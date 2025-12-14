@@ -1,0 +1,34 @@
+services:
+  notenest-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: notenest-dev
+    ports:
+      - "3000:3000"
+      - "5173:5173"  # Vite Dev Server
+    volumes:
+      # Live-Reload: Code-Änderungen werden sofort übernommen
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./data/bibles:/app/data/bibles:ro
+      - ./data/database:/app/data/database
+      - ./data/users:/app/data/users      # Benutzer-Dateien (Development)
+      - ./data/shared:/app/data/shared    # Geteilte Dateien (Development)
+      - ./logs:/app/logs
+      - ./.env:/app/.env                  # .env Datei (wird vom Entrypoint generiert, falls nicht vorhanden)
+      - ./.env.example:/app/.env.example # .env.example für Entrypoint
+    environment:
+      - NODE_ENV=development
+      # PORT wird aus .env geladen (env_file)
+    env_file:
+      - .env
+    command: npm run dev
+    networks:
+      - notenest-network
+    restart: unless-stopped
+
+networks:
+  notenest-network:
+    driver: bridge
+

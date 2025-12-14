@@ -1,0 +1,45 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Installiere Build-Dependencies für better-sqlite3 und Puppeteer
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Kopiere Root package.json (Workspace-Konfiguration)
+COPY package*.json ./
+
+# Kopiere Backend package.json
+COPY backend/package*.json ./backend/
+
+# Kopiere Frontend package.json
+COPY frontend/package*.json ./frontend/
+
+# Installiere Dependencies (Workspace-Installation)
+RUN npm install
+
+# Copy Entrypoint Script
+COPY scripts/docker-entrypoint.js ./scripts/
+COPY scripts/docker-entrypoint.sh ./scripts/
+RUN chmod +x ./scripts/docker-entrypoint.sh
+
+# Copy .env.example für Entrypoint
+COPY .env.example ./.env.example
+
+# Expose Ports
+EXPOSE 3000 5173
+
+# Verwende Entrypoint-Script
+ENTRYPOINT ["node", "/app/scripts/docker-entrypoint.js"]
+# Dev-Command (wird in docker-compose überschrieben)
+CMD ["npm", "run", "dev"]
+

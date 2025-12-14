@@ -1,0 +1,218 @@
+/**
+ * Notes Page
+ * 
+ * Hauptseite für Notizen-Verwaltung
+ */
+
+import { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { useFileStore } from '../store/fileStore';
+import MarkdownEditor from '../components/Editor/MarkdownEditor';
+
+export default function NotesPage() {
+  const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
+  const { 
+    selectedFile, 
+    selectedPath, 
+    selectedType,
+    fileContent, 
+    isLoadingContent,
+    loadFileContent,
+    selectFile
+  } = useFileStore();
+
+  // Lade Datei aus URL-Parametern, wenn vorhanden
+  useEffect(() => {
+    if (params.type && params.path) {
+      try {
+        // Decodiere den Pfad aus der URL
+        // params.path ist bereits decodiert von React Router, aber wir müssen sicherstellen, dass es mit / beginnt
+        let decodedPath = params.path;
+        
+        // Stelle sicher, dass der Pfad mit / beginnt
+        if (!decodedPath.startsWith('/')) {
+          decodedPath = '/' + decodedPath;
+        }
+        
+        // Normalisiere den Pfad (entferne doppelte Slashes)
+        decodedPath = decodedPath.replace(/\/+/g, '/');
+        
+        console.log('Loading file from URL:', { 
+          urlPath: params.path, 
+          decodedPath, 
+          type: params.type,
+          currentSelectedPath: selectedPath,
+          currentSelectedType: selectedType
+        });
+        
+        // Prüfe, ob die Datei bereits geladen ist
+        if (selectedPath !== decodedPath || selectedType !== params.type) {
+          // Lade Datei-Inhalt
+          loadFileContent(decodedPath, params.type);
+          
+          // Erstelle FileItem-Objekt für selectFile
+          const fileName = decodedPath.split('/').pop() || decodedPath;
+          const fileItem = {
+            name: fileName,
+            path: decodedPath,
+            type: 'file' as const,
+            isEditable: true,
+            canRead: true,
+            canWrite: true
+          };
+          
+          selectFile(fileItem, decodedPath, params.type);
+        }
+      } catch (error) {
+        console.error('Error loading file from URL:', error);
+      }
+    }
+  }, [params.type, params.path, selectedPath, selectedType, loadFileContent, selectFile]);
+
+  // Beim Mount: Lösche Auswahl NICHT automatisch
+  // useEffect(() => {
+  //   clearSelection();
+  //   resetEditor();
+  // }, [clearSelection, resetEditor]);
+
+  if (!selectedFile) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        color: '#999'
+      }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📝</div>
+        <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>
+          Wähle eine Notiz aus
+        </div>
+        <div style={{ fontSize: '0.875rem' }}>
+          Klicke auf eine Datei in der Sidebar, um sie zu öffnen
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingContent) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        color: '#999'
+      }}>
+        <div>Lädt Datei...</div>
+      </div>
+    );
+  }
+
+  if (!fileContent && selectedFile.type === 'file') {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        color: '#999'
+      }}>
+        <div>Datei konnte nicht geladen werden</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{
+        padding: '1rem',
+        borderBottom: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-secondary)'
+      }}>
+        <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
+          {selectedFile.name}
+        </h2>
+        {selectedPath && (
+          <div style={{ 
+            fontSize: '0.875rem', 
+            color: 'var(--text-secondary)', 
+            marginTop: '0.25rem' 
+          }}>
+            {selectedPath}
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{
+        flex: 1,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {selectedFile.type === 'file' && selectedPath && selectedType && 
+         (selectedFile.isEditable === true || (selectedFile.fileType === 'md' || selectedFile.fileType === 'txt')) ? (
+          isLoadingContent ? (
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-tertiary)'
+            }}>
+              Lädt Datei...
+            </div>
+          ) : fileContent !== null && fileContent !== undefined ? (
+            <MarkdownEditor 
+              filePath={selectedPath} 
+              fileType={selectedType}
+            />
+          ) : (
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-tertiary)'
+            }}>
+              Datei konnte nicht geladen werden
+            </div>
+          )
+        ) : selectedFile.type === 'file' && fileContent ? (
+          <div style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '1rem'
+          }}>
+            <pre style={{
+              whiteSpace: 'pre-wrap',
+              wordWrap: 'break-word',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              lineHeight: '1.5',
+              margin: 0
+            }}>
+              {fileContent}
+            </pre>
+          </div>
+        ) : (
+          <div style={{ 
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-tertiary)'
+          }}>
+            {selectedFile.type === 'file' && !selectedFile.isEditable 
+              ? 'Diese Datei kann nicht bearbeitet werden'
+              : 'Ordner-Inhalt wird hier angezeigt'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

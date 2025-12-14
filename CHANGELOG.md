@@ -1,0 +1,193 @@
+# Changelog
+
+Alle wichtigen Änderungen in diesem Projekt werden in dieser Datei dokumentiert.
+
+Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
+und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
+
+## [1.0.0] - 2025-12-10
+
+## [Unreleased]
+
+### Geplant für zukünftige Releases
+- Erweiterte Bibelstellen-Features (Vergleichsansicht, Vers-Notizen, erweiterte Versbereiche)
+- LDAP/NAS-Integration (optional)
+- Share-Links
+- Tags & Kategorien
+- Versionierung von Notizen
+
+## [1.0.0] - 2024-01-XX
+
+### ✨ Features
+- **Authentifizierung**: JWT-basierte Authentifizierung mit Refresh-Tokens
+  - Login/Registrierung
+  - "Angemeldet bleiben" Funktionalität
+  - Automatische Token-Erneuerung
+- **Notizen-Verwaltung**: Vollständige CRUD-Operationen für Notizen
+  - Private und geteilte Ordner
+  - Markdown-Editor mit Live-Vorschau
+  - WYSIWYG-Editor (What You See Is What You Get)
+  - Split-View (Editor + Vorschau)
+  - Automatisches Speichern
+  - Undo/Redo-Funktionalität
+- **Bibelstellen-Integration**: Umfassende Bibelstellen-Funktionalität
+  - Automatische Erkennung von Bibelstellen im Text
+  - Hover-Tooltips mit Vers-Text
+  - Interaktive Popups mit vollständigem Vers/Kapitel
+  - Mehrere Übersetzungen unterstützt:
+    - Luther 1912 (LUT1912)
+    - Luther 1545 (LUT1545)
+    - Elberfelder 1905 (ELB1905)
+    - Schlachter 1951 (SCH1951)
+    - Elberfelder (ELB) via API.Bible
+  - Favoriten-System für Bibelübersetzungen
+  - Standard-Übersetzung konfigurierbar
+  - "In Notiz übernehmen" Funktionalität
+  - Bibelstellen-Links in WYSIWYG-Editor
+- **Export-Funktionen**: Export von Notizen in verschiedene Formate
+  - PDF-Export (A4/A5)
+  - Word-Dokument-Export (.docx)
+  - Markdown-Export (.md)
+  - Bibelstellen-Links in Exporten
+- **Volltextsuche**: Durchsucht alle Notizen
+  - Live-Suche mit Debouncing
+  - Kontextuelle Treffer-Anzeige
+  - Deep-Linking zu Ergebnissen
+  - Erweiterte Treffer-Anzeige
+- **Einstellungen**: Umfassende Konfigurationsmöglichkeiten
+  - Theme-Auswahl (Hell/Dunkel)
+  - Standard-Bibelübersetzung
+  - Bibelübersetzungs-Favoriten
+  - Export-Größe (A4/A5)
+  - Ordner-Pfade konfigurierbar
+- **PWA-Funktionalität**: Progressive Web App
+  - Offline-Funktionalität
+  - IndexedDB-Caching
+  - Automatische Synchronisation
+  - Offline-Indikator
+- **Production-Features**: Enterprise-ready Features
+  - Rate Limiting (Login, API, Export)
+  - Strukturiertes Logging (Winston)
+  - Log-Rotation (täglich, 30 Tage Retention)
+  - Health-Check Endpoint
+  - Prometheus Metrics
+  - Log-Analyse
+  - Erweiterte Tests (Unit + Integration)
+
+### 🔧 Technische Details
+- **Backend**: Node.js + Express + TypeScript
+  - SQLite-Datenbank (better-sqlite3)
+  - JWT-Authentifizierung
+  - Argon2id Passwort-Hashing
+  - Express Rate Limiting
+  - Winston Logging
+  - Prometheus Metrics
+- **Frontend**: React + TypeScript + Vite
+  - Zustand State Management
+  - React Router
+  - Markdown-Rendering (react-markdown)
+  - WYSIWYG-Editor (contentEditable)
+  - PWA-Support
+- **Docker**: Multi-Stage Build
+  - Production-optimiert
+  - Alpine Linux
+  - Puppeteer für PDF-Export
+
+### 🐛 Bugfixes
+- Korrigierte Bibelstellen-Erkennung für mehrstellige Kapitelnummern
+- Behobene Deep-Linking-Probleme bei Suchergebnissen
+- Korrigierte "Weitere Treffer" Funktionalität in Suche
+- Behobene WYSIWYG-Editor Cursor-Position beim Einfügen
+- Korrigierte "Angemeldet bleiben" Funktionalität
+- Behobene Markdown-Export-Funktionalität
+
+### 🔒 Sicherheit
+- Path Traversal Prevention
+- Input Validation
+- Rate Limiting
+- JWT Token Security
+- Argon2id Passwort-Hashing
+
+### 📚 Dokumentation
+- Vollständige Architektur-Dokumentation (`ARCHITEKTUR_PLANUNG.md`)
+- Deployment-Anleitung (`DEPLOYMENT_ANLEITUNG.md`)
+- Deployment-Checkliste (`DEPLOYMENT_CHECKLISTE.md`)
+- Monitoring-Setup (`MONITORING_SETUP.md`)
+- Testing-Guide (`TESTING_GUIDE.md`)
+- Production-Features Übersicht (`PRODUCTION_FEATURES_COMPLETE.md`)
+
+### 🎨 UI/UX
+- Responsive Design
+- iPhone-Notes-App Philosophie
+- Intuitive Navigation
+- Keyboard Shortcuts
+- Dark/Light Theme
+
+---
+
+## Versionierungs-Schema
+
+Wir folgen [Semantic Versioning](https://semver.org/lang/de/):
+
+- **MAJOR** (X.0.0): Breaking Changes
+- **MINOR** (0.X.0): Neue Features (rückwärtskompatibel)
+- **PATCH** (0.0.X): Bugfixes (rückwärtskompatibel)
+
+### Kategorien
+
+- **✨ Features**: Neue Funktionalitäten
+- **🐛 Bugfixes**: Fehlerbehebungen
+- **🔒 Sicherheit**: Sicherheitsrelevante Änderungen
+- **🔧 Technische Details**: Technische Verbesserungen
+- **📚 Dokumentation**: Dokumentations-Updates
+- **🎨 UI/UX**: UI/UX-Verbesserungen
+- **♻️ Refactoring**: Code-Verbesserungen ohne Funktionsänderung
+- **⚡ Performance**: Performance-Verbesserungen
+- **🗑️ Deprecated**: Veraltete Features
+
+---
+
+## Release-Prozess
+
+### Vor einem Release
+
+1. **CHANGELOG.md aktualisieren**
+   - Alle Änderungen seit letztem Release dokumentieren
+   - Version und Datum setzen
+   - Kategorien korrekt zuordnen
+
+2. **Version in package.json aktualisieren**
+   - Root `package.json`
+   - `backend/package.json`
+   - `frontend/package.json`
+
+3. **Tests ausführen**
+   ```bash
+   npm test
+   ```
+
+4. **Build testen**
+   ```bash
+   npm run build
+   ```
+
+5. **Git-Tag erstellen**
+   ```bash
+   git tag -a v1.0.0 -m "Release v1.0.0"
+   git push origin v1.0.0
+   ```
+
+6. **Release-Notes erstellen**
+   - GitHub Release (falls verwendet)
+   - Zusammenfassung der wichtigsten Änderungen
+
+### Nach einem Release
+
+1. **Neue "Unreleased" Sektion in CHANGELOG.md**
+2. **Version in package.json erhöhen** (z.B. 1.0.1 für Patch)
+
+---
+
+## Historische Releases
+
+*(Wird mit jedem Release aktualisiert)*

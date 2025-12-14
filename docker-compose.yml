@@ -1,0 +1,47 @@
+services:
+  notenest:
+    build: .
+    container_name: notenest
+    ports:
+      - "127.0.0.1:3000:3000"
+      # Für Production mit Reverse Proxy: Nur localhost (sicherer)
+      # - "127.0.0.1:3000:3000"
+    volumes:
+      # NAS-Mounts (Synology Beispiel)
+      - /volume1/homes:/data/homes:ro     # Private Ordner (read-only für Sicherheit)
+      - /volume1/shared:/data/shared:rw   # Geteilte Ordner (read-write)
+      # Oder: Lokale Entwicklung
+      # - ./data/users:/data/users
+      - ./data/database:/data/database    # SQLite-DB
+      - ./logs:/app/logs                  # Logs
+      - ./.env:/app/.env                  # .env Datei (wird vom Entrypoint generiert, falls nicht vorhanden)
+    # Wichtig: Container-User muss Zugriff auf NAS-Ordner haben
+    # Option A: Als root (einfach, aber weniger sicher)
+    # user: "0:0"
+    # Option B: Als NAS-Admin-User (empfohlen für Synology)
+    user: "1024:100"  # admin:users (Synology Standard)
+    environment:
+      - NODE_ENV=production
+      # PORT wird aus .env geladen (env_file)
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - DATA_ROOT=/data/users
+      - DB_PATH=/data/database/notenest.db
+      - LOG_LEVEL=info
+      - NAS_TYPE=${NAS_TYPE:-synology}
+      - NAS_HOMES_PATH=/data/homes
+      - NAS_SHARED_PATH=/data/shared
+      - BIBLE_API_ENABLED=${BIBLE_API_ENABLED:-true}
+      - BIBLE_API_KEY=${BIBLE_API_KEY}
+      - BIBLE_API_URL=${BIBLE_API_URL:-https://rest.api.bible}
+      - BIBLE_LOCAL_PATH=/app/data/bibles
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - notenest-network
+
+networks:
+  notenest-network:
+    driver: bridge
+

@@ -1,0 +1,32 @@
+{
+  "name": "notenest",
+  "version": "1.0.0",
+  "description": "NoteNest - Persönliche Notizen-App mit Bibelstellen-Referenzen",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "test": "npm run test --workspace=backend && npm run test --workspace=frontend",
+    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "create-test-user": "node scripts/create-test-user.js",
+    "version:get": "node scripts/version.js get",
+    "version:set": "node scripts/version.js set",
+    "version:bump": "node scripts/version.js bump",
+    "version:release": "node scripts/version.js release"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "marked": "^17.0.1",
+    "turndown": "^7.2.2"
+  }
+}
