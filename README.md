@@ -2,6 +2,9 @@
 
 Persönliche Notizen-App mit Bibelstellen-Referenzen, Multi-User-Support und NAS-Integration.
 
+[![GitHub release](https://img.shields.io/github/release/BKunzmann/NoteNest.svg)](https://github.com/BKunzmann/NoteNest/releases/latest)
+[![License](https://img.shields.io/badge/license-Unlicense-blue.svg)](LICENSE)
+
 ## Features
 
 - 📝 Markdown-Editor mit Live-Vorschau
@@ -24,8 +27,8 @@ Persönliche Notizen-App mit Bibelstellen-Referenzen, Multi-User-Support und NAS
 
 1. Repository klonen:
 ```bash
-git clone <repository-url>
-cd NotizenApp
+git clone https://github.com/BKunzmann/NoteNest.git
+cd NoteNest
 ```
 
 2. Umgebungsvariablen konfigurieren:
@@ -99,7 +102,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-nas.ps1  # Windows
 
 - Vollständige Architektur-Dokumentation: [ARCHITEKTUR_PLANUNG.md](./ARCHITEKTUR_PLANUNG.md)
 - Reverse Proxy Setup (für externe Erreichbarkeit): [REVERSE_PROXY.md](./REVERSE_PROXY.md)
-- Deployment-Anleitung: [DEPLOYMENT.md](./DEPLOYMENT.md)
+- Deployment-Anleitung: [DEPLOYMENT_ANLEITUNG.md](./DEPLOYMENT_ANLEITUNG.md)
+- Changelog: [CHANGELOG.md](./CHANGELOG.md)
+- AI-Instructions für Entwickler: [instructions.md](./instructions.md)
+
+## Releases
+
+- **Aktuelle Version**: [v1.0.0](https://github.com/BKunzmann/NoteNest/releases/tag/v1.0.0) - Initial Release
+- Alle Releases: [GitHub Releases](https://github.com/BKunzmann/NoteNest/releases)
 
 ## Lizenz
 
