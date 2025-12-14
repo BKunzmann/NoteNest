@@ -22,7 +22,7 @@ cd /opt/notenest
 
 # 2. Code klonen oder kopieren
 # (Falls Git-Repository vorhanden)
-git clone <repository-url> .
+git clone https://github.com/BKunzmann/NoteNest.git .
 
 # Oder: Code manuell kopieren
 ```
