@@ -16,7 +16,7 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 - Tags & Kategorien
 - Versionierung von Notizen
 
-## [1.0.0] - 2024-01-XX
+## [1.0.0] - 2025-12-14
 
 ### ✨ Features
 - **Authentifizierung**: JWT-basierte Authentifizierung mit Refresh-Tokens

@@ -20,19 +20,23 @@ import { UserSettings, UpdateSettingsRequest } from '../types/settings';
 
 // Ermittle die API-URL automatisch basierend auf dem aktuellen Hostname
 // Wenn VITE_API_URL gesetzt ist, verwende diese
-// Sonst: Wenn auf localhost, verwende localhost:3000, sonst verwende den gleichen Hostname mit Port 3000
+// Sonst:
+// - im lokalen Dev (localhost) direkt http://localhost:3000/api
+// - in allen anderen Fällen relative zum aktuellen Origin: /api
 const getApiBaseUrl = (): string => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   
-  const hostname = window.location.hostname;
+  const { origin, hostname } = window.location;
+
+  // Lokale Entwicklung: Vite auf 5173, Backend auf 3000 (Proxy auf /api)
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'http://localhost:3000/api';
   }
   
-  // Verwende den gleichen Hostname wie das Frontend, aber Port 3000
-  return `http://${hostname}:3000/api`;
+  // Production / NAS: Backend läuft im gleichen Container/Host + Port → relative API-URL
+  return `${origin}/api`;
 };
 
 const API_BASE_URL = getApiBaseUrl();

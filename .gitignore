@@ -64,3 +64,11 @@ coverage/
 # TypeScript
 *.tsbuildinfo
 
+# Local documentation and deployment scripts
+*.md
+!README.md
+!CHANGELOG.md
+*.txt
+scripts/*.ps1
+env.template
+.dockerignore

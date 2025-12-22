@@ -1,21 +1,24 @@
 # Stage 1: Frontend Build
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+# Verwende npm install (lock file könnte nicht synchron sein)
+RUN npm install
 COPY frontend/ .
+# Build
 RUN npm run build
 
 # Stage 2: Backend Build
-FROM node:18-alpine AS backend-builder
+FROM node:20-alpine AS backend-builder
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN npm ci
+# Verwende npm install (lock file könnte nicht synchron sein)
+RUN npm install
 COPY backend/ .
 RUN npm run build
 
 # Stage 3: Production
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
 
 # Installiere Puppeteer Dependencies
@@ -41,9 +44,6 @@ COPY data/bibles/*.json ./data/bibles/
 COPY scripts/docker-entrypoint.js ./scripts/
 COPY scripts/docker-entrypoint.sh ./scripts/
 RUN chmod +x ./scripts/docker-entrypoint.sh
-
-# Copy .env.example für Entrypoint
-COPY .env.example ./.env.example
 
 # Create data directory
 RUN mkdir -p /data/users /data/database /app/logs

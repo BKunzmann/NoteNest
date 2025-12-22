@@ -10,9 +10,30 @@ import path from 'path';
 import fs from 'fs';
 
 // Log-Verzeichnis erstellen
-const logDir = process.env.LOG_DIR || path.join(__dirname, '../../logs');
+// In Production: /app/logs (vom Dockerfile erstellt)
+// In Development: Relativer Pfad
+const logDir = process.env.LOG_DIR || (
+  process.env.NODE_ENV === 'production' 
+    ? '/app/logs' 
+    : path.join(__dirname, '../../logs')
+);
 if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+  } catch (error: any) {
+    // Falls Berechtigungsproblem, verwende /tmp/logs als Fallback
+    if (error.code === 'EACCES') {
+      console.warn(`Cannot create log directory ${logDir}, using /tmp/logs as fallback`);
+      const fallbackDir = '/tmp/logs';
+      if (!fs.existsSync(fallbackDir)) {
+        fs.mkdirSync(fallbackDir, { recursive: true });
+      }
+      // Verwende Fallback für diese Session
+      process.env.LOG_DIR = fallbackDir;
+    } else {
+      throw error;
+    }
+  }
 }
 
 // Log-Format

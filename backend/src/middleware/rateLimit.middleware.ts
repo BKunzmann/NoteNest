@@ -5,6 +5,7 @@
  */
 
 import rateLimit from 'express-rate-limit';
+import { Request } from 'express';
 
 /**
  * Rate Limiter für Login-Versuche
@@ -41,10 +42,11 @@ export const apiLimiter = rateLimit({
 });
 
 /**
- * Rate Limiter für PDF-Export
+ * Rate Limiter für PDF-Export (für authentifizierte User)
  * 10 Exports pro Stunde pro User
  * 
  * WICHTIG: Dieser Limiter benötigt User-ID, daher wird er in den Routes angewendet
+ * und nur für authentifizierte Requests verwendet
  */
 export const pdfExportLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 Stunde
@@ -57,15 +59,17 @@ export const pdfExportLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   skipFailedRequests: false,
-  // Key-Generator: Verwende User-ID statt IP (wenn verfügbar)
-  keyGenerator: (req) => {
-    // Wenn User authentifiziert ist, verwende User-ID
-    if ((req as any).user?.id) {
-      return `pdf-export-${(req as any).user.id}`;
+  // Key-Generator: Verwende User-ID (muss vorhanden sein, da nur für authentifizierte Requests)
+  keyGenerator: (req: Request) => {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      // Fallback: Sollte nicht vorkommen, da nur für authentifizierte Requests
+      return 'pdf-export-unknown';
     }
-    // Fallback: IP-Adresse
-    return req.ip || req.socket.remoteAddress || 'unknown';
+    return `pdf-export-${userId}`;
   },
+  // Deaktiviere Validierung, da wir User-ID verwenden (keine IP)
+  validate: false,
 });
 
 /**

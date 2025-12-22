@@ -20,7 +20,14 @@ import {
 } from './config/metrics';
 
 // Lade Umgebungsvariablen
-dotenv.config();
+// Suche .env im Root-Verzeichnis (wenn aus backend/ gestartet wird)
+// In Development: __dirname = backend/src, in Production: __dirname = backend/dist
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
+// Fallback: Versuche auch .env im aktuellen Verzeichnis
+if (!process.env.AUTH_MODE) {
+  dotenv.config();
+}
 
 // Initialisiere Datenbank
 try {
@@ -173,6 +180,26 @@ app.use('/api/bible', bibleRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api', metricsRoutes); // Metrics (ohne Rate Limiting für Monitoring)
+
+// Static Frontend (React-Build) ausliefern
+// Im Docker-Image liegt der Build unter /app/frontend/build
+// __dirname zeigt in Production auf /app/backend/dist → zwei Ebenen nach oben
+const frontendBuildPath = path.join(__dirname, '../../frontend/build');
+
+// Optional per ENV deaktivierbar (z.B. für reine API-Deployments)
+if (process.env.SERVE_FRONTEND !== 'false') {
+  // Statische Assets (JS, CSS, Bilder, etc.)
+  app.use(express.static(frontendBuildPath));
+
+  // Catch-all: alle Nicht-/api-Routen an das React-Frontend weiterleiten (SPA-Routing)
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+
+    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  });
+}
 
 // Error Handler
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {

@@ -186,6 +186,11 @@ if (args.length > 0) {
     }
   });
   
+  child.on('error', (error) => {
+    console.error('❌ Fehler beim Starten der Anwendung:', error);
+    process.exit(1);
+  });
+  
   // Weiterleite Signale
   process.on('SIGTERM', () => child.kill('SIGTERM'));
   process.on('SIGINT', () => child.kill('SIGINT'));

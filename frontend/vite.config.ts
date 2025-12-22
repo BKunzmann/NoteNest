@@ -17,6 +17,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // Service Worker im Development-Mode deaktivieren (verhindert Cache-Probleme)
+      devOptions: {
+        enabled: false
+      },
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png'],
       workbox: {
