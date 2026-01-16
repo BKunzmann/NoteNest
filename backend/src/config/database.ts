@@ -54,9 +54,20 @@ export function initializeDatabase(): void {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active BOOLEAN DEFAULT 1 NOT NULL,
+      is_admin BOOLEAN DEFAULT 0 NOT NULL,
       CHECK (auth_type IN ('local', 'ldap', 'synology'))
     )
   `);
+
+  // Migration: Füge is_admin Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0 NOT NULL`);
+  } catch (error: any) {
+    // Spalte existiert bereits, ignoriere Fehler
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
 
   // Tabelle: user_settings
   db.exec(`
@@ -184,6 +195,83 @@ export function initializeDatabase(): void {
   `);
 
   console.log('✅ Database initialized');
+}
+
+/**
+ * Initialisiert einen Standard-Admin-Benutzer, falls keiner existiert
+ */
+export async function initializeDefaultAdmin(): Promise<void> {
+  try {
+    // Prüfe, ob bereits ein Admin existiert
+    const adminExists = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
+    if (adminExists) {
+      console.log('✅ Admin-Benutzer existiert bereits');
+      return;
+    }
+
+    // Hole Admin-Credentials aus Umgebungsvariablen oder verwende Defaults
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@notenest.local';
+
+    // Prüfe, ob Benutzer mit diesem Username bereits existiert
+    const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUsername);
+    if (existingUser) {
+      // Benutzer existiert, mache ihn zum Admin
+      db.prepare('UPDATE users SET is_admin = 1 WHERE username = ?').run(adminUsername);
+      console.log(`✅ Benutzer "${adminUsername}" wurde zum Admin gemacht`);
+      return;
+    }
+
+    // Importiere hashPassword asynchron
+    const { hashPassword } = await import('../services/auth.service');
+    const passwordHash = await hashPassword(adminPassword);
+
+    // Erstelle Admin-Benutzer
+    const result = db.prepare(`
+      INSERT INTO users (username, password_hash, email, auth_type, is_admin)
+      VALUES (?, ?, ?, 'local', 1)
+    `).run(adminUsername, passwordHash, adminEmail);
+
+    const userId = result.lastInsertRowid as number;
+
+    // Erstelle Standard-Einstellungen
+    const privatePath = process.env.NAS_HOMES_PATH 
+      ? `${process.env.NAS_HOMES_PATH}/${adminUsername}`
+      : process.env.NODE_ENV === 'production'
+      ? `/data/users/${adminUsername}`
+      : `/app/data/users/${adminUsername}`;
+    
+    const sharedPath = process.env.NAS_SHARED_PATH || (
+      process.env.NODE_ENV === 'production'
+        ? '/data/shared'
+        : '/app/data/shared'
+    );
+    
+    db.prepare(`
+      INSERT INTO user_settings (user_id, private_folder_path, shared_folder_path)
+      VALUES (?, ?, ?)
+    `).run(userId, privatePath, sharedPath);
+
+    // Erstelle Benutzer-Ordner, falls nicht vorhanden
+    try {
+      const fs = await import('fs');
+      if (!fs.existsSync(privatePath)) {
+        fs.mkdirSync(privatePath, { recursive: true });
+        console.log(`✅ Created admin user directory: ${privatePath}`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Could not create admin user directory: ${privatePath}`, error);
+    }
+
+    console.log('✅ Standard-Admin-Benutzer erstellt');
+    console.log(`   Username: ${adminUsername}`);
+    console.log(`   Password: ${adminPassword}`);
+    console.log(`   ⚠️  Bitte ändern Sie das Passwort nach dem ersten Login!`);
+  } catch (error) {
+    console.error('❌ Fehler beim Erstellen des Standard-Admin-Benutzers:', error);
+    // Nicht beenden, da die App auch ohne Admin funktionieren sollte
+  }
 }
 
 // Export database instance

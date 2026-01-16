@@ -7,6 +7,10 @@ export interface User {
   username: string;
   email: string | null;
   auth_type: string;
+  is_admin?: boolean;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AuthResponse {

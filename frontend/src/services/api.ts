@@ -456,5 +456,99 @@ export const searchAPI = {
   }
 };
 
+/**
+ * Admin API Types
+ */
+export interface AdminUser {
+  id: number;
+  username: string;
+  email: string | null;
+  auth_type: 'local' | 'ldap' | 'synology';
+  auth_source: string | null;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  is_admin: boolean;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+}
+
+export interface CreateUserRequest extends RegisterRequest {
+  isAdmin?: boolean;
+}
+
+export interface ResetPasswordRequest {
+  newPassword: string;
+}
+
+export interface UpdateUserRoleRequest {
+  isAdmin: boolean;
+}
+
+export interface UpdateUserStatusRequest {
+  isActive: boolean;
+}
+
+/**
+ * Admin API
+ */
+export const adminAPI = {
+  /**
+   * Gibt alle Benutzer zurück
+   */
+  async getUsers(): Promise<AdminUsersResponse> {
+    const response = await api.get<AdminUsersResponse>('/admin/users');
+    return response.data;
+  },
+
+  /**
+   * Erstellt einen neuen Benutzer
+   */
+  async createUser(data: CreateUserRequest): Promise<{ user: AdminUser; message: string }> {
+    const response = await api.post<{ user: AdminUser; message: string }>('/admin/users', data);
+    return response.data;
+  },
+
+  /**
+   * Löscht einen Benutzer
+   */
+  async deleteUser(userId: number): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/admin/users/${userId}`);
+    return response.data;
+  },
+
+  /**
+   * Setzt das Passwort eines Benutzers zurück
+   */
+  async resetPassword(userId: number, newPassword: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/admin/users/${userId}/reset-password`, {
+      newPassword
+    });
+    return response.data;
+  },
+
+  /**
+   * Aktualisiert den Admin-Status eines Benutzers
+   */
+  async updateUserRole(userId: number, isAdmin: boolean): Promise<{ message: string }> {
+    const response = await api.patch<{ message: string }>(`/admin/users/${userId}/role`, {
+      isAdmin
+    });
+    return response.data;
+  },
+
+  /**
+   * Aktiviert oder deaktiviert einen Benutzer
+   */
+  async updateUserStatus(userId: number, isActive: boolean): Promise<{ message: string }> {
+    const response = await api.patch<{ message: string }>(`/admin/users/${userId}/status`, {
+      isActive
+    });
+    return response.data;
+  }
+};
+
 export default api;
 

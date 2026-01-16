@@ -104,6 +104,27 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
       {/* Right: Settings + User Menu */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {user?.is_admin && (
+          <button
+            onClick={() => navigate('/admin')}
+            style={{
+              padding: '0.5rem',
+              background: 'none',
+              border: 'none',
+              color: '#007AFF',
+              fontSize: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            aria-label="Admin"
+            title="Benutzerverwaltung"
+          >
+            👑
+          </button>
+        )}
         <button
           onClick={handleSettingsClick}
           style={{

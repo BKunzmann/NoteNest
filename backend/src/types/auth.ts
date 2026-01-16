@@ -12,6 +12,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  is_admin: boolean;
 }
 
 export interface UserSettings {
@@ -46,6 +47,7 @@ export interface AuthResponse {
     username: string;
     email: string | null;
     auth_type: string;
+    is_admin?: boolean;
   };
 }
 

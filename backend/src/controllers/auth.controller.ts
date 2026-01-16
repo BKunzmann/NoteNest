@@ -83,7 +83,8 @@ export async function register(req: Request, res: Response): Promise<void> {
         id: user.id,
         username: user.username,
         email: user.email,
-        auth_type: user.auth_type
+        auth_type: user.auth_type,
+        is_admin: user.is_admin
       }
     };
 
@@ -140,7 +141,8 @@ export async function login(req: Request, res: Response): Promise<void> {
         id: user.id,
         username: user.username,
         email: user.email,
-        auth_type: user.auth_type
+        auth_type: user.auth_type,
+        is_admin: user.is_admin
       }
     };
 
@@ -244,7 +246,8 @@ export async function getMe(req: Request, res: Response): Promise<void> {
       id: user.id,
       username: user.username,
       email: user.email,
-      auth_type: user.auth_type
+      auth_type: user.auth_type,
+      is_admin: user.is_admin
     });
   } catch (error) {
     console.error('Get me error:', error);

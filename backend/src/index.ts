@@ -33,6 +33,13 @@ if (!process.env.AUTH_MODE) {
 try {
   initializeDatabase();
   logInfo('Database initialized');
+  
+  // Initialisiere Standard-Admin-Benutzer (asynchron, blockiert nicht)
+  import('./config/database').then(({ initializeDefaultAdmin }) => {
+    initializeDefaultAdmin().catch((error) => {
+      logError('Failed to initialize default admin', error);
+    });
+  });
 } catch (error) {
   logError('Failed to initialize database', error);
   process.exit(1);
@@ -172,6 +179,7 @@ import bibleRoutes from './routes/bible.routes';
 import exportRoutes from './routes/export.routes';
 import searchRoutes from './routes/search.routes';
 import metricsRoutes from './routes/metrics.routes';
+import adminRoutes from './routes/admin.routes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
@@ -180,6 +188,7 @@ app.use('/api/bible', bibleRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api', metricsRoutes); // Metrics (ohne Rate Limiting für Monitoring)
+app.use('/api/admin', adminRoutes);
 
 // Static Frontend (React-Build) ausliefern
 // Im Docker-Image liegt der Build unter /app/frontend/build
