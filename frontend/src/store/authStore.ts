@@ -139,17 +139,10 @@ export const useAuthStore = create<AuthState>()(
         const useSessionStorage = localStorage.getItem('useSessionStorage') === 'true';
         const storage = useSessionStorage ? sessionStorage : localStorage;
         
-        console.log('🔍 checkAuth: useSessionStorage =', useSessionStorage);
-        console.log('🔍 checkAuth: storage type =', useSessionStorage ? 'sessionStorage' : 'localStorage');
-        
         const accessToken = storage.getItem('accessToken');
         const refreshToken = storage.getItem('refreshToken');
         
-        console.log('🔍 checkAuth: accessToken exists =', !!accessToken);
-        console.log('🔍 checkAuth: refreshToken exists =', !!refreshToken);
-        
         if (!accessToken && !refreshToken) {
-          console.log('❌ checkAuth: Keine Tokens gefunden');
           set({
             user: null,
             isAuthenticated: false,
@@ -164,9 +157,7 @@ export const useAuthStore = create<AuthState>()(
           // Versuche zuerst mit Access Token
           if (accessToken) {
             try {
-              console.log('🔑 checkAuth: Versuche mit Access Token...');
               const user = await authAPI.getMe();
-              console.log('✅ checkAuth: Access Token gültig, User:', user.username);
               set({
                 user,
                 isAuthenticated: true,
@@ -177,10 +168,8 @@ export const useAuthStore = create<AuthState>()(
             } catch (error: any) {
               // Access Token ungültig, versuche Refresh Token
               if (error.response?.status === 401 || error.response?.status === 403) {
-                console.log('⚠️ checkAuth: Access token expired, trying refresh token...');
                 // Fall through to refresh token logic
               } else {
-                console.error('❌ checkAuth: Unerwarteter Fehler:', error);
                 throw error;
               }
             }
@@ -189,13 +178,11 @@ export const useAuthStore = create<AuthState>()(
           // Versuche Refresh Token zu verwenden
           if (refreshToken) {
             try {
-              console.log('🔄 checkAuth: Versuche Token-Refresh...');
               const response = await authAPI.refresh(refreshToken);
               storage.setItem('accessToken', response.accessToken);
               
               // Hole User-Info mit neuem Token
               const user = await authAPI.getMe();
-              console.log('✅ checkAuth: Refresh erfolgreich, User:', user.username);
               set({
                 user,
                 isAuthenticated: true,
@@ -204,7 +191,6 @@ export const useAuthStore = create<AuthState>()(
               });
               return;
             } catch (refreshError) {
-              console.error('❌ checkAuth: Refresh token failed:', refreshError);
               // Refresh fehlgeschlagen -> Logout
               storage.removeItem('accessToken');
               storage.removeItem('refreshToken');

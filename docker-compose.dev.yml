@@ -1,34 +1,58 @@
+# =============================================================================
+# NoteNest - Docker Compose (Development)
+# =============================================================================
+# Für lokale Entwicklung mit Hot-Reload
+# =============================================================================
+
 services:
   notenest-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    
     container_name: notenest-dev
+    
+    # --- Ports ---
     ports:
-      - "3000:3000"
-      - "5173:5173"  # Vite Dev Server
+      - "3000:3000"    # Backend API
+      - "5173:5173"    # Vite Dev Server (Frontend)
+    
+    # --- Volumes (Live-Reload) ---
     volumes:
-      # Live-Reload: Code-Änderungen werden sofort übernommen
+      # Source-Code (für Hot-Reload)
       - ./backend:/app/backend
       - ./frontend:/app/frontend
+      
+      # Daten (lokal)
       - ./data/bibles:/app/data/bibles:ro
       - ./data/database:/app/data/database
-      - ./data/users:/app/data/users      # Benutzer-Dateien (Development)
-      - ./data/shared:/app/data/shared    # Geteilte Dateien (Development)
+      - ./data/users:/app/data/users
+      - ./data/shared:/app/data/shared
+      
+      # Logs
       - ./logs:/app/logs
-      - ./.env:/app/.env                  # .env Datei (wird vom Entrypoint generiert, falls nicht vorhanden)
-      - ./.env.example:/app/.env.example # .env.example für Entrypoint
+      
+      # .env Datei
+      - ./.env:/app/.env
+    
+    # --- Umgebungsvariablen ---
     environment:
       - NODE_ENV=development
-      # PORT wird aus .env geladen (env_file)
+      - LOG_LEVEL=debug
+    
     env_file:
       - .env
-    command: npm run dev
+    
+    # --- Netzwerk ---
     networks:
       - notenest-network
+    
+    # --- Command ---
+    command: npm run dev
+    
+    # --- Restart Policy ---
     restart: unless-stopped
 
 networks:
   notenest-network:
     driver: bridge
-
