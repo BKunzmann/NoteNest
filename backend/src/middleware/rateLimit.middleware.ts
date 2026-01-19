@@ -9,14 +9,15 @@ import { Request } from 'express';
 
 /**
  * Rate Limiter für Login-Versuche
- * 5 Versuche pro 15 Minuten pro IP
+ * Development: 20 Versuche pro 5 Minuten
+ * Production: 5 Versuche pro 15 Minuten
  */
 export const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 Minuten
-  max: 5, // 5 Versuche
+  windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 5 * 60 * 1000, // 15 Min (prod) / 5 Min (dev)
+  max: process.env.NODE_ENV === 'production' ? 5 : 20, // 5 (prod) / 20 (dev)
   message: {
     error: 'Too many login attempts',
-    message: 'Zu viele Login-Versuche. Bitte versuchen Sie es in 15 Minuten erneut.'
+    message: 'Zu viele Login-Versuche. Bitte versuchen Sie es später erneut.'
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
