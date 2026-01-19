@@ -91,14 +91,43 @@ docker-compose build
 docker-compose up -d
 ```
 
-### NAS Deployment
+### NAS Deployment (Synology, QNAP, TrueNAS)
 
+NoteNest kann auf verschiedenen NAS-Systemen deployed werden:
+
+**Schnellstart:**
 ```bash
-# Auf der NAS ausführen
-./scripts/deploy-nas.sh  # Linux/Mac
-# oder
-powershell -ExecutionPolicy Bypass -File .\scripts\deploy-nas.ps1  # Windows
+# 1. Beispiel-Konfiguration kopieren
+cp docker-compose.synology.example.yml docker-compose.yml
+
+# 2. Environment-Variablen aus docs/ENV_EXAMPLES.md kopieren
+nano .env  # JWT-Secrets generieren!
+
+# 3. Container starten
+docker-compose up -d
 ```
+
+**Ausführliche Anleitung:** Siehe [NAS Setup Guide](docs/NAS_SETUP_GUIDE.md)
+
+#### Wichtige Konzepte:
+
+1. **Private Ordner:** Jeder User sieht sein NAS-Home-Verzeichnis
+   - Synology: `/volume1/homes/username/`
+   - Automatisch als "Privat (username)" in NoteNest
+
+2. **Shared-Ordner:** Admin kann mehrere Shared-Ordner freigeben
+   - Beispiel: Familie, Projekte, Arbeit
+   - Admin entscheidet, welcher User welche Shared-Ordner sieht
+   - NAS-Permissions werden respektiert
+
+3. **Pfad-Konfiguration:**
+   - `docker-compose.yml`: Mountet NAS-Pfade IN den Container
+   - `.env`: Definiert Pfade INNERHALB des Containers
+
+Siehe auch:
+- [ENV_EXAMPLES.md](docs/ENV_EXAMPLES.md) - Environment-Variablen Beispiele
+- [NAS_SETUP_GUIDE.md](docs/NAS_SETUP_GUIDE.md) - Schritt-für-Schritt Setup
+- [DEPLOYMENT_MODES.md](docs/DEPLOYMENT_MODES.md) - Deployment-Modi erklärt
 
 **Hinweis:** Beim ersten Start auf der NAS werden JWT-Secrets automatisch generiert.
 

@@ -1,0 +1,66 @@
+# =============================================================================
+# NoteNest - Docker Compose für Standalone-Deployment
+# =============================================================================
+# Dieses Beispiel zeigt die Konfiguration für eigenständige Server
+# (ohne NAS-Integration)
+# =============================================================================
+
+services:
+  notenest:
+    # Image (entweder lokal gebaut oder von Registry)
+    image: notenest:latest
+    # Oder bauen:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    
+    container_name: notenest
+    restart: unless-stopped
+    
+    # Port
+    ports:
+      - "3100:3000"
+    
+    # =============================================================================
+    # VOLUMES - Standalone-Modus
+    # =============================================================================
+    volumes:
+      # Alle Daten lokal im Container/Volume
+      - ./data:/data
+      
+      # Logs
+      - ./logs:/app/logs
+      
+      # Bibel-Daten (optional)
+      - ./data/bibles:/app/data/bibles:ro
+      
+      # .env Datei
+      - ./.env:/app/.env
+    
+    # =============================================================================
+    # ENVIRONMENT VARIABLES
+    # =============================================================================
+    environment:
+      - NODE_ENV=production
+      - LOG_DIR=/app/logs
+    
+    env_file:
+      - .env
+    
+    # =============================================================================
+    # NETWORK & HEALTH
+    # =============================================================================
+    networks:
+      - notenest-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  notenest-network:
+    driver: bridge
+
