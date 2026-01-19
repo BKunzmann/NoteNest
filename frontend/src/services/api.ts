@@ -504,6 +504,34 @@ export interface UpdateUserStatusRequest {
 }
 
 /**
+ * Shared Folders Types
+ */
+export interface SharedFolder {
+  name: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface SharedFoldersResponse {
+  folders: SharedFolder[];
+}
+
+export interface UserSharedFolder {
+  id: number;
+  user_id: number;
+  folder_path: string;
+  created_at: string;
+}
+
+export interface UserSharedFoldersResponse {
+  folders: UserSharedFolder[];
+}
+
+export interface AddSharedFolderRequest {
+  folderPath: string;
+}
+
+/**
  * Admin API
  */
 export const adminAPI = {
@@ -558,6 +586,40 @@ export const adminAPI = {
     const response = await api.patch<{ message: string }>(`/admin/users/${userId}/status`, {
       isActive
     });
+    return response.data;
+  },
+
+  /**
+   * Gibt alle verfügbaren Shared-Ordner zurück
+   */
+  async getSharedFolders(): Promise<SharedFoldersResponse> {
+    const response = await api.get<SharedFoldersResponse>('/admin/shared-folders');
+    return response.data;
+  },
+
+  /**
+   * Gibt die Shared-Ordner eines Users zurück
+   */
+  async getUserSharedFolders(userId: number): Promise<UserSharedFoldersResponse> {
+    const response = await api.get<UserSharedFoldersResponse>(`/admin/users/${userId}/shared-folders`);
+    return response.data;
+  },
+
+  /**
+   * Fügt einem User Zugriff auf einen Shared-Ordner hinzu
+   */
+  async addUserSharedFolder(userId: number, folderPath: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/admin/users/${userId}/shared-folders`, {
+      folderPath
+    });
+    return response.data;
+  },
+
+  /**
+   * Entfernt den Zugriff eines Users auf einen Shared-Ordner
+   */
+  async removeUserSharedFolder(userId: number, folderId: number): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/admin/users/${userId}/shared-folders/${folderId}`);
     return response.data;
   }
 };
