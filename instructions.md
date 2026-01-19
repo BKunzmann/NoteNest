@@ -12,6 +12,10 @@
   - Struktur: `components/`, `pages/`, `services/`, `store/`, `utils/`
   - PWA: Service Worker via `vite-plugin-pwa`, Offline-Support (`services/offlineStorage.ts`)
   - API-Client: `services/api.ts` mit Axios, automatische Token-Erneuerung
+- **Authentifizierung**: JWT mit Refresh-Tokens (siehe `docs/AUTHENTICATION.md`)
+  - Access Token: 15 Min (automatisch erneuert)
+  - Refresh Token: 7 Tage (localStorage oder sessionStorage)
+  - "Angemeldet bleiben": localStorage (persistent) vs sessionStorage (Sitzung)
 - **Datenbank**: SQLite in `data/database/notenest.db` (Development) oder `/data/database/notenest.db` (Production)
 - **Dateisystem**: Notizen als `.md`-Dateien in `data/users/{username}/` (private) oder `data/shared/` (shared)
 - **Bibelstellen**: Lokale JSON-Dateien in `data/bibles/` + API.Bible-Integration (`services/bibleApi.service.ts`)
