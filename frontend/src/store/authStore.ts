@@ -40,9 +40,13 @@ export const useAuthStore = create<AuthState>()(
         try {
           const response: AuthResponse = await authAPI.login(data);
           
-          // Speichere Tokens
-          localStorage.setItem('accessToken', response.accessToken);
-          localStorage.setItem('refreshToken', response.refreshToken);
+          // Speichere Tokens abhängig von "Angemeldet bleiben"
+          const storage = data.rememberMe ? localStorage : sessionStorage;
+          storage.setItem('accessToken', response.accessToken);
+          storage.setItem('refreshToken', response.refreshToken);
+          
+          // Merke dir die Storage-Präferenz
+          localStorage.setItem('useSessionStorage', data.rememberMe ? 'false' : 'true');
           
           set({
             user: response.user,
@@ -71,9 +75,10 @@ export const useAuthStore = create<AuthState>()(
         try {
           const response: AuthResponse = await authAPI.register(data);
           
-          // Speichere Tokens
+          // Bei Registrierung immer localStorage verwenden (User will sich anmelden)
           localStorage.setItem('accessToken', response.accessToken);
           localStorage.setItem('refreshToken', response.refreshToken);
+          localStorage.setItem('useSessionStorage', 'false');
           
           set({
             user: response.user,
@@ -98,16 +103,23 @@ export const useAuthStore = create<AuthState>()(
        */
       logout: async () => {
         try {
-          const refreshToken = localStorage.getItem('refreshToken');
+          // Hole Token aus dem richtigen Storage
+          const useSessionStorage = localStorage.getItem('useSessionStorage') === 'true';
+          const storage = useSessionStorage ? sessionStorage : localStorage;
+          const refreshToken = storage.getItem('refreshToken');
+          
           if (refreshToken) {
             await authAPI.logout(refreshToken);
           }
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
-          // Lösche lokale Daten
+          // Lösche lokale Daten aus beiden Storages
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
+          localStorage.removeItem('useSessionStorage');
+          sessionStorage.removeItem('accessToken');
+          sessionStorage.removeItem('refreshToken');
           
           set({
             user: null,
@@ -123,8 +135,12 @@ export const useAuthStore = create<AuthState>()(
        * Versucht automatisch, den Refresh Token zu verwenden, wenn der Access Token abgelaufen ist
        */
       checkAuth: async () => {
-        const accessToken = localStorage.getItem('accessToken');
-        const refreshToken = localStorage.getItem('refreshToken');
+        // Prüfe beide Storages (localStorage für "Angemeldet bleiben", sessionStorage für Sitzung)
+        const useSessionStorage = localStorage.getItem('useSessionStorage') === 'true';
+        const storage = useSessionStorage ? sessionStorage : localStorage;
+        
+        const accessToken = storage.getItem('accessToken');
+        const refreshToken = storage.getItem('refreshToken');
         
         if (!accessToken && !refreshToken) {
           set({
@@ -164,7 +180,7 @@ export const useAuthStore = create<AuthState>()(
           if (refreshToken) {
             try {
               const response = await authAPI.refresh(refreshToken);
-              localStorage.setItem('accessToken', response.accessToken);
+              storage.setItem('accessToken', response.accessToken);
               
               // Hole User-Info mit neuem Token
               const user = await authAPI.getMe();
@@ -178,8 +194,9 @@ export const useAuthStore = create<AuthState>()(
             } catch (refreshError) {
               console.log('Refresh token failed:', refreshError);
               // Refresh fehlgeschlagen -> Logout
-              localStorage.removeItem('accessToken');
-              localStorage.removeItem('refreshToken');
+              storage.removeItem('accessToken');
+              storage.removeItem('refreshToken');
+              localStorage.removeItem('useSessionStorage');
               set({
                 user: null,
                 isAuthenticated: false,
@@ -199,8 +216,9 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           // Unerwarteter Fehler
           console.log('Auth check failed:', error);
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          storage.removeItem('accessToken');
+          storage.removeItem('refreshToken');
+          localStorage.removeItem('useSessionStorage');
           
           set({
             user: null,

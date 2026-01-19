@@ -41,6 +41,15 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/**
+ * Hilfsfunktion: Hole den richtigen Storage (sessionStorage oder localStorage)
+ * Basierend auf der User-Präferenz ("Angemeldet bleiben")
+ */
+const getTokenStorage = (): Storage => {
+  const useSessionStorage = localStorage.getItem('useSessionStorage') === 'true';
+  return useSessionStorage ? sessionStorage : localStorage;
+};
+
 // Erstelle Axios-Instance
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -52,7 +61,8 @@ const api: AxiosInstance = axios.create({
 // Request Interceptor: Füge Access Token hinzu
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    const storage = getTokenStorage();
+    const token = storage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -74,7 +84,8 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        const storage = getTokenStorage();
+        const refreshToken = storage.getItem('refreshToken');
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -84,7 +95,7 @@ api.interceptors.response.use(
         });
 
         const { accessToken } = response.data;
-        localStorage.setItem('accessToken', accessToken);
+        storage.setItem('accessToken', accessToken);
 
         // Setze neuen Token im Request
         if (originalRequest.headers) {
@@ -95,9 +106,10 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh fehlgeschlagen -> Logout
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
+        const storage = getTokenStorage();
+        storage.removeItem('accessToken');
+        storage.removeItem('refreshToken');
+        localStorage.removeItem('useSessionStorage');
         // Nur zu Login weiterleiten, wenn wir nicht bereits auf der Login-Seite sind
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
