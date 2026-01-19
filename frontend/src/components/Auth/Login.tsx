@@ -142,14 +142,28 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <Link 
-            to="/register" 
-            style={{ color: '#007AFF', textDecoration: 'none' }}
-          >
-            Noch kein Konto? Registrieren
-          </Link>
-        </div>
+        {registrationEnabled && (
+          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+            <Link 
+              to="/register" 
+              style={{ color: '#007AFF', textDecoration: 'none' }}
+            >
+              Noch kein Konto? Registrieren
+            </Link>
+          </div>
+        )}
+        
+        {!registrationEnabled && (
+          <div style={{ 
+            marginTop: '1.5rem', 
+            textAlign: 'center',
+            fontSize: '0.875rem',
+            color: '#666'
+          }}>
+            Verwende deine Zugangsdaten zum Anmelden.<br />
+            Bei Problemen kontaktiere deinen Administrator.
+          </div>
+        )}
       </div>
     </div>
   );

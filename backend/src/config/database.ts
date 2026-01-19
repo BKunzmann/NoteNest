@@ -128,6 +128,18 @@ export function initializeDatabase(): void {
     ON sessions(expires_at)
   `);
 
+  // Tabelle: user_shared_folders (Mehrere Shared-Ordner pro User, NAS-Mode)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_shared_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      folder_path TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, folder_path)
+    )
+  `);
+
   // Tabelle: bible_verses (Lokale Public-Domain-Übersetzungen)
   db.exec(`
     CREATE TABLE IF NOT EXISTS bible_verses (

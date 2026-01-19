@@ -162,22 +162,32 @@ export async function createUser(data: RegisterRequest): Promise<User> {
     sharedPath
   );
   
-  // Erstelle Benutzer-Ordner, falls nicht vorhanden
+  // Erstelle oder validiere Benutzer-Ordner
   try {
-    const fs = await import('fs');
+    const { IS_NAS_MODE } = await import('../config/constants');
+    const { validateNasHomePath, createPathIfNotExists } = await import('../utils/nasPathValidator');
     
-    // Erstelle privaten Ordner
-    if (!fs.existsSync(privatePath)) {
-      fs.mkdirSync(privatePath, { recursive: true });
-      console.log(`✅ Created user directory: ${privatePath}`);
+    if (IS_NAS_MODE) {
+      // NAS-Mode: Validiere, dass Ordner auf NAS existiert
+      const validation = validateNasHomePath(data.username);
+      if (!validation.valid) {
+        console.warn(`⚠️ NAS home directory validation failed: ${validation.error}`);
+        // Warnung, aber kein Fehler - User kann trotzdem erstellt werden
+        // Admin muss dann Ordner auf NAS erstellen
+      } else {
+        console.log(`✅ Validated NAS home directory: ${validation.path}`);
+      }
+    } else {
+      // Standalone-Mode: Erstelle Ordner lokal
+      const result = createPathIfNotExists(privatePath);
+      if (result.created) {
+        console.log(`✅ Created user directory: ${privatePath}`);
+      } else if (result.error) {
+        console.warn(`⚠️ Could not create user directory: ${result.error}`);
+      }
     }
-    
-    // Shared-Ordner wird beim ersten Zugriff erstellt (nicht pro Benutzer)
-    // Keine Aktion nötig
   } catch (error) {
-    // Fehler beim Erstellen des Ordners ist nicht kritisch
-    // (kann später manuell erstellt werden)
-    console.warn(`⚠️ Could not create user directory: ${privatePath}`, error);
+    console.warn(`⚠️ Path validation/creation error:`, error);
   }
   
   const user = findUserById(userId);

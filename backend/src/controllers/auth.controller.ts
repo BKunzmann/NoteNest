@@ -24,9 +24,21 @@ import { LoginRequest, RegisterRequest, AuthResponse } from '../types/auth';
  */
 export async function register(req: Request, res: Response): Promise<void> {
   try {
+    const { REGISTRATION_ENABLED, IS_NAS_MODE } = await import('../config/constants');
     const AUTH_MODE = process.env.AUTH_MODE || 'local';
     
     // Prüfe, ob Registrierung erlaubt ist
+    if (!REGISTRATION_ENABLED) {
+      res.status(403).json({ 
+        error: 'Registration disabled',
+        message: IS_NAS_MODE 
+          ? 'Self-registration is disabled in NAS mode. Please contact your administrator.'
+          : 'Registration is currently disabled.'
+      });
+      return;
+    }
+    
+    // Prüfe Auth-Mode (LDAP/Synology erlaubt keine lokale Registrierung)
     if (AUTH_MODE === 'ldap' || AUTH_MODE === 'synology') {
       res.status(403).json({ 
         error: 'Registration is not available in LDAP/Synology mode' 
@@ -257,16 +269,19 @@ export async function getMe(req: Request, res: Response): Promise<void> {
 
 /**
  * GET /api/auth/mode
- * Gibt aktiven Authentifizierungs-Modus zurück
+ * Gibt Authentifizierungs-Modus und Deployment-Konfiguration zurück
  */
-export function getAuthMode(_req: Request, res: Response): void {
+export async function getAuthMode(_req: Request, res: Response): Promise<void> {
+  const { DEPLOYMENT_MODE, IS_NAS_MODE, REGISTRATION_ENABLED } = await import('../config/constants');
   const AUTH_MODE = process.env.AUTH_MODE || 'local';
   const LDAP_ENABLED = process.env.LDAP_ENABLED === 'true';
   
   res.json({
     mode: AUTH_MODE,
     ldapEnabled: LDAP_ENABLED,
-    registrationEnabled: AUTH_MODE === 'local' || AUTH_MODE === 'hybrid'
+    registrationEnabled: REGISTRATION_ENABLED,
+    deploymentMode: DEPLOYMENT_MODE,
+    isNasMode: IS_NAS_MODE
   });
 }
 

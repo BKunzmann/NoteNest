@@ -180,6 +180,7 @@ import exportRoutes from './routes/export.routes';
 import searchRoutes from './routes/search.routes';
 import metricsRoutes from './routes/metrics.routes';
 import adminRoutes from './routes/admin.routes';
+import sharedFoldersRoutes from './routes/sharedFolders.routes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
@@ -189,6 +190,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api', metricsRoutes); // Metrics (ohne Rate Limiting für Monitoring)
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', sharedFoldersRoutes);
 
 // Static Frontend (React-Build) ausliefern
 // Im Docker-Image liegt der Build unter /app/frontend/build

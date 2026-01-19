@@ -35,5 +35,7 @@ export interface AuthMode {
   mode: 'local' | 'ldap' | 'synology' | 'hybrid';
   ldapEnabled: boolean;
   registrationEnabled: boolean;
+  deploymentMode?: 'standalone' | 'nas';
+  isNasMode?: boolean;
 }
 
