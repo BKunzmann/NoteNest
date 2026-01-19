@@ -44,7 +44,7 @@ function App() {
     }, 100);
     
     return () => clearTimeout(timer);
-  }, [checkAuth]);
+  }, []); // Leere Dependencies - checkAuth soll nur EINMAL beim Mount aufgerufen werden
 
   useEffect(() => {
     // Lade Theme, wenn Benutzer authentifiziert ist

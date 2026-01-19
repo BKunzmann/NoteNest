@@ -13,16 +13,10 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
   const location = useLocation();
 
-  useEffect(() => {
-    // Prüfe Authentifizierung beim Mount
-    if (!isAuthenticated && !isLoading) {
-      checkAuth();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // checkAuth wird bereits in App.tsx aufgerufen, hier nicht nochmal!
 
   if (isLoading) {
     return (
