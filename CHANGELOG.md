@@ -9,6 +9,29 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### ✨ Features
+- **Admin-Panel**: Benutzerverwaltung für Administratoren
+  - Benutzer erstellen, löschen, deaktivieren
+  - Passwort zurücksetzen
+  - Admin-Rechte verwalten
+  - Benutzer-Status ändern
+
+### 🐛 Bugfixes
+- **Authentifizierung**: "Angemeldet bleiben" funktioniert jetzt korrekt
+  - localStorage vs. sessionStorage abhängig von User-Wahl
+  - Race Condition beim App-Start behoben
+  - checkAuth() wird nur noch einmal pro Reload aufgerufen
+  - Access Token (15 Min) wird automatisch durch Refresh Token (7 Tage) erneuert
+
+### 🔧 Technische Details
+- **Rate Limiting**: Angepasst für Development und Production
+  - Development: 20 Login-Versuche / 5 Minuten
+  - Production: 5 Login-Versuche / 15 Minuten
+- **Docker-Konfiguration**: Optimiert und vereinfacht
+  - `.env.example` und `.env.production.example` Templates
+  - Separate docker-compose.yml für Dev und Production
+  - Test-Daten aus Repository entfernt
+
 ### Geplant für zukünftige Releases
 - Erweiterte Bibelstellen-Features (Vergleichsansicht, Vers-Notizen, erweiterte Versbereiche)
 - LDAP/NAS-Integration (optional)

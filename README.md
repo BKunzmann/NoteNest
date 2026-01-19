@@ -7,13 +7,17 @@ Persönliche Notizen-App mit Bibelstellen-Referenzen, Multi-User-Support und NAS
 
 ## Features
 
-- 📝 Markdown-Editor mit Live-Vorschau
-- 📖 Automatische Bibelstellen-Erkennung und -Referenzen
-- 👥 Multi-User-System mit Authentifizierung
-- 📁 Private und geteilte Ordner
-- 🐳 Docker-Deployment für NAS/Server
-- 📱 PWA-Support (Progressive Web App)
-- 📄 PDF-Export (A4/A5)
+- 📝 **Markdown-Editor** mit Live-Vorschau und WYSIWYG-Modus
+- 📖 **Bibelstellen-Integration** - Automatische Erkennung und interaktive Popups
+- 👥 **Multi-User-System** mit sicherer JWT-Authentifizierung
+  - "Angemeldet bleiben" Funktionalität (7 Tage Gültigkeit)
+  - Automatische Token-Erneuerung
+  - Rate Limiting zum Schutz vor Brute-Force-Angriffen
+- 🔐 **Admin-Panel** - Benutzerverwaltung für Administratoren
+- 📁 **Private und geteilte Ordner** mit NAS-Integration
+- 🐳 **Docker-Deployment** für NAS/Server (Synology, QNAP)
+- 📱 **PWA-Support** - Offline-Funktionalität
+- 📄 **PDF-Export** (A4/A5, Word, Markdown)
 
 ## Schnellstart
 
@@ -100,11 +104,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-nas.ps1  # Windows
 
 ## Dokumentation
 
-- Vollständige Architektur-Dokumentation: [ARCHITEKTUR_PLANUNG.md](./ARCHITEKTUR_PLANUNG.md)
-- Reverse Proxy Setup (für externe Erreichbarkeit): [REVERSE_PROXY.md](./REVERSE_PROXY.md)
-- Deployment-Anleitung: [DEPLOYMENT_ANLEITUNG.md](./DEPLOYMENT_ANLEITUNG.md)
-- Changelog: [CHANGELOG.md](./CHANGELOG.md)
-- AI-Instructions für Entwickler: [instructions.md](./instructions.md)
+- **Authentifizierung**: [docs/AUTHENTICATION.md](./docs/AUTHENTICATION.md) - Login, "Angemeldet bleiben", Token-Management
+- **Architektur**: [ARCHITEKTUR_PLANUNG.md](./ARCHITEKTUR_PLANUNG.md) - Vollständige System-Dokumentation
+- **Deployment**: [DEPLOYMENT_ANLEITUNG.md](./DEPLOYMENT_ANLEITUNG.md) - Installation auf NAS/Server
+- **Reverse Proxy**: [REVERSE_PROXY.md](./REVERSE_PROXY.md) - HTTPS-Setup für externe Erreichbarkeit
+- **Changelog**: [CHANGELOG.md](./CHANGELOG.md) - Versionshistorie
+- **Troubleshooting**: [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Problemlösungen
+- **AI-Instructions**: [instructions.md](./instructions.md) - Für Entwickler
 
 ## Releases
 
