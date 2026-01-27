@@ -9,7 +9,7 @@ import { loginLimiter, apiLimiter, pdfExportLimiter, registerLimiter } from '../
 
 const createAppWithLimiter = (limiter: RequestHandler, beforeLimiter?: RequestHandler) => {
   const app = express();
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 
   const middlewares: RequestHandler[] = [];
   if (beforeLimiter) {
