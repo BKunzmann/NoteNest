@@ -46,6 +46,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1  # Windows
 cp .env.example .env
 # .env bearbeiten und API-Keys eintragen
 # JWT-Secrets werden automatisch generiert (beim ersten Docker-Start)
+#
+# Hinweis: docker-compose.example.yml laedt Variablen via env_file.
+# Bitte Werte nur in .env pflegen (keine Duplikate in environment:).
 ```
 
 3. Dependencies installieren:

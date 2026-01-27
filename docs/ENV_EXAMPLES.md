@@ -2,6 +2,9 @@
 
 Diese Datei enthält Beispiel-Konfigurationen für `.env`-Dateien für verschiedene Deployment-Szenarien.
 
+**Hinweis:** `.env` ist die einzige Quelle für Umgebungsvariablen. `docker-compose.example.yml`
+lädt sie über `env_file`. Bitte keine doppelten Werte in `environment:` pflegen.
+
 ## 📋 Quick Start
 
 1. Wähle dein Deployment-Szenario (NAS oder Standalone)

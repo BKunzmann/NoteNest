@@ -98,14 +98,11 @@ services:
       # Logs
       - ./logs:/app/logs
       
-      # .env
+    # .env
       - ./.env:/app/.env
     
-    environment:
-      - NODE_ENV=production
-    
     env_file:
-      - .env
+      - .env  # .env ist die einzige Quelle fuer Umgebungsvariablen
     
     # WICHTIG: UID/GID des admin-Users
     user: "1024:100"  # Prüfen mit: id admin
@@ -119,6 +116,7 @@ networks:
 ```
 
 **Wichtig:** Jeden Shared-Ordner einzeln mounten!
+**Hinweis:** Umgebungsvariablen bitte nur in `.env` pflegen (keine Duplikate in `environment:`).
 
 ### 2.3 .env konfigurieren
 
