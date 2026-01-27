@@ -133,7 +133,6 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ### 📚 Dokumentation
 - Vollständige Architektur-Dokumentation (`ARCHITEKTUR_PLANUNG.md`)
-- Deployment-Anleitung (`DEPLOYMENT_ANLEITUNG.md`)
 - Deployment-Checkliste (`DEPLOYMENT_CHECKLISTE.md`)
 - Monitoring-Setup (`MONITORING_SETUP.md`)
 - Testing-Guide (`TESTING_GUIDE.md`)
