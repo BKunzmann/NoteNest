@@ -36,10 +36,7 @@ services:
       - ./.env:/app/.env
     
     # --- Umgebungsvariablen ---
-    environment:
-      - NODE_ENV=development
-      - LOG_LEVEL=debug
-    
+    # Werte wie NODE_ENV/LOG_LEVEL bitte in .env setzen.
     env_file:
       - .env
     
