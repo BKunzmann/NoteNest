@@ -4,7 +4,7 @@
  * Testet die vollständige Auth-Flow (Register → Login → Refresh)
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, beforeAll, afterAll } from '@jest/globals';
 import { initializeDatabase } from '../../config/database';
 
 // TODO: Importiere die Express-App
@@ -21,27 +21,13 @@ describe('Auth Integration Tests', () => {
   });
 
   describe('POST /api/auth/register', () => {
-    it('should register a new user', async () => {
-      // TODO: Implementiere Test
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should reject duplicate username', async () => {
-      // TODO: Implementiere Test
-      expect(true).toBe(true); // Placeholder
-    });
+    it.todo('should register a new user');
+    it.todo('should reject duplicate username');
   });
 
   describe('POST /api/auth/login', () => {
-    it('should login with correct credentials', async () => {
-      // TODO: Implementiere Test
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should reject incorrect password', async () => {
-      // TODO: Implementiere Test
-      expect(true).toBe(true); // Placeholder
-    });
+    it.todo('should login with correct credentials');
+    it.todo('should reject incorrect password');
   });
 });
 

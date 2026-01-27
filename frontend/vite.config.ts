@@ -2,10 +2,6 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const ICON_96 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABCklEQVR4nO3OoQEAMAjAMO7e83BGRCfiM/N2P4gH6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+p4oI4H6nigjgfqeKCOB+IOaa3lKWGdzC4AAAAASUVORK5CYII=';
-const ICON_192 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAACWklEQVR4nO3OoQEAMAjAMO7e83BGxSLiM/N24Vt5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEp5AEIH4cOUztIU9AIAAAAASUVORK5CYII=';
-const ICON_512 = 'data:image/png;base64,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';
-
 export default defineConfig({
   resolve: {
     dedupe: ['marked', 'turndown'],
@@ -26,7 +22,14 @@ export default defineConfig({
         enabled: false
       },
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico'],
+      includeAssets: [
+        'favicon.ico',
+        'icons/favicon.ico',
+        'icons/favicon-16x16.png',
+        'icons/favicon-32x32.png',
+        'icons/favicon-48x48.png',
+        'icons/Designer.png'
+      ],
       workbox: {
         // Caching-Strategien
         runtimeCaching: [
@@ -79,16 +82,28 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: ICON_192,
-            sizes: '192x192',
+            src: '/icons/Designer.png',
+            sizes: '1024x1024',
             type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: ICON_512,
-            sizes: '512x512',
+            src: '/icons/favicon-48x48.png',
+            sizes: '48x48',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: '/icons/favicon-32x32.png',
+            sizes: '32x32',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/favicon-16x16.png',
+            sizes: '16x16',
+            type: 'image/png',
+            purpose: 'any'
           }
         ],
         shortcuts: [
@@ -97,7 +112,7 @@ export default defineConfig({
             short_name: 'Neu',
             description: 'Erstelle eine neue Notiz',
             url: '/notes/new',
-            icons: [{ src: ICON_96, sizes: '96x96', type: 'image/png' }]
+            icons: [{ src: '/icons/favicon-48x48.png', sizes: '48x48', type: 'image/png' }]
           }
         ]
       }
@@ -118,4 +133,3 @@ export default defineConfig({
     sourcemap: true
   }
 });
-
