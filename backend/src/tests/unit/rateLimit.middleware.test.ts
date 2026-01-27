@@ -2,7 +2,7 @@
  * Unit Tests für Rate Limiting Middleware
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it } from '@jest/globals';
 import express, { RequestHandler } from 'express';
 import request from 'supertest';
 import { loginLimiter, apiLimiter, pdfExportLimiter, registerLimiter } from '../../middleware/rateLimit.middleware';
