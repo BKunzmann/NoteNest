@@ -7,6 +7,7 @@ import request from 'supertest';
 import express from 'express';
 import { initializeDatabase } from '../../config/database';
 import db from '../../config/database';
+import { VERSION } from '../../config/version';
 
 // Erstelle eine Test-Express-App
 const createTestApp = () => {
@@ -27,7 +28,7 @@ const createTestApp = () => {
       
       res.json({ 
         status: dbStatus === 'ok' ? 'ok' : 'degraded',
-        version: expect.any(String), // Version wird aus version.ts gelesen
+        version: VERSION,
         timestamp: new Date().toISOString(),
         uptime: `${Math.floor(uptime)}s`,
         database: dbStatus,
