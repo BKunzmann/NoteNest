@@ -111,6 +111,19 @@ Falls du die IDE-Fehler beheben möchtest:
 
 ---
 
+## Rate Limiting / Reverse Proxy
+
+### Problem: `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR`
+
+**Ursache:** Reverse Proxy setzt `X-Forwarded-For`, aber `trust proxy` ist aus.
+
+**Loesung:** In `.env` setzen und Container neu starten:
+```env
+TRUST_PROXY=1
+```
+
+---
+
 ## Authentifizierung
 
 ### Problem: User wird nach Reload ausgeloggt

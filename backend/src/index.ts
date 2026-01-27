@@ -12,6 +12,7 @@ import { initializeDatabase } from './config/database';
 import logger, { logInfo, logError, logWarn } from './config/logger';
 import { apiLimiter } from './middleware/rateLimit.middleware';
 import { VERSION, getVersionInfo } from './config/version';
+import { IS_NAS_MODE } from './config/constants';
 import { 
   httpRequestDuration, 
   httpRequestTotal, 
@@ -46,6 +47,24 @@ try {
 }
 
 const app = express();
+const trustProxySetting = process.env.TRUST_PROXY;
+if (trustProxySetting !== undefined) {
+  const normalized = trustProxySetting.toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    app.set('trust proxy', 1);
+  } else if (normalized === 'false' || normalized === '0') {
+    app.set('trust proxy', false);
+  } else {
+    const parsed = Number(trustProxySetting);
+    if (!Number.isNaN(parsed)) {
+      app.set('trust proxy', parsed);
+    }
+  }
+} else if (IS_NAS_MODE) {
+  // NAS-Deployments laufen haeufig hinter einem Reverse Proxy.
+  app.set('trust proxy', 1);
+}
+
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Middleware
