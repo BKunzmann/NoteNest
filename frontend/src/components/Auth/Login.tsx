@@ -72,7 +72,7 @@ export default function Login() {
             color: '#c33',
             borderRadius: '4px',
             fontSize: '0.875rem'
-          }}>
+          }} role="alert">
             {error || localError}
           </div>
         )}
@@ -88,6 +88,9 @@ export default function Login() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -109,6 +112,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
+              autoComplete="current-password"
               style={{
                 width: '100%',
                 padding: '0.75rem',

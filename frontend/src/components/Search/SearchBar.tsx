@@ -120,6 +120,7 @@ export default function SearchBar({ onClose }: SearchBarProps) {
           aria-expanded={showResults}
           aria-controls={listboxId}
           aria-autocomplete="list"
+          aria-label="Notizen durchsuchen"
           onFocus={() => {
             if (results.length > 0) {
               setShowResults(true);
@@ -134,7 +135,8 @@ export default function SearchBar({ onClose }: SearchBarProps) {
             fontSize: '1rem',
             backgroundColor: 'var(--bg-primary, #fff)',
             color: 'var(--text-primary, #333)',
-            outline: 'none'
+            outline: 'none',
+            minHeight: '44px'
           }}
         />
         {isSearching && (

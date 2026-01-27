@@ -282,7 +282,8 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Ordner erstellen"
           title="Neuen Ordner erstellen"
@@ -304,7 +305,8 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Datei erstellen"
           title="Neue Datei erstellen"
@@ -329,7 +331,8 @@ export default function BottomToolbar() {
             color: '#007AFF',
             backgroundColor: isPreviewActive ? 'var(--bg-tertiary)' : 'transparent',
             borderRadius: '8px',
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Vorschau"
           title={isPreviewActive ? 'Vorschau schließen' : 'Vorschau'}
@@ -354,7 +357,8 @@ export default function BottomToolbar() {
               gap: '0.25rem',
               color: (!selectedFile || !selectedPath) ? '#999' : '#007AFF',
               opacity: (!selectedFile || !selectedPath) ? 0.5 : 1,
-              minWidth: '60px'
+              minWidth: '60px',
+              minHeight: '44px'
             }}
             aria-label="Export"
             title={(!selectedFile || !selectedPath) ? 'Keine Datei ausgewählt' : 'Exportieren'}
@@ -476,7 +480,8 @@ export default function BottomToolbar() {
             gap: '0.25rem',
             color: (!selectedFile || !selectedPath) ? '#999' : '#c33',
             opacity: (!selectedFile || !selectedPath) ? 0.5 : 1,
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Löschen"
           title={(!selectedFile || !selectedPath) ? 'Keine Datei ausgewählt' : 'Löschen'}
