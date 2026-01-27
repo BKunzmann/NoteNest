@@ -9,6 +9,7 @@ NoteNest auf Synology NAS installieren mit:
 
 **Hinweis:** Dieses Dokument beschreibt den NAS-Mode (`DEPLOYMENT_MODE=nas`).
 Für Standalone siehe [README.md](../README.md) und [ENV_EXAMPLES.md](./ENV_EXAMPLES.md).
+Kurzanleitung fuer den Erststart: [ERSTER_START.md](../ERSTER_START.md).
 
 ---
 

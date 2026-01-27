@@ -122,6 +122,7 @@ nano .env  # JWT-Secrets generieren!
 docker-compose up -d
 ```
 
+**Erster Start (kurz):** [ERSTER_START.md](./ERSTER_START.md)  
 **Ausführliche Anleitung:** Siehe [NAS Setup Guide](docs/NAS_SETUP_GUIDE.md)
 
 #### Wichtige Konzepte:
@@ -150,6 +151,7 @@ Siehe auch:
 - **Authentifizierung**: [docs/AUTHENTICATION.md](./docs/AUTHENTICATION.md) - Login, "Angemeldet bleiben", Token-Management
 - **Architektur**: [ARCHITEKTUR_PLANUNG.md](./ARCHITEKTUR_PLANUNG.md) - Vollständige System-Dokumentation
 - **Deployment (NAS/Standalone)**: [docs/NAS_SETUP_GUIDE.md](./docs/NAS_SETUP_GUIDE.md) und [docs/ENV_EXAMPLES.md](./docs/ENV_EXAMPLES.md)
+- **Erster Start**: [ERSTER_START.md](./ERSTER_START.md) - Kurz-Checkliste
 - **Docker-Entwicklung**: [docs/DOCKER_ENTWICKLUNG.md](./docs/DOCKER_ENTWICKLUNG.md) - Lokales Setup mit Docker
 - **Changelog**: [CHANGELOG.md](./CHANGELOG.md) - Versionshistorie
 - **Troubleshooting**: [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Problemlösungen
