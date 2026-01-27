@@ -68,6 +68,9 @@ ADMIN_EMAIL=...
 
 **Wichtig:** Passwort nach dem ersten Login aendern.
 
+**Falls Login nicht klappt:** Einmal `docker-compose down`, dann
+`docker-compose pull` und `docker-compose up -d` ausfuehren und erneut testen.
+
 ---
 
 Weitere Infos:
