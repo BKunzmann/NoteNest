@@ -12,6 +12,8 @@ import fs from 'fs';
 
 let app: express.Application;
 let dbPath: string;
+let homesPath: string;
+let sharedPath: string;
 let baseRefreshToken = '';
 
 const baseUser = {
@@ -31,6 +33,13 @@ describe('Auth Integration Tests', () => {
 
     dbPath = path.join(__dirname, '../../../data/database/test-auth.db');
     process.env.DB_PATH = dbPath;
+    homesPath = path.join(__dirname, '../../../data/users-test');
+    sharedPath = path.join(__dirname, '../../../data/shared-test');
+    process.env.NAS_HOMES_PATH = homesPath;
+    process.env.NAS_SHARED_PATH = sharedPath;
+
+    fs.mkdirSync(homesPath, { recursive: true });
+    fs.mkdirSync(sharedPath, { recursive: true });
 
     const { initializeDatabase } = await import('../../config/database');
     initializeDatabase();
@@ -54,6 +63,17 @@ describe('Auth Integration Tests', () => {
       try {
         if (file && fs.existsSync(file)) {
           fs.unlinkSync(file);
+        }
+      } catch {
+        // Ignore cleanup failures
+      }
+    }
+
+    const cleanupDirs = [homesPath, sharedPath];
+    for (const dir of cleanupDirs) {
+      try {
+        if (dir && fs.existsSync(dir)) {
+          fs.rmSync(dir, { recursive: true, force: true });
         }
       } catch {
         // Ignore cleanup failures
