@@ -98,7 +98,7 @@ NoteNest kann auf verschiedenen NAS-Systemen deployed werden:
 **Schnellstart:**
 ```bash
 # 1. Beispiel-Konfiguration kopieren
-cp docker-compose.synology.example.yml docker-compose.yml
+cp docker-compose.example.yml docker-compose.yml
 
 # 2. Environment-Variablen aus docs/ENV_EXAMPLES.md kopieren
 nano .env  # JWT-Secrets generieren!
