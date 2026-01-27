@@ -4,7 +4,6 @@
  * Schützt Routen vor unauthentifiziertem Zugriff
  */
 
-import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
