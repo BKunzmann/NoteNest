@@ -378,5 +378,5 @@ id admin
 
 - [NAS_SETUP_GUIDE.md](./NAS_SETUP_GUIDE.md) - Schritt-für-Schritt Setup
 - [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) - Deployment-Modi erklärt
-- [docker-compose.synology.example.yml](../docker-compose.synology.example.yml) - Vollständige Compose-Konfiguration
+- [docker-compose.example.yml](../docker-compose.example.yml) - Vollständige Compose-Konfiguration
 

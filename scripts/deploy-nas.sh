@@ -8,8 +8,13 @@ echo "🚀 NoteNest NAS Deployment"
 echo ""
 
 # Prüfe ob wir im richtigen Verzeichnis sind
-if [ ! -f "docker-compose.yml" ]; then
-    echo "❌ docker-compose.yml nicht gefunden!"
+if [ -f "docker-compose.yml" ]; then
+    COMPOSE_FILE="docker-compose.yml"
+elif [ -f "docker-compose.example.yml" ]; then
+    COMPOSE_FILE="docker-compose.example.yml"
+else
+    echo "❌ Keine docker-compose Datei gefunden!"
+    echo "   Erwartet: docker-compose.yml oder docker-compose.example.yml"
     echo "   Bitte führe dieses Script im Projekt-Root aus."
     exit 1
 fi
@@ -24,25 +29,25 @@ fi
 
 # Baue Docker Image neu
 echo "🔨 Baue Docker Image..."
-docker-compose build
+docker-compose -f "$COMPOSE_FILE" build
 echo "✅ Build abgeschlossen"
 echo ""
 
 # Stoppe alte Container
 echo "🛑 Stoppe alte Container..."
-docker-compose down
+docker-compose -f "$COMPOSE_FILE" down
 echo "✅ Container gestoppt"
 echo ""
 
 # Starte neue Container
 echo "🚀 Starte neue Container..."
-docker-compose up -d
+docker-compose -f "$COMPOSE_FILE" up -d
 echo "✅ Container gestartet"
 echo ""
 
 # Zeige Logs
 echo "📋 Container-Status:"
-docker-compose ps
+docker-compose -f "$COMPOSE_FILE" ps
 echo ""
 
 echo "✅ Deployment abgeschlossen!"
