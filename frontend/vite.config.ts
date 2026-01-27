@@ -28,6 +28,8 @@ export default defineConfig({
         'icons/favicon-16x16.png',
         'icons/favicon-32x32.png',
         'icons/favicon-48x48.png',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
         'icons/Designer.png'
       ],
       workbox: {
@@ -82,10 +84,22 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
+            src: '/icons/icon-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
             src: '/icons/Designer.png',
             sizes: '1024x1024',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
           },
           {
             src: '/icons/favicon-48x48.png',
