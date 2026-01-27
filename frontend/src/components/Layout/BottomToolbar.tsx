@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useFileStore } from '../../store/fileStore';
+import { useEditorStore } from '../../store/editorStore';
 import CreateFileDialog from '../FileManager/CreateFileDialog';
 import DeleteConfirmDialog from '../FileManager/DeleteConfirmDialog';
 import { exportAPI, settingsAPI, fileAPI } from '../../services/api';
@@ -21,6 +22,7 @@ export default function BottomToolbar() {
     deleteItem,
     loadFiles
   } = useFileStore();
+  const { viewMode, setViewMode } = useEditorStore();
   const [showCreateFile, setShowCreateFile] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -96,6 +98,12 @@ export default function BottomToolbar() {
     }
     setShowExportMenu(!showExportMenu);
   };
+
+  const handlePreviewToggle = () => {
+    setViewMode(viewMode === 'preview' ? 'wysiwyg' : 'preview');
+  };
+
+  const isPreviewActive = viewMode === 'preview';
 
   const handleExportPDF = async () => {
     if (!selectedFile || !selectedPath || !selectedType) {
@@ -274,7 +282,8 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Ordner erstellen"
           title="Neuen Ordner erstellen"
@@ -296,7 +305,8 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Datei erstellen"
           title="Neue Datei erstellen"
@@ -306,6 +316,8 @@ export default function BottomToolbar() {
         </button>
 
         <button
+          onClick={handlePreviewToggle}
+          aria-pressed={isPreviewActive}
           style={{
             background: 'none',
             border: 'none',
@@ -317,10 +329,13 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
-            minWidth: '60px'
+            backgroundColor: isPreviewActive ? 'var(--bg-tertiary)' : 'transparent',
+            borderRadius: '8px',
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Vorschau"
-          title="Vorschau"
+          title={isPreviewActive ? 'Vorschau schließen' : 'Vorschau'}
         >
           <span>👁️</span>
           <span style={{ fontSize: '0.625rem' }}>Vorschau</span>
@@ -342,7 +357,8 @@ export default function BottomToolbar() {
               gap: '0.25rem',
               color: (!selectedFile || !selectedPath) ? '#999' : '#007AFF',
               opacity: (!selectedFile || !selectedPath) ? 0.5 : 1,
-              minWidth: '60px'
+              minWidth: '60px',
+              minHeight: '44px'
             }}
             aria-label="Export"
             title={(!selectedFile || !selectedPath) ? 'Keine Datei ausgewählt' : 'Exportieren'}
@@ -464,7 +480,8 @@ export default function BottomToolbar() {
             gap: '0.25rem',
             color: (!selectedFile || !selectedPath) ? '#999' : '#c33',
             opacity: (!selectedFile || !selectedPath) ? 0.5 : 1,
-            minWidth: '60px'
+            minWidth: '60px',
+            minHeight: '44px'
           }}
           aria-label="Löschen"
           title={(!selectedFile || !selectedPath) ? 'Keine Datei ausgewählt' : 'Löschen'}

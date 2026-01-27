@@ -127,7 +127,7 @@ export default function Register() {
             color: '#c33',
             borderRadius: '4px',
             fontSize: '0.875rem'
-          }}>
+          }} role="alert">
             {error || localError}
           </div>
         )}
@@ -143,6 +143,9 @@ export default function Register() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -165,6 +168,7 @@ export default function Register() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
+              autoComplete="email"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -185,6 +189,7 @@ export default function Register() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
+              autoComplete="new-password"
               style={{
                 width: '100%',
                 padding: '0.75rem',
@@ -207,6 +212,7 @@ export default function Register() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={isLoading}
+              autoComplete="new-password"
               style={{
                 width: '100%',
                 padding: '0.75rem',

@@ -36,7 +36,7 @@ describe('Auth Service', () => {
     it('should verify a correct password', async () => {
       const password = 'testPassword123';
       const hash = await authService.hashPassword(password);
-      const isValid = await authService.verifyPassword(password, hash);
+      const isValid = await authService.verifyPassword(hash, password);
       
       expect(isValid).toBe(true);
     });
@@ -45,7 +45,7 @@ describe('Auth Service', () => {
       const password = 'testPassword123';
       const wrongPassword = 'wrongPassword';
       const hash = await authService.hashPassword(password);
-      const isValid = await authService.verifyPassword(wrongPassword, hash);
+      const isValid = await authService.verifyPassword(hash, wrongPassword);
       
       expect(isValid).toBe(false);
     });

@@ -76,7 +76,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '4px',
+            borderRadius: '8px',
+            minWidth: '44px',
+            minHeight: '44px',
             color: '#007AFF'
           }}
           aria-label="Menü"
@@ -116,7 +118,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: '4px',
+              borderRadius: '8px',
+              minWidth: '44px',
+              minHeight: '44px',
               cursor: 'pointer'
             }}
             aria-label="Admin"
@@ -136,7 +140,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '4px',
+              borderRadius: '8px',
+              minWidth: '44px',
+              minHeight: '44px',
             cursor: 'pointer'
           }}
           aria-label="Einstellungen"
@@ -156,7 +162,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: '4px',
+              borderRadius: '8px',
+              minWidth: '44px',
+              minHeight: '44px',
               color: '#007AFF'
             }}
             aria-label="Benutzer-Menü"

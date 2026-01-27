@@ -22,6 +22,7 @@ export default function SearchBar({ onClose }: SearchBarProps) {
   const navigate = useNavigate();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxId = 'search-results-list';
 
   useEffect(() => {
     // Fokussiere Input beim Öffnen
@@ -116,6 +117,10 @@ export default function SearchBar({ onClose }: SearchBarProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
+          aria-expanded={showResults}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-label="Notizen durchsuchen"
           onFocus={() => {
             if (results.length > 0) {
               setShowResults(true);
@@ -130,7 +135,8 @@ export default function SearchBar({ onClose }: SearchBarProps) {
             fontSize: '1rem',
             backgroundColor: 'var(--bg-primary, #fff)',
             color: 'var(--text-primary, #333)',
-            outline: 'none'
+            outline: 'none',
+            minHeight: '44px'
           }}
         />
         {isSearching && (
@@ -151,6 +157,8 @@ export default function SearchBar({ onClose }: SearchBarProps) {
 
       {showResults && results.length > 0 && (
         <div
+          id={listboxId}
+          role="listbox"
           style={{
             position: 'absolute',
             top: '100%',
@@ -169,6 +177,8 @@ export default function SearchBar({ onClose }: SearchBarProps) {
           {results.map((result, index) => (
             <div
               key={`${result.path}-${result.type}`}
+              role="option"
+              aria-selected={selectedIndex === index}
               onClick={() => handleSelectResult(result)}
               onMouseEnter={() => setSelectedIndex(index)}
               style={{

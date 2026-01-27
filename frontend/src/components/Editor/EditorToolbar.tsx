@@ -37,7 +37,9 @@ export default function EditorToolbar({
     color: 'var(--text-primary)',
     cursor: 'pointer',
     fontSize: '0.875rem',
-    marginRight: '0.5rem'
+    marginRight: '0.5rem',
+    minHeight: '44px',
+    minWidth: '44px'
   };
 
   const activeButtonStyle: React.CSSProperties = {
@@ -106,8 +108,8 @@ export default function EditorToolbar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minWidth: '32px',
-            height: '32px',
+            minWidth: '44px',
+            height: '44px',
             opacity: canUndo ? 1 : 0.5,
             transition: 'all 0.2s ease'
           }}
@@ -140,8 +142,8 @@ export default function EditorToolbar({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minWidth: '32px',
-            height: '32px',
+            minWidth: '44px',
+            height: '44px',
             opacity: canRedo ? 1 : 0.5,
             transition: 'all 0.2s ease'
           }}

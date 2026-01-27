@@ -1,0 +1,88 @@
+# =============================================================================
+# NoteNest - Docker Compose Example (Synology NAS)
+# =============================================================================
+# Optimized for Synology NAS:
+# - Explicit UID/GID mapping for NAS permissions
+# - Healthcheck for container supervision
+# - Log rotation to protect NAS storage
+# - Multiple shared folder mounts (optional)
+# =============================================================================
+
+services:
+  notenest:
+    # Image (either local build or registry)
+    image: notenest:latest
+    # Or build locally on the NAS:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+
+    container_name: notenest
+    restart: unless-stopped
+    init: true
+
+    # Map host port to container port
+    # Example: 3100:3000 -> http://NAS-IP:3100
+    ports:
+      - "3100:3000"
+
+    # Volumes: map Synology paths into the container
+    volumes:
+      # Database (persistent)
+      - ./data/database:/data/database
+
+      # Home directories (private folders)
+      - /volume1/homes:/data/homes:ro
+
+      # Shared folders (add/remove as needed)
+      - /volume1/shared:/data/shared/Allgemein:rw
+      - /volume1/Familie:/data/shared/Familie:rw
+      - /volume1/Projekte:/data/shared/Projekte:rw
+      - /volume1/Arbeit:/data/shared/Arbeit:rw
+
+      # Logs
+      - ./logs:/app/logs
+
+      # Bible data (optional, read-only)
+      - ./data/bibles:/app/data/bibles:ro
+
+      # .env file (optional)
+      - ./.env:/app/.env
+
+    environment:
+      - DEPLOYMENT_MODE=nas
+      - AUTH_MODE=hybrid
+      - REGISTRATION_ENABLED=false
+      - NAS_TYPE=synology
+      - NAS_HOMES_PATH=/data/homes
+      - NAS_SHARED_PATH=/data/shared
+      - NODE_ENV=production
+      - LOG_DIR=/app/logs
+
+    # .env must define JWT_SECRET and JWT_REFRESH_SECRET at minimum.
+    env_file:
+      - .env
+
+    # Synology standard: admin = UID 1024, users = GID 100
+    # Verify on NAS via: id admin
+    user: "1024:100"
+
+    networks:
+      - notenest-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  notenest-network:
+    driver: bridge
