@@ -5,7 +5,7 @@
  */
 
 import { Request, Response } from 'express';
-import { db } from '../config/database';
+import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
 import { 
   listAvailableSharedFolders, 
@@ -16,7 +16,7 @@ import {
  * GET /api/admin/shared-folders
  * Listet verfügbare Shared-Ordner auf
  */
-export async function getAvailableSharedFolders(req: Request, res: Response): Promise<void> {
+export async function getAvailableSharedFolders(_req: Request, res: Response): Promise<void> {
   try {
     const result = listAvailableSharedFolders();
     

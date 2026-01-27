@@ -19,7 +19,7 @@ import { RegisterRequest } from '../types/auth';
  * GET /api/admin/users
  * Gibt alle Benutzer zurück
  */
-export async function getUsers(req: Request, res: Response): Promise<void> {
+export async function getUsers(_req: Request, res: Response): Promise<void> {
   try {
     const users = getAllUsers();
     

@@ -6,7 +6,7 @@
 
 import db from '../config/database';
 import { User, RegisterRequest } from '../types/auth';
-import { hashPassword, createUser } from './auth.service';
+import { hashPassword } from './auth.service';
 import fs from 'fs';
 
 /**
