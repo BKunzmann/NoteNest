@@ -4,7 +4,7 @@
 
 ## Aufgabe
 
-Erzeuge oder aktualisiere eine Datei `instructions.md` im Arbeitsverzeichnis, die AI‑Coding‑Agents sofort produktiv macht. Schreibe präzise, projektspezifische Regeln (20–50 Zeilen, Markdown) mit echten Beispielen/Kommandos aus diesem Repo. Keine Markenbegriffe. Fokus: **Architektur**, **Workflows**, **Konventionen**, **Integrationen**, **CI/CD**. 
+Erzeuge oder aktualisiere eine Datei `docs/AI/instructions.md`, die AI‑Coding‑Agents sofort produktiv macht. Schreibe präzise, projektspezifische Regeln (20–50 Zeilen, Markdown) mit echten Beispielen/Kommandos aus diesem Repo. Keine Markenbegriffe. Fokus: **Architektur**, **Workflows**, **Konventionen**, **Integrationen**, **CI/CD**. 
 
 Wenn bestehende instructions existieren, **mergen** (Wertvolles erhalten, Veraltetes aktualisieren).
 
@@ -15,15 +15,15 @@ Wenn bestehende instructions existieren, **mergen** (Wertvolles erhalten, Veralt
 ## Projektstruktur
 
 Projekt/
-├─ instructions.md                           # Generierte KI-Anleitung für Agents
 ├─ docs/
-│   └─ ai-instructions-prompt.md   # Vollständiger Prompt + Beispiele + Skeleton (diese Datei)
+│   └─ AI/
+│      ├─ instructions.md                 # Generierte KI-Anleitung für Agents
+│      └─ ai-instructions-prompt.md       # Vollständiger Prompt + Beispiele + Skeleton (diese Datei)
 └─ ci/
-    ├─ ci.yml                                         # Plattformneutraler CI-Workflow
-    └─ branch-policy.md                    # Dokumentation der Branch-Regeln
+    ├─ ci.yml                                           # Plattformneutraler CI-Workflow
+    └─ branch-policy.md                       # Dokumentation der Branch-Regeln
 
 ---
-
 
 
 ## Quellen für Analyse
@@ -82,7 +82,7 @@ Projekt/
 
 ## Format der Ziel-Datei
 
-- Datei: `/instructions.md` (Markdown)
+- Datei: `/docs/AI/instructions.md` (Markdown)
 - Struktur:
   - Titel
   - Architektur & Datenfluss (3–6 Punkte)
@@ -117,7 +117,7 @@ Projekt/
 
 ## Skeletons für zusätzliche Dateien
 
-### ✅ Skeleton für `instructions.md`
+### ✅ Skeleton für `docs/AI/instructions.md`
 
 ```markdown
 # Projekt-Instructions für AI-Coding-Agents
@@ -200,4 +200,4 @@ jobs:
 
 ## Output:
 
-* Gib nur den finalen Markdown-Inhalt für /instructions.md zurück (inkl. „Offene Punkte“).
+* Gib nur den finalen Markdown-Inhalt für /docs/AI/instructions.md zurück (inkl. „Offene Punkte“).

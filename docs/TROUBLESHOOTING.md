@@ -1,5 +1,8 @@
 # Troubleshooting
 
+Zentrale Sammlung fuer haeufige Probleme. Andere Dokus verlinken hierher,
+damit wir keine mehrfachen, widerspruechlichen Anleitungen pflegen.
+
 ## TypeScript-Fehler: "Cannot find module" oder "Cannot find name 'process'"
 
 ### Problem
@@ -105,6 +108,43 @@ Falls du die IDE-Fehler beheben möchtest:
 1. Docker Desktop läuft? Prüfe: `docker ps`
 2. Docker neu starten
 3. Build-Cache löschen: `docker-compose build --no-cache`
+
+---
+
+## Authentifizierung
+
+### Problem: User wird nach Reload ausgeloggt
+
+**Ursache:** Alte Tokens im falschen Storage
+
+**Lösung:**
+```javascript
+// Browser Console öffnen (F12)
+localStorage.clear()
+sessionStorage.clear()
+location.reload()
+```
+
+### Problem: "Too many login attempts"
+
+**Ursache:** Rate Limiting aktiv
+
+**Lösung (Development):**
+```bash
+# Container neustarten (Reset Rate Limit)
+docker restart notenest-dev
+```
+
+### Problem: "Invalid token" Fehler
+
+**Mögliche Ursachen:**
+1. JWT-Secret wurde geändert (Backend-Neustart mit neuer .env)
+2. Token manuell gelöscht/modifiziert
+3. System-Zeit nicht synchron (Clock Skew)
+
+**Lösung:**
+- Neu anmelden
+- System-Zeit prüfen
 
 ---
 

@@ -268,40 +268,8 @@ export const JWT_REFRESH_TOKEN_EXPIRY = '7d';   // 7 Tage
 - **Access Token**: 15m - 1h (kurz für Sicherheit)
 - **Refresh Token**: 7d - 30d (lange genug, aber nicht zu lange)
 
-## 🔧 Troubleshooting
-
-### Problem: User wird nach Reload ausgeloggt
-
-**Ursache:** Alte Tokens im falschen Storage
-
-**Lösung:**
-```javascript
-// Browser Console öffnen (F12)
-localStorage.clear()
-sessionStorage.clear()
-location.reload()
-```
-
-### Problem: "Too many login attempts"
-
-**Ursache:** Rate Limiting aktiv
-
-**Lösung (Development):**
-```bash
-# Container neustarten (Reset Rate Limit)
-docker restart notenest-dev
-```
-
-### Problem: "Invalid token" Fehler
-
-**Mögliche Ursachen:**
-1. JWT-Secret wurde geändert (Backend-Neustart mit neuer .env)
-2. Token manuell gelöscht/modifiziert
-3. System-Zeit nicht synchron (Clock Skew)
-
-**Lösung:**
-- Neu anmelden
-- System-Zeit prüfen
+**Troubleshooting:** Siehe zentrale Sammlung in
+[docs/TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
 
 ## 📊 Monitoring
 
@@ -356,8 +324,9 @@ curl http://localhost:3000/api/metrics | grep auth
 
 ## 📚 Weitere Dokumentation
 
-- [API-Endpunkte](./API.md)
-- [Deployment-Anleitung](../DEPLOYMENT_ANLEITUNG.md)
-- [Troubleshooting](./TROUBLESHOOTING.md)
-- [Architektur](../ARCHITEKTUR_PLANUNG.md)
+- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Zentrale Problemloesungen
+- [ENV_EXAMPLES.md](./ENV_EXAMPLES.md) - Environment-Variablen
+- [NAS_SETUP_GUIDE.md](./NAS_SETUP_GUIDE.md) - NAS-Setup
+- [README.md](../README.md) - Quickstart & Deployment-Modi
+- [ARCHITEKTUR_PLANUNG.md](../ARCHITEKTUR_PLANUNG.md) - Architektur
 

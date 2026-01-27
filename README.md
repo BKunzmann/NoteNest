@@ -46,6 +46,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1  # Windows
 cp .env.example .env
 # .env bearbeiten und API-Keys eintragen
 # JWT-Secrets werden automatisch generiert (beim ersten Docker-Start)
+#
+# Hinweis: docker-compose.example.yml laedt Variablen via env_file.
+# Bitte Werte nur in .env pflegen (keine Duplikate in environment:).
 ```
 
 3. Dependencies installieren:
@@ -73,10 +76,12 @@ npm run dev
 ### Docker-Entwicklung
 
 ```bash
-docker-compose -f docker-compose.dev.yml up
+docker-compose -f docker-compose.dev.yml up --build
 ```
 
 **Hinweis:** JWT-Secrets werden beim ersten Start automatisch generiert, falls sie in `.env` fehlen.
+Weitere Details: [docs/DOCKER_ENTWICKLUNG.md](./docs/DOCKER_ENTWICKLUNG.md) und
+[docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md).
 
 ### Production Build & Deployment
 
@@ -90,6 +95,16 @@ docker-compose build
 # Start
 docker-compose up -d
 ```
+
+### Deployment-Modi (Kurz)
+
+- **Standalone (`DEPLOYMENT_MODE=standalone`)**: Self-Service Registrierung, keine NAS-Pfade,
+  Daten im Container-Volume.
+  - Typisch: `AUTH_MODE=local`, `REGISTRATION_ENABLED=true`
+- **NAS (`DEPLOYMENT_MODE=nas`)**: Admin-gesteuert, NAS-Home/Shared, erfordert `NAS_*` Pfade.
+  - Typisch: `AUTH_MODE=hybrid`, `REGISTRATION_ENABLED=false`
+
+Details und Beispiele siehe [docs/ENV_EXAMPLES.md](docs/ENV_EXAMPLES.md).
 
 ### NAS Deployment (Synology, QNAP, TrueNAS)
 
@@ -127,7 +142,6 @@ docker-compose up -d
 Siehe auch:
 - [ENV_EXAMPLES.md](docs/ENV_EXAMPLES.md) - Environment-Variablen Beispiele
 - [NAS_SETUP_GUIDE.md](docs/NAS_SETUP_GUIDE.md) - Schritt-für-Schritt Setup
-- [DEPLOYMENT_MODES.md](docs/DEPLOYMENT_MODES.md) - Deployment-Modi erklärt
 
 **Hinweis:** Beim ersten Start auf der NAS werden JWT-Secrets automatisch generiert.
 
@@ -135,11 +149,11 @@ Siehe auch:
 
 - **Authentifizierung**: [docs/AUTHENTICATION.md](./docs/AUTHENTICATION.md) - Login, "Angemeldet bleiben", Token-Management
 - **Architektur**: [ARCHITEKTUR_PLANUNG.md](./ARCHITEKTUR_PLANUNG.md) - Vollständige System-Dokumentation
-- **Deployment**: [DEPLOYMENT_ANLEITUNG.md](./DEPLOYMENT_ANLEITUNG.md) - Installation auf NAS/Server
-- **Reverse Proxy**: [REVERSE_PROXY.md](./REVERSE_PROXY.md) - HTTPS-Setup für externe Erreichbarkeit
+- **Deployment (NAS/Standalone)**: [docs/NAS_SETUP_GUIDE.md](./docs/NAS_SETUP_GUIDE.md) und [docs/ENV_EXAMPLES.md](./docs/ENV_EXAMPLES.md)
+- **Docker-Entwicklung**: [docs/DOCKER_ENTWICKLUNG.md](./docs/DOCKER_ENTWICKLUNG.md) - Lokales Setup mit Docker
 - **Changelog**: [CHANGELOG.md](./CHANGELOG.md) - Versionshistorie
 - **Troubleshooting**: [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Problemlösungen
-- **AI-Instructions**: [instructions.md](./instructions.md) - Für Entwickler
+- **AI-Instructions**: [docs/AI/instructions.md](./docs/AI/instructions.md) - Für Entwickler
 
 ## Releases
 

@@ -32,7 +32,8 @@
   - Frontend: `frontend/vite.config.ts` mit Vitest, Tests in `frontend/src/**/*.test.ts`
 - **Versionierung**: `npm run version:get|set|bump|release` (via `scripts/version.js`)
   - Aktualisiert `package.json` (Root, Backend, Frontend), `config/version.ts` (beide), `CHANGELOG.md`
-- **Docker**: `docker-compose -f docker-compose.dev.yml up` (Development), `docker-compose -f docker-compose.prod.yml up` (Production)
+- **Docker**: `docker-compose -f docker-compose.dev.yml up` (Development),
+  `docker-compose up -d` (Production, nach Kopie von `docker-compose.example.yml`)
 
 ## Konventionen & Patterns
 
@@ -57,12 +58,12 @@
 
 ## CI/CD & Qualitätschecks
 
-- **Kein CI/CD-Workflow vorhanden** (noch nicht implementiert)
+- **GitHub Actions**: `.github/workflows/docker-build-push.yml` (Build & Push Docker Image)
 - **Linting**: `npm run lint` (ESLint für beide Workspaces)
 - **Type Checking**: `tsc --noEmit` (implizit im Build-Prozess)
 - **Testing**: Jest (Backend) + Vitest (Frontend), Coverage-Reports in `coverage/`
 - **Docker**: Multi-Stage Build (`Dockerfile`), Production-Image mit Alpine Linux
-- **Deployment**: Docker Compose (`docker-compose.prod.yml`), Umgebungsvariablen via `.env`
+- **Deployment**: Docker Compose (`docker-compose.example.yml` → `docker-compose.yml`), Umgebungsvariablen via `.env`
 - **Versionierung**: Semantic Versioning (Major.Minor.Patch), `CHANGELOG.md` im "Keep a Changelog"-Format
 
 ## Nie manuell editieren
@@ -74,8 +75,6 @@
 
 ## Offene Punkte
 
-- Soll ein CI/CD-Workflow (GitHub Actions/GitLab CI) eingerichtet werden?
+- Soll die Coverage-Schwelle dokumentiert werden?
 - Gibt es spezielle Branch-Policies (z.B. `main`/`develop`, PR-Reviews)?
-- Soll die Test-Coverage-Schwelle dokumentiert werden (aktuell keine Mindestanforderung)?
 - Gibt es spezielle Feature-Flag-Regeln (aktuell keine Feature-Flags implementiert)?
-
