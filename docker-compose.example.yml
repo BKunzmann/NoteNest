@@ -49,17 +49,8 @@ services:
       # .env file (optional)
       - ./.env:/app/.env
 
-    environment:
-      - DEPLOYMENT_MODE=nas
-      - AUTH_MODE=hybrid
-      - REGISTRATION_ENABLED=false
-      - NAS_TYPE=synology
-      - NAS_HOMES_PATH=/data/homes
-      - NAS_SHARED_PATH=/data/shared
-      - NODE_ENV=production
-      - LOG_DIR=/app/logs
-
     # .env must define JWT_SECRET and JWT_REFRESH_SECRET at minimum.
+    # Weitere Werte (z.B. AUTH_MODE, DEPLOYMENT_MODE, NAS_* , LOG_DIR) bitte dort setzen.
     env_file:
       - .env
 
