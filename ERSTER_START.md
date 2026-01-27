@@ -22,6 +22,11 @@ AUTH_MODE=hybrid
 
 JWT-Secrets kannst du **leer lassen** (werden beim ersten Start generiert).
 
+Falls dein Reverse Proxy `X-Forwarded-For` setzt, fuege in `.env` hinzu:
+```
+TRUST_PROXY=1
+```
+
 ## 3) Volumes/UID/GID pruefen
 
 - Passe in `docker-compose.yml` die NAS-Pfade an (homes/shared).
