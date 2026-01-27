@@ -377,9 +377,17 @@ id admin
 
 ---
 
+## 🔌 Ports & env_file (Kurz)
+
+- `ports:` in `docker-compose.example.yml` mapped Host → Container und macht den Service erreichbar.
+- `PORT` in `.env` steuert, auf welchem Port das Backend **im Container** lauscht.
+- Da `env_file` genutzt wird, kommt `PORT` aus `.env` (nicht doppelt in `environment:` setzen).
+
+---
+
 ## 📚 Siehe auch
 
 - [NAS_SETUP_GUIDE.md](./NAS_SETUP_GUIDE.md) - Schritt-für-Schritt Setup
-- [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) - Deployment-Modi erklärt
+- [README.md](../README.md) - Deployment-Modi (Kurz) und Quickstart
 - [docker-compose.example.yml](../docker-compose.example.yml) - Vollständige Compose-Konfiguration
 

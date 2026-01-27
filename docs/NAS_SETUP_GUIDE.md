@@ -7,6 +7,9 @@ NoteNest auf Synology NAS installieren mit:
 - Mehrere Shared-Ordner (Familie, Projekte, etc.)
 - Admin verwaltet, welcher User welche Shared-Ordner sieht
 
+**Hinweis:** Dieses Dokument beschreibt den NAS-Mode (`DEPLOYMENT_MODE=nas`).
+Für Standalone siehe [README.md](../README.md) und [ENV_EXAMPLES.md](./ENV_EXAMPLES.md).
+
 ---
 
 ## 📋 Voraussetzungen
@@ -191,6 +194,18 @@ docker logs notenest
 
 ---
 
+## 🌐 HTTPS / Reverse Proxy (Kurz)
+
+Wenn du NoteNest von außen erreichbar machen willst, nutze einen Reverse Proxy
+(z.B. Synology DSM). Kurzfassung:
+
+- **Reverse Proxy**: HTTPS → `http://localhost:3000`
+- **Empfehlung**: Port in `docker-compose.yml` nur lokal binden:
+  `127.0.0.1:3000:3000`
+- **.env**: `FRONTEND_URL=https://<deine-domain>`
+
+---
+
 ## 👤 Schritt 4: Benutzer einrichten
 
 ### 4.1 Als Admin einloggen
@@ -360,6 +375,8 @@ curl -X POST http://nas-ip:3100/api/admin/users/2/shared-folders \
 
 ## 🛠️ Troubleshooting
 
+Allgemeine Probleme findest du gesammelt in [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
+
 ### Problem: User sieht seine privaten Dateien nicht
 
 **Ursache:** Home-Verzeichnis existiert nicht oder Permissions falsch
@@ -416,7 +433,7 @@ user: "1024:100"
 
 ## 📚 Siehe auch
 
-- [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) - Deployment-Modi erklärt
+- [ENV_EXAMPLES.md](./ENV_EXAMPLES.md) - Environment-Variablen Beispiele
 - [AUTHENTICATION.md](./AUTHENTICATION.md) - Auth-System
 - [README.md](../README.md) - Hauptdokumentation
 
