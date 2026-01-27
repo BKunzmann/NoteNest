@@ -22,7 +22,7 @@ export default defineConfig({
         enabled: false
       },
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png'],
+      includeAssets: ['favicon.ico'],
       workbox: {
         // Caching-Strategien
         runtimeCaching: [
@@ -75,16 +75,10 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: 'icons/icon-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: 'icons/icon-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
+            src: 'favicon.ico',
+            sizes: '64x64 32x32 16x16',
+            type: 'image/x-icon',
+            purpose: 'any'
           }
         ]
       }

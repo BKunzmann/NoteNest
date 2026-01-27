@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useFileStore } from '../../store/fileStore';
+import { useEditorStore } from '../../store/editorStore';
 import CreateFileDialog from '../FileManager/CreateFileDialog';
 import DeleteConfirmDialog from '../FileManager/DeleteConfirmDialog';
 import { exportAPI, settingsAPI, fileAPI } from '../../services/api';
@@ -21,6 +22,7 @@ export default function BottomToolbar() {
     deleteItem,
     loadFiles
   } = useFileStore();
+  const { viewMode, setViewMode } = useEditorStore();
   const [showCreateFile, setShowCreateFile] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -96,6 +98,12 @@ export default function BottomToolbar() {
     }
     setShowExportMenu(!showExportMenu);
   };
+
+  const handlePreviewToggle = () => {
+    setViewMode(viewMode === 'preview' ? 'wysiwyg' : 'preview');
+  };
+
+  const isPreviewActive = viewMode === 'preview';
 
   const handleExportPDF = async () => {
     if (!selectedFile || !selectedPath || !selectedType) {
@@ -306,6 +314,8 @@ export default function BottomToolbar() {
         </button>
 
         <button
+          onClick={handlePreviewToggle}
+          aria-pressed={isPreviewActive}
           style={{
             background: 'none',
             border: 'none',
@@ -317,10 +327,12 @@ export default function BottomToolbar() {
             alignItems: 'center',
             gap: '0.25rem',
             color: '#007AFF',
+            backgroundColor: isPreviewActive ? 'var(--bg-tertiary)' : 'transparent',
+            borderRadius: '8px',
             minWidth: '60px'
           }}
           aria-label="Vorschau"
-          title="Vorschau"
+          title={isPreviewActive ? 'Vorschau schließen' : 'Vorschau'}
         >
           <span>👁️</span>
           <span style={{ fontSize: '0.625rem' }}>Vorschau</span>

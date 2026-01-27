@@ -110,7 +110,7 @@ export default function NotesPage() {
     );
   }
 
-  if (!fileContent && selectedFile.type === 'file') {
+  if ((fileContent === null || fileContent === undefined) && selectedFile.type === 'file') {
     return (
       <div style={{
         display: 'flex',
