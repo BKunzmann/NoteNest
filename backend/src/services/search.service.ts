@@ -84,27 +84,32 @@ async function searchInDirectory(
       if (item.type === 'folder') {
         // Rekursiv in Unterordnern suchen
         await searchInDirectory(userId, itemPath, type, searchTerm, results);
-      } else if (item.type === 'file' && item.isEditable) {
-        // Nur durchsuchbare Dateien (.md, .txt)
-        const matches = await searchInFile(userId, itemPath, searchTerm, type);
+      } else if (item.type === 'file') {
+        // Prüfe Dateiendung explizit, um sicherzugehen
+        const ext = path.extname(item.name).toLowerCase();
         
-        if (matches.length > 0) {
-          // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
-          let relevance = matches.length;
+        // Nur durchsuchbare Dateien (.md, .txt, .json, .js, .ts, etc. theoretisch, aber wir beschränken uns auf Notizen)
+        if (['.md', '.txt'].includes(ext)) {
+          const matches = await searchInFile(userId, itemPath, searchTerm, type);
           
-          // Bonus, wenn Suchbegriff im Dateinamen vorkommt
-          const fileName = path.basename(itemPath);
-          if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
-            relevance += 10;
+          if (matches.length > 0) {
+            // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
+            let relevance = matches.length;
+            
+            // Bonus, wenn Suchbegriff im Dateinamen vorkommt
+            const fileName = path.basename(itemPath);
+            if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
+              relevance += 10;
+            }
+            
+            results.push({
+              path: itemPath,
+              type,
+              name: fileName,
+              matches,
+              relevance
+            });
           }
-          
-          results.push({
-            path: itemPath,
-            type,
-            name: fileName,
-            matches,
-            relevance
-          });
         }
       }
     }

@@ -110,7 +110,7 @@ export default function UserManagement() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h1 style={{ margin: 0 }}>Benutzerverwaltung</h1>
         <button
           onClick={() => setShowCreateDialog(true)}
@@ -122,7 +122,8 @@ export default function UserManagement() {
             borderRadius: '8px',
             cursor: 'pointer',
             fontSize: '1rem',
-            fontWeight: '500'
+            fontWeight: '500',
+            whiteSpace: 'nowrap'
           }}
         >
           + Neuer Benutzer
@@ -146,9 +147,9 @@ export default function UserManagement() {
         backgroundColor: 'white',
         border: '1px solid #e0e0e0',
         borderRadius: '8px',
-        overflow: 'hidden'
+        overflowX: 'auto'
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
           <thead>
             <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
               <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Benutzername</th>

@@ -4,7 +4,8 @@
  * Haupt-Layout mit Header, Sidebar und Content-Bereich
  */
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BottomToolbar from './BottomToolbar';
@@ -15,7 +16,17 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Initial Sidebar-Status basierend auf Bildschirmbreite
+  const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
+  const location = useLocation();
+
+  // Schließe Sidebar automatisch auf Mobilgeräten bei Navigation
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [location]);
+
 
   return (
     <div style={{

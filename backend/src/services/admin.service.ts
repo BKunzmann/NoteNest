@@ -138,10 +138,31 @@ export async function adminResetPassword(userId: number, newPassword: string): P
 }
 
 /**
+ * Zählt die Anzahl der Administratoren
+ */
+export function getAdminCount(): number {
+  const result = db.prepare('SELECT COUNT(*) as count FROM users WHERE is_admin = 1 AND is_active = 1').get() as { count: number };
+  return result.count;
+}
+
+/**
  * Aktualisiert Admin-Status eines Benutzers
  */
 export function adminUpdateUserRole(userId: number, isAdmin: boolean): boolean {
   try {
+    // Wenn Admin-Rechte entzogen werden, prüfen wir, ob es der letzte Admin ist
+    if (!isAdmin) {
+      const user = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(userId) as { is_admin: number } | undefined;
+      
+      // Nur relevant, wenn der User aktuell Admin ist
+      if (user && user.is_admin === 1) {
+        const adminCount = getAdminCount();
+        if (adminCount <= 1) {
+          throw new Error('Cannot remove the last administrator');
+        }
+      }
+    }
+
     const result = db.prepare(`
       UPDATE users 
       SET is_admin = ?, updated_at = CURRENT_TIMESTAMP 
@@ -149,7 +170,10 @@ export function adminUpdateUserRole(userId: number, isAdmin: boolean): boolean {
     `).run(isAdmin ? 1 : 0, userId);
     
     return result.changes > 0;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'Cannot remove the last administrator') {
+      throw error;
+    }
     console.error('Error updating user role:', error);
     return false;
   }

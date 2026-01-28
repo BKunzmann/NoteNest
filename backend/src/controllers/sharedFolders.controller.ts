@@ -25,7 +25,13 @@ export async function getAvailableSharedFolders(_req: Request, res: Response): P
       return;
     }
 
-    res.json({ folders: result.folders, nasMode: IS_NAS_MODE });
+    const folders = result.folders.map(name => ({
+      name,
+      path: name,
+      exists: true
+    }));
+
+    res.json({ folders, nasMode: IS_NAS_MODE });
   } catch (error) {
     console.error('Error listing shared folders:', error);
     res.status(500).json({ error: 'Failed to list shared folders' });

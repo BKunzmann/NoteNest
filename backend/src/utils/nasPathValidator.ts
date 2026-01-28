@@ -138,20 +138,72 @@ export function validateNasSharedPath(sharedPath: string): {
     };
   }
 
-  if (!validation.readable) {
+    if (!validation.readable) {
+      return {
+        valid: false,
+        path: fullPath,
+        error: `Shared directory not readable: ${fullPath}`
+      };
+    }
+
     return {
-      valid: false,
+      valid: true,
       path: fullPath,
-      error: `Shared directory not readable: ${fullPath}`
+      error: undefined
     };
   }
-
-  return {
-    valid: true,
-    path: fullPath,
-    error: undefined
-  };
 }
+
+/**
+ * Validiert, ob ein Pfad für einen Benutzer erlaubt ist
+ * Verhindert Zugriff auf Home-Verzeichnisse anderer Benutzer
+ */
+export function validatePathScope(
+  targetPath: string, 
+  username: string, 
+  type: 'private' | 'shared'
+): { valid: boolean; error?: string } {
+  const normalizedPath = path.resolve(targetPath);
+  
+  if (type === 'private') {
+    // Bestimme das Home-Verzeichnis des Benutzers
+    const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
+    const standaloneUsersPath = '/data/users';
+    
+    // Prüfe beide möglichen Home-Basispfade um sicherzugehen
+    const userHomeNas = path.resolve(path.join(nasHomesPath, username));
+    const userHomeStandalone = path.resolve(path.join(standaloneUsersPath, username));
+    
+    // In Standalone Mode ist userHomeStandalone relevant, in NAS userHomeNas.
+    // Aber um sicher zu gehen, erlauben wir Zugriff nur, wenn der Pfad innerhalb des eigenen User-Verzeichnisses liegt.
+    
+    let allowedPrefix = IS_NAS_MODE ? userHomeNas : userHomeStandalone;
+    
+    // Falls Pfad nicht mit dem erlaubten Prefix beginnt
+    if (!normalizedPath.startsWith(allowedPrefix)) {
+      return {
+        valid: false,
+        error: `Access denied. Private folder must be within your home directory: ${allowedPrefix}`
+      };
+    }
+  } else if (type === 'shared') {
+    // Shared folder muss im Shared-Bereich liegen
+    const nasSharedPath = path.resolve(process.env.NAS_SHARED_PATH || '/data/shared');
+    
+    if (!normalizedPath.startsWith(nasSharedPath)) {
+      return {
+        valid: false,
+        error: `Access denied. Shared folder must be within shared directory: ${nasSharedPath}`
+      };
+    }
+    
+    // Zusätzlich verhindern, dass man zurück zu /data/homes navigiert, falls diese irgendwie verlinkt sind
+    // (wird eigentlich durch startWith abgedeckt, aber sicherheitshalber)
+  }
+
+  return { valid: true };
+}
+
 
 /**
  * Listet verfügbare Shared-Ordner auf (für Admin-Panel)

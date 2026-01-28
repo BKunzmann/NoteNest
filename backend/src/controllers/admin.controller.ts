@@ -202,8 +202,12 @@ export async function updateUserRole(req: Request, res: Response): Promise<void>
     }
 
     res.json({ message: 'User role updated successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating user role:', error);
+    if (error.message === 'Cannot remove the last administrator') {
+      res.status(400).json({ error: error.message });
+      return;
+    }
     res.status(500).json({ error: 'Failed to update user role' });
   }
 }

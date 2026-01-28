@@ -6,6 +6,7 @@
 
 import { Request, Response } from 'express';
 import { getUserSettings, updateUserSettings } from '../services/settings.service';
+import { validatePathScope } from '../utils/nasPathValidator';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -49,6 +50,13 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
 
     // Validiere Pfade, falls angegeben
     if (private_folder_path !== undefined && private_folder_path !== null) {
+      // Sicherheitsprüfung: Pfad muss im erlaubten Bereich liegen
+      const scopeValidation = validatePathScope(private_folder_path, req.user.username, 'private');
+      if (!scopeValidation.valid) {
+        res.status(403).json({ error: scopeValidation.error });
+        return;
+      }
+
       try {
         // Prüfe, ob Pfad existiert oder erstellt werden kann
         const dir = path.dirname(private_folder_path);
@@ -61,6 +69,13 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
     }
 
     if (shared_folder_path !== undefined && shared_folder_path !== null) {
+      // Sicherheitsprüfung: Pfad muss im erlaubten Bereich liegen
+      const scopeValidation = validatePathScope(shared_folder_path, req.user.username, 'shared');
+      if (!scopeValidation.valid) {
+        res.status(403).json({ error: scopeValidation.error });
+        return;
+      }
+
       try {
         const dir = path.dirname(shared_folder_path);
         await fs.mkdir(dir, { recursive: true });
