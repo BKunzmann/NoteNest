@@ -5,12 +5,13 @@
  */
 
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
 
 export default function NotesPage() {
   const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
+  const navigate = useNavigate();
   const { 
     selectedFile, 
     selectedPath, 
@@ -18,7 +19,8 @@ export default function NotesPage() {
     fileContent, 
     isLoadingContent,
     loadFileContent,
-    selectFile
+    selectFile,
+    clearSelection
   } = useFileStore();
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
@@ -132,18 +134,40 @@ export default function NotesPage() {
         borderBottom: '1px solid var(--border-color)',
         backgroundColor: 'var(--bg-secondary)'
       }}>
-        <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
-          {selectedFile.name}
-        </h2>
-        {selectedPath && (
-          <div style={{ 
-            fontSize: '0.875rem', 
-            color: 'var(--text-secondary)', 
-            marginTop: '0.25rem' 
-          }}>
-            {selectedPath}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
+              {selectedFile.name}
+            </h2>
+            {selectedPath && (
+              <div style={{ 
+                fontSize: '0.875rem', 
+                color: 'var(--text-secondary)', 
+                marginTop: '0.25rem' 
+              }}>
+                {selectedPath}
+              </div>
+            )}
           </div>
-        )}
+          <button
+            onClick={() => {
+              clearSelection();
+              navigate('/notes');
+            }}
+            style={{
+              padding: '0.5rem 0.9rem',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Schließen
+          </button>
+        </div>
       </div>
 
       {/* Content */}

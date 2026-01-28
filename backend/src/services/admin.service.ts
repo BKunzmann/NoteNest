@@ -18,6 +18,27 @@ export function getAllUsers(): User[] {
 }
 
 /**
+ * Holt einen Benutzer für Admin-Zwecke (inkl. inaktive)
+ */
+export function getUserByIdForAdmin(userId: number): User | null {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as User | undefined;
+  return user || null;
+}
+
+/**
+ * Zählt aktive Admins
+ */
+export function countActiveAdmins(): number {
+  const result = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM users
+    WHERE is_admin = 1 AND is_active = 1
+  `).get() as { count: number } | undefined;
+
+  return result?.count ?? 0;
+}
+
+/**
  * Erstellt einen neuen Benutzer (Admin-Funktion)
  */
 export async function adminCreateUser(data: RegisterRequest, isAdmin: boolean = false): Promise<User> {

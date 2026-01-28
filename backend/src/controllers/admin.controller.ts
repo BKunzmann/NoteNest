@@ -11,7 +11,9 @@ import {
   adminDeleteUser,
   adminResetPassword,
   adminUpdateUserRole,
-  adminUpdateUserStatus
+  adminUpdateUserStatus,
+  countActiveAdmins,
+  getUserByIdForAdmin
 } from '../services/admin.service';
 import { RegisterRequest } from '../types/auth';
 
@@ -118,6 +120,20 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
+        res.status(400).json({ error: 'Cannot delete the last active admin' });
+        return;
+      }
+    }
+
     const success = adminDeleteUser(userId);
     
     if (!success) {
@@ -188,10 +204,24 @@ export async function updateUserRole(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     // Verhindere, dass ein Admin sich selbst die Admin-Rechte entzieht
     if (req.user && req.user.id === userId && !isAdmin) {
       res.status(400).json({ error: 'Cannot remove admin rights from your own account' });
       return;
+    }
+
+    if (!isAdmin && targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
+        res.status(400).json({ error: 'Cannot remove the last active admin' });
+        return;
+      }
     }
 
     const success = adminUpdateUserRole(userId, isAdmin);
@@ -227,10 +257,24 @@ export async function updateUserStatus(req: Request, res: Response): Promise<voi
       return;
     }
 
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     // Verhindere, dass ein Admin sich selbst deaktiviert
     if (req.user && req.user.id === userId && !isActive) {
       res.status(400).json({ error: 'Cannot deactivate your own account' });
       return;
+    }
+
+    if (!isActive && targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
+        res.status(400).json({ error: 'Cannot deactivate the last active admin' });
+        return;
+      }
     }
 
     const success = adminUpdateUserStatus(userId, isActive);

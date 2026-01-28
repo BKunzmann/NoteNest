@@ -23,6 +23,14 @@ import {
   RenameFileRequest
 } from '../types/file';
 
+function handleAccessError(res: Response, error: any): boolean {
+  if (error?.message === 'Shared folder access denied' || error?.message === 'Path traversal detected') {
+    res.status(403).json({ error: 'Access denied' });
+    return true;
+  }
+  return false;
+}
+
 /**
  * GET /api/files/list
  * Listet Verzeichnis-Inhalt auf
@@ -60,6 +68,9 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
       items
     });
   } catch (error: any) {
+    if (handleAccessError(res, error)) {
+      return;
+    }
     console.error('List files error:', error);
     res.status(500).json({ error: error.message || 'Failed to list files' });
   }
@@ -138,6 +149,9 @@ export async function getFileContent(req: Request, res: Response): Promise<void>
       res.status(403).json({ error: 'No read permission' });
       return;
     }
+    if (handleAccessError(res, error)) {
+      return;
+    }
     res.status(500).json({ error: error.message || 'Failed to read file' });
   }
 }
@@ -175,6 +189,9 @@ export async function createFileHandler(req: Request, res: Response): Promise<vo
   } catch (error: any) {
     if (error.message === 'File already exists') {
       res.status(409).json({ error: 'File already exists' });
+      return;
+    }
+    if (handleAccessError(res, error)) {
       return;
     }
     console.error('Create file error:', error);
@@ -217,6 +234,9 @@ export async function updateFileHandler(req: Request, res: Response): Promise<vo
       res.status(404).json({ error: 'File not found' });
       return;
     }
+    if (handleAccessError(res, error)) {
+      return;
+    }
     console.error('Update file error:', error);
     res.status(500).json({ error: error.message || 'Failed to update file' });
   }
@@ -256,6 +276,9 @@ export async function deleteFileHandler(req: Request, res: Response): Promise<vo
       res.status(404).json({ error: 'File or folder not found' });
       return;
     }
+    if (handleAccessError(res, error)) {
+      return;
+    }
     console.error('Delete file error:', error);
     res.status(500).json({ error: error.message || 'Failed to delete file' });
   }
@@ -293,6 +316,9 @@ export async function createFolderHandler(req: Request, res: Response): Promise<
   } catch (error: any) {
     if (error.message === 'Folder already exists') {
       res.status(409).json({ error: 'Folder already exists' });
+      return;
+    }
+    if (handleAccessError(res, error)) {
       return;
     }
     console.error('Create folder error:', error);
@@ -341,6 +367,9 @@ export async function moveFileHandler(req: Request, res: Response): Promise<void
       res.status(409).json({ error: 'Destination already exists' });
       return;
     }
+    if (handleAccessError(res, error)) {
+      return;
+    }
     console.error('Move file error:', error);
     res.status(500).json({ error: error.message || 'Failed to move file' });
   }
@@ -386,6 +415,9 @@ export async function renameFileHandler(req: Request, res: Response): Promise<vo
       message: 'File or folder renamed successfully'
     });
   } catch (error: any) {
+    if (handleAccessError(res, error)) {
+      return;
+    }
     console.error('Rename file error:', error);
     res.status(500).json({ error: error.message || 'Failed to rename file' });
   }

@@ -77,6 +77,7 @@ async function searchInDirectory(
 ): Promise<void> {
   try {
     const items = await listDirectory(userId, dirPath, type);
+    const lowerSearchTerm = searchTerm.toLowerCase();
     
     for (const item of items) {
       const itemPath = item.path;
@@ -84,20 +85,33 @@ async function searchInDirectory(
       if (item.type === 'folder') {
         // Rekursiv in Unterordnern suchen
         await searchInDirectory(userId, itemPath, type, searchTerm, results);
-      } else if (item.type === 'file' && item.isEditable) {
-        // Nur durchsuchbare Dateien (.md, .txt)
-        const matches = await searchInFile(userId, itemPath, searchTerm, type);
-        
-        if (matches.length > 0) {
+      } else if (item.type === 'file') {
+        const fileName = path.basename(itemPath);
+        const nameMatches = fileName.toLowerCase().includes(lowerSearchTerm);
+        let matches: SearchMatch[] = [];
+
+        if (item.isEditable) {
+          // Nur durchsuchbare Dateien (.md, .txt)
+          matches = await searchInFile(userId, itemPath, searchTerm, type);
+        }
+
+        if (matches.length > 0 || nameMatches) {
+          if (matches.length === 0 && nameMatches) {
+            matches = [{
+              line: 0,
+              text: fileName,
+              context: fileName
+            }];
+          }
+
           // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
           let relevance = matches.length;
-          
+
           // Bonus, wenn Suchbegriff im Dateinamen vorkommt
-          const fileName = path.basename(itemPath);
-          if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
+          if (nameMatches) {
             relevance += 10;
           }
-          
+
           results.push({
             path: itemPath,
             type,

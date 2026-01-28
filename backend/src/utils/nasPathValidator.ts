@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { IS_NAS_MODE } from '../config/constants';
+import { getDefaultSharedRoot } from './pathAccess';
 
 /**
  * Prüft, ob ein Pfad existiert und zugänglich ist
@@ -120,7 +121,7 @@ export function validateNasSharedPath(sharedPath: string): {
   path: string;
   error?: string;
 } {
-  const nasSharedPath = process.env.NAS_SHARED_PATH || '/data/shared';
+  const nasSharedPath = getDefaultSharedRoot();
   
   // Wenn Pfad absolut ist und mit nasSharedPath beginnt, verwende ihn direkt
   // Sonst kombiniere mit nasSharedPath
@@ -161,7 +162,7 @@ export function listAvailableSharedFolders(): {
   error?: string;
 } {
   try {
-    const nasSharedPath = process.env.NAS_SHARED_PATH || '/data/shared';
+    const nasSharedPath = getDefaultSharedRoot();
 
     if (!fs.existsSync(nasSharedPath)) {
       return {

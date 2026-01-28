@@ -9,7 +9,8 @@ import {
   getAvailableSharedFolders,
   grantSharedFolderAccess,
   revokeSharedFolderAccess,
-  getUserSharedFolders
+  getUserSharedFolders,
+  revokeSharedFolderAccessById
 } from '../controllers/sharedFolders.controller';
 
 const router = express.Router();
@@ -29,6 +30,9 @@ router.post('/users/:id/shared-folders', grantSharedFolderAccess);
 
 // DELETE /api/admin/users/:id/shared-folders - Zugriff entziehen
 router.delete('/users/:id/shared-folders', revokeSharedFolderAccess);
+
+// DELETE /api/admin/users/:id/shared-folders/:folderId - Zugriff entziehen (per ID)
+router.delete('/users/:id/shared-folders/:folderId', revokeSharedFolderAccessById);
 
 export default router;
 
