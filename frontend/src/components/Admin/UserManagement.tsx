@@ -110,7 +110,6 @@ export default function UserManagement() {
 
   return (
     <div style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header mit flexiblem Layout für mobile */}
       <div style={{ 
         display: 'flex', 
         flexDirection: 'row',
@@ -157,8 +156,7 @@ export default function UserManagement() {
       <div style={{
         backgroundColor: 'white',
         border: '1px solid #e0e0e0',
-        borderRadius: '8px',
-        overflow: 'hidden'
+        borderRadius: '8px'
       }}>
         <div style={{
           overflowX: 'auto',
@@ -272,7 +270,7 @@ export default function UserManagement() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
         </div>
       </div>
 

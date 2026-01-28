@@ -73,12 +73,6 @@ export default function NotesPage() {
     }
   }, [params.type, params.path, selectedPath, selectedType, loadFileContent, selectFile]);
 
-  // Beim Mount: Lösche Auswahl NICHT automatisch
-  // useEffect(() => {
-  //   clearSelection();
-  //   resetEditor();
-  // }, [clearSelection, resetEditor]);
-
   if (!selectedFile) {
     return (
       <div style={{
@@ -145,23 +139,26 @@ export default function NotesPage() {
         backgroundColor: 'var(--bg-secondary)',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start'
+        alignItems: 'center',
+        gap: '1rem'
       }}>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedFile.name}
           </h2>
           {selectedPath && (
             <div style={{ 
               fontSize: '0.875rem', 
               color: 'var(--text-secondary)', 
-              marginTop: '0.25rem' 
+              marginTop: '0.25rem',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
             }}>
               {selectedPath}
             </div>
           )}
         </div>
-        {/* Schließen-Button */}
         <button
           onClick={handleCloseNote}
           title="Notiz schließen"

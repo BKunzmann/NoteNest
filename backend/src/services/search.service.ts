@@ -87,36 +87,46 @@ async function searchInDirectory(
     
     for (const item of items) {
       const itemPath = item.path;
-      
+
       if (item.type === 'folder') {
         // Rekursiv in Unterordnern suchen
         await searchInDirectory(userId, itemPath, type, searchTerm, results, depth + 1);
-      } else if (item.type === 'file' && item.isEditable) {
+      } else if (item.type === 'file') {
+        // Prüfe Dateiendung explizit, um sicherzugehen
+        const ext = path.extname(item.name).toLowerCase();
+        const fileName = path.basename(itemPath);
+        const nameMatches = fileName.toLowerCase().includes(searchTerm.toLowerCase());
+        let matches: SearchMatch[] = [];
+
         // Nur durchsuchbare Dateien (.md, .txt)
-        try {
-          const matches = await searchInFile(userId, itemPath, searchTerm, type);
-          
-          if (matches.length > 0) {
-            // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
-            let relevance = matches.length;
-            
-            // Bonus, wenn Suchbegriff im Dateinamen vorkommt
-            const fileName = path.basename(itemPath);
-            if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
-              relevance += 10;
-            }
-            
-            results.push({
-              path: itemPath,
-              type,
-              name: fileName,
-              matches,
-              relevance
-            });
+        if (['.md', '.txt'].includes(ext)) {
+          matches = await searchInFile(userId, itemPath, searchTerm, type);
+        }
+
+        if (matches.length > 0 || nameMatches) {
+          if (matches.length === 0 && nameMatches) {
+            matches = [{
+              line: 0,
+              text: fileName,
+              context: fileName
+            }];
           }
-        } catch (fileError) {
-          // Einzelne Datei konnte nicht durchsucht werden - weiter mit nächster
-          console.warn(`Error searching file ${itemPath}:`, fileError);
+
+          // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
+          let relevance = matches.length;
+
+          // Bonus, wenn Suchbegriff im Dateinamen vorkommt
+          if (nameMatches) {
+            relevance += 10;
+          }
+
+          results.push({
+            path: itemPath,
+            type,
+            name: fileName,
+            matches,
+            relevance
+          });
         }
       }
     }
