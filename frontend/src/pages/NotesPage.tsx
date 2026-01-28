@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
+import { useEditorStore } from '../store/editorStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
 
 export default function NotesPage() {
@@ -22,6 +23,7 @@ export default function NotesPage() {
     selectFile,
     clearSelection
   } = useFileStore();
+  const { reset: resetEditor } = useEditorStore();
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
   useEffect(() => {
@@ -70,12 +72,6 @@ export default function NotesPage() {
       }
     }
   }, [params.type, params.path, selectedPath, selectedType, loadFileContent, selectFile]);
-
-  // Handler zum Schließen der Notiz
-  const handleClose = () => {
-    clearSelection();
-    navigate('/notes');
-  };
 
   if (!selectedFile) {
     return (
@@ -126,6 +122,14 @@ export default function NotesPage() {
     );
   }
 
+  // Funktion zum Schließen der Notiz
+  const handleCloseNote = () => {
+    clearSelection();
+    resetEditor();
+    // Navigiere zur Basis-Notes-Seite (ohne Parameter)
+    navigate('/notes');
+  };
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
@@ -135,9 +139,10 @@ export default function NotesPage() {
         backgroundColor: 'var(--bg-secondary)',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        gap: '1rem'
       }}>
-        <div style={{ overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
           <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedFile.name}
           </h2>
@@ -155,24 +160,31 @@ export default function NotesPage() {
           )}
         </div>
         <button
-          onClick={handleClose}
+          onClick={handleCloseNote}
+          title="Notiz schließen"
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
             padding: '0.5rem',
-            marginLeft: '0.5rem',
+            backgroundColor: 'transparent',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '1rem',
             color: 'var(--text-secondary)',
-            fontSize: '1.25rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '4px',
-            transition: 'background-color 0.2s'
+            minWidth: '36px',
+            minHeight: '36px',
+            transition: 'all 0.2s ease'
           }}
-          title="Schließen"
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f0f0f0)';
+            e.currentTarget.style.borderColor = 'var(--text-secondary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.borderColor = 'var(--border-color)';
+          }}
         >
           ✕
         </button>

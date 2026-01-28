@@ -48,7 +48,7 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
 
     const { private_folder_path, shared_folder_path, theme, default_export_size, default_bible_translation } = req.body;
 
-    // Validiere Pfade, falls angegeben
+    // Validiere private Pfade
     if (private_folder_path !== undefined && private_folder_path !== null) {
       // Sicherheitsprüfung: Pfad muss im erlaubten Bereich liegen
       const scopeValidation = validatePathScope(private_folder_path, req.user.username, 'private');
@@ -68,6 +68,7 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       }
     }
 
+    // Validiere shared Pfade
     if (shared_folder_path !== undefined && shared_folder_path !== null) {
       // Sicherheitsprüfung: Pfad muss im erlaubten Bereich liegen
       const scopeValidation = validatePathScope(shared_folder_path, req.user.username, 'shared');

@@ -13,9 +13,10 @@ interface FileItemProps {
   type: 'private' | 'shared';
   currentPath: string;
   onFolderClick: (path: string) => void;
+  onFileSelect?: () => void; // Callback wenn Datei ausgewählt wird (für mobile Sidebar)
 }
 
-export default function FileItem({ file, type, currentPath, onFolderClick }: FileItemProps) {
+export default function FileItem({ file, type, currentPath, onFolderClick, onFileSelect }: FileItemProps) {
   const { selectFile } = useFileStore();
   const navigate = useNavigate();
 
@@ -56,6 +57,14 @@ export default function FileItem({ file, type, currentPath, onFolderClick }: Fil
       }
       
       selectFile(file, filePath, type);
+      
+      // Callback für mobile Sidebar (schließen nach Auswahl)
+      if (onFileSelect) {
+        // Kurze Verzögerung, damit die Datei-Auswahl abgeschlossen ist
+        setTimeout(() => {
+          onFileSelect();
+        }, 100);
+      }
     }
   };
 

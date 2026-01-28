@@ -20,21 +20,15 @@ export async function getAvailableSharedFolders(_req: Request, res: Response): P
   try {
     const result = listAvailableSharedFolders();
     
+    // Bei Fehler nur loggen, aber trotzdem antworten (leere Liste)
     if (result.error) {
-      res.status(500).json({ error: result.error });
-      return;
+      console.warn('Warning listing shared folders:', result.error);
     }
 
-    const folders = result.folders.map(name => ({
-      name,
-      path: name,
-      exists: true
-    }));
-
-    res.json({ folders, nasMode: IS_NAS_MODE });
+    res.json({ folders: result.folders || [], nasMode: IS_NAS_MODE });
   } catch (error) {
     console.error('Error listing shared folders:', error);
-    res.status(500).json({ error: 'Failed to list shared folders' });
+    res.status(500).json({ error: 'Failed to list shared folders', folders: [] });
   }
 }
 
@@ -92,29 +86,29 @@ export async function grantSharedFolderAccess(req: Request, res: Response): Prom
 }
 
 /**
- * DELETE /api/admin/users/:id/shared-folders
+ * DELETE /api/admin/users/:id/shared-folders/:folderId
  * Entfernt Shared-Ordner-Zugriff für einen Benutzer
  */
 export async function revokeSharedFolderAccess(req: Request, res: Response): Promise<void> {
   try {
     const userId = parseInt(req.params.id, 10);
-    const { folderPath } = req.body;
+    const folderId = parseInt(req.params.folderId, 10);
 
     if (isNaN(userId)) {
       res.status(400).json({ error: 'Invalid user ID' });
       return;
     }
 
-    if (!folderPath) {
-      res.status(400).json({ error: 'Folder path is required' });
+    if (isNaN(folderId)) {
+      res.status(400).json({ error: 'Invalid folder ID' });
       return;
     }
 
-    // Entferne Zugriff
+    // Entferne Zugriff per ID
     const result = db.prepare(`
       DELETE FROM user_shared_folders
-      WHERE user_id = ? AND folder_path = ?
-    `).run(userId, folderPath);
+      WHERE id = ? AND user_id = ?
+    `).run(folderId, userId);
 
     if (result.changes === 0) {
       res.status(404).json({ error: 'Access not found' });
@@ -142,16 +136,16 @@ export async function getUserSharedFolders(req: Request, res: Response): Promise
     }
 
     const folders = db.prepare(`
-      SELECT folder_path, created_at
+      SELECT id, user_id, folder_path, created_at
       FROM user_shared_folders
       WHERE user_id = ?
       ORDER BY folder_path
-    `).all(userId);
+    `).all(userId) as Array<{ id: number; user_id: number; folder_path: string; created_at: string }>;
 
     res.json({ folders });
   } catch (error) {
     console.error('Error getting user shared folders:', error);
-    res.status(500).json({ error: 'Failed to get shared folders' });
+    res.status(500).json({ error: 'Failed to get shared folders', folders: [] });
   }
 }
 

@@ -73,49 +73,68 @@ async function searchInDirectory(
   dirPath: string,
   type: 'private' | 'shared',
   searchTerm: string,
-  results: SearchResult[]
+  results: SearchResult[],
+  depth: number = 0
 ): Promise<void> {
+  // Maximale Tiefe begrenzen, um endlose Schleifen zu verhindern
+  if (depth > 10) {
+    console.warn(`Max search depth reached at ${dirPath}`);
+    return;
+  }
+
   try {
     const items = await listDirectory(userId, dirPath, type);
     
     for (const item of items) {
       const itemPath = item.path;
-      
+
       if (item.type === 'folder') {
         // Rekursiv in Unterordnern suchen
-        await searchInDirectory(userId, itemPath, type, searchTerm, results);
+        await searchInDirectory(userId, itemPath, type, searchTerm, results, depth + 1);
       } else if (item.type === 'file') {
         // Prüfe Dateiendung explizit, um sicherzugehen
         const ext = path.extname(item.name).toLowerCase();
-        
-        // Nur durchsuchbare Dateien (.md, .txt, .json, .js, .ts, etc. theoretisch, aber wir beschränken uns auf Notizen)
+        const fileName = path.basename(itemPath);
+        const nameMatches = fileName.toLowerCase().includes(searchTerm.toLowerCase());
+        let matches: SearchMatch[] = [];
+
+        // Nur durchsuchbare Dateien (.md, .txt)
         if (['.md', '.txt'].includes(ext)) {
-          const matches = await searchInFile(userId, itemPath, searchTerm, type);
-          
-          if (matches.length > 0) {
-            // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
-            let relevance = matches.length;
-            
-            // Bonus, wenn Suchbegriff im Dateinamen vorkommt
-            const fileName = path.basename(itemPath);
-            if (fileName.toLowerCase().includes(searchTerm.toLowerCase())) {
-              relevance += 10;
-            }
-            
-            results.push({
-              path: itemPath,
-              type,
-              name: fileName,
-              matches,
-              relevance
-            });
+          matches = await searchInFile(userId, itemPath, searchTerm, type);
+        }
+
+        if (matches.length > 0 || nameMatches) {
+          if (matches.length === 0 && nameMatches) {
+            matches = [{
+              line: 0,
+              text: fileName,
+              context: fileName
+            }];
           }
+
+          // Berechne Relevanz basierend auf Anzahl der Matches und Dateiname
+          let relevance = matches.length;
+
+          // Bonus, wenn Suchbegriff im Dateinamen vorkommt
+          if (nameMatches) {
+            relevance += 10;
+          }
+
+          results.push({
+            path: itemPath,
+            type,
+            name: fileName,
+            matches,
+            relevance
+          });
         }
       }
     }
-  } catch (error) {
-    // Verzeichnis konnte nicht gelesen werden
-    console.error(`Error searching in directory ${dirPath}:`, error);
+  } catch (error: any) {
+    // Verzeichnis konnte nicht gelesen werden - nicht kritisch
+    if (error.code !== 'ENOENT') {
+      console.warn(`Error searching in directory ${dirPath}:`, error.message);
+    }
   }
 }
 
@@ -139,26 +158,33 @@ export async function searchNotes(
   const trimmedTerm = searchTerm.trim();
   const results: SearchResult[] = [];
   
+  console.log(`Searching for "${trimmedTerm}" for user ${userId}, type: ${folderType || 'all'}`);
+  
   // Suche in privaten Ordnern
   if (!folderType || folderType === 'private') {
     try {
-      await searchInDirectory(userId, '/', 'private', trimmedTerm, results);
-    } catch (error) {
-      console.error('Error searching private folder:', error);
+      await searchInDirectory(userId, '/', 'private', trimmedTerm, results, 0);
+      console.log(`Private search completed, found ${results.length} results so far`);
+    } catch (error: any) {
+      console.warn('Error searching private folder:', error.message);
     }
   }
   
   // Suche in geteilten Ordnern
   if (!folderType || folderType === 'shared') {
     try {
-      await searchInDirectory(userId, '/', 'shared', trimmedTerm, results);
-    } catch (error) {
-      console.error('Error searching shared folder:', error);
+      const privateResultCount = results.length;
+      await searchInDirectory(userId, '/', 'shared', trimmedTerm, results, 0);
+      console.log(`Shared search completed, found ${results.length - privateResultCount} additional results`);
+    } catch (error: any) {
+      console.warn('Error searching shared folder:', error.message);
     }
   }
   
   // Sortiere nach Relevanz (höchste zuerst)
   results.sort((a, b) => b.relevance - a.relevance);
+  
+  console.log(`Search for "${trimmedTerm}" completed with ${results.length} total results`);
   
   return results;
 }

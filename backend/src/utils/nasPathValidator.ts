@@ -138,20 +138,19 @@ export function validateNasSharedPath(sharedPath: string): {
     };
   }
 
-    if (!validation.readable) {
-      return {
-        valid: false,
-        path: fullPath,
-        error: `Shared directory not readable: ${fullPath}`
-      };
-    }
-
+  if (!validation.readable) {
     return {
-      valid: true,
+      valid: false,
       path: fullPath,
-      error: undefined
+      error: `Shared directory not readable: ${fullPath}`
     };
   }
+
+  return {
+    valid: true,
+    path: fullPath,
+    error: undefined
+  };
 }
 
 /**
@@ -204,29 +203,46 @@ export function validatePathScope(
   return { valid: true };
 }
 
-
+/**
+ * Shared Folder mit Metadaten
+ */
+export interface SharedFolderInfo {
+  name: string;
+  path: string;
+  exists: boolean;
+}
 /**
  * Listet verfügbare Shared-Ordner auf (für Admin-Panel)
  */
 export function listAvailableSharedFolders(): {
-  folders: string[];
+  folders: SharedFolderInfo[];
   error?: string;
 } {
   try {
     const nasSharedPath = process.env.NAS_SHARED_PATH || '/data/shared';
 
     if (!fs.existsSync(nasSharedPath)) {
-      return {
-        folders: [],
-        error: `Shared path does not exist: ${nasSharedPath}`
-      };
+      // Wenn Pfad nicht existiert, erstelle ihn
+      try {
+        fs.mkdirSync(nasSharedPath, { recursive: true });
+        console.log(`Created shared path: ${nasSharedPath}`);
+      } catch (mkdirError: any) {
+        return {
+          folders: [],
+          error: `Shared path does not exist and could not be created: ${nasSharedPath}`
+        };
+      }
     }
 
     const entries = fs.readdirSync(nasSharedPath, { withFileTypes: true });
-    const folders = entries
+    const folders: SharedFolderInfo[] = entries
       .filter(entry => entry.isDirectory())
-      .map(entry => entry.name)
-      .sort();
+      .map(entry => ({
+        name: entry.name,
+        path: path.join(nasSharedPath, entry.name),
+        exists: true
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     return {
       folders,
