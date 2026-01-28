@@ -116,7 +116,7 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
 
     // Verhindere, dass ein Admin sich selbst löscht
     if (req.user && req.user.id === userId) {
-      res.status(400).json({ error: 'Cannot delete your own account' });
+      res.status(400).json({ error: 'Sie können Ihr eigenes Konto nicht löschen' });
       return;
     }
 
@@ -129,7 +129,9 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
     if (targetUser.is_admin && targetUser.is_active) {
       const activeAdmins = countActiveAdmins();
       if (activeAdmins <= 1) {
-        res.status(400).json({ error: 'Cannot delete the last active admin' });
+        res.status(400).json({ 
+          error: 'Es muss mindestens ein Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
+        });
         return;
       }
     }
@@ -212,14 +214,16 @@ export async function updateUserRole(req: Request, res: Response): Promise<void>
 
     // Verhindere, dass ein Admin sich selbst die Admin-Rechte entzieht
     if (req.user && req.user.id === userId && !isAdmin) {
-      res.status(400).json({ error: 'Cannot remove admin rights from your own account' });
+      res.status(400).json({ error: 'Sie können sich nicht selbst die Admin-Rechte entziehen' });
       return;
     }
 
     if (!isAdmin && targetUser.is_admin && targetUser.is_active) {
       const activeAdmins = countActiveAdmins();
       if (activeAdmins <= 1) {
-        res.status(400).json({ error: 'Cannot remove the last active admin' });
+        res.status(400).json({ 
+          error: 'Es muss mindestens ein Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
+        });
         return;
       }
     }
@@ -265,14 +269,16 @@ export async function updateUserStatus(req: Request, res: Response): Promise<voi
 
     // Verhindere, dass ein Admin sich selbst deaktiviert
     if (req.user && req.user.id === userId && !isActive) {
-      res.status(400).json({ error: 'Cannot deactivate your own account' });
+      res.status(400).json({ error: 'Sie können Ihr eigenes Konto nicht deaktivieren' });
       return;
     }
 
     if (!isActive && targetUser.is_admin && targetUser.is_active) {
       const activeAdmins = countActiveAdmins();
       if (activeAdmins <= 1) {
-        res.status(400).json({ error: 'Cannot deactivate the last active admin' });
+        res.status(400).json({ 
+          error: 'Es muss mindestens ein aktiver Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
+        });
         return;
       }
     }

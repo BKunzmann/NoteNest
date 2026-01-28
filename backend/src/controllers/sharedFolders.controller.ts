@@ -5,14 +5,12 @@
  */
 
 import { Request, Response } from 'express';
-import path from 'path';
 import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
 import {
   listAvailableSharedFolders,
   validateNasSharedPath
 } from '../utils/nasPathValidator';
-import { getDefaultSharedRoot } from '../utils/pathAccess';
 
 /**
  * GET /api/admin/shared-folders
@@ -22,22 +20,16 @@ export async function getAvailableSharedFolders(_req: Request, res: Response): P
   try {
     const result = listAvailableSharedFolders();
     
+    // Bei Fehler nur loggen, aber trotzdem antworten (leere Liste)
     if (result.error) {
-      res.status(500).json({ error: result.error });
-      return;
+      console.warn('Warning listing shared folders:', result.error);
     }
 
-    const sharedRoot = getDefaultSharedRoot();
-    const folders = result.folders.map((name) => ({
-      name,
-      path: path.join(sharedRoot, name),
-      exists: true
-    }));
-
+    const folders = result.folders || [];
     res.json({ folders, nasMode: IS_NAS_MODE });
   } catch (error) {
     console.error('Error listing shared folders:', error);
-    res.status(500).json({ error: 'Failed to list shared folders' });
+    res.status(500).json({ error: 'Failed to list shared folders', folders: [] });
   }
 }
 
@@ -113,7 +105,7 @@ export async function revokeSharedFolderAccess(req: Request, res: Response): Pro
       return;
     }
 
-    // Entferne Zugriff
+    // Entferne Zugriff per Pfad
     const result = db.prepare(`
       DELETE FROM user_shared_folders
       WHERE user_id = ? AND folder_path = ?
@@ -149,12 +141,12 @@ export async function getUserSharedFolders(req: Request, res: Response): Promise
       FROM user_shared_folders
       WHERE user_id = ?
       ORDER BY folder_path
-    `).all(userId);
+    `).all(userId) as Array<{ id: number; user_id: number; folder_path: string; created_at: string }>;
 
     res.json({ folders });
   } catch (error) {
     console.error('Error getting user shared folders:', error);
-    res.status(500).json({ error: 'Failed to get shared folders' });
+    res.status(500).json({ error: 'Failed to get shared folders', folders: [] });
   }
 }
 

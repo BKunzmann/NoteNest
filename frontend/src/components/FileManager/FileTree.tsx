@@ -13,9 +13,10 @@ interface FileTreeProps {
   type: 'private' | 'shared';
   title: string;
   icon: string;
+  onFileSelect?: () => void; // Callback wenn eine Datei ausgewählt wird (für mobile Sidebar-Schließen)
 }
 
-export default function FileTree({ type, title, icon }: FileTreeProps) {
+export default function FileTree({ type, title, icon, onFileSelect }: FileTreeProps) {
   const navigate = useNavigate();
   const { 
     privateFiles, 
@@ -129,6 +130,7 @@ export default function FileTree({ type, title, icon }: FileTreeProps) {
               type={type}
               currentPath={currentPath}
               onFolderClick={handleFolderClick}
+              onFileSelect={onFileSelect}
             />
           ))}
         </div>

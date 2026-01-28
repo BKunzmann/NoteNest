@@ -20,17 +20,14 @@ export default function Sidebar({ isOpen, onClose, isMobile = false }: SidebarPr
   return (
     <aside style={{
       width: isMobile ? '80%' : '280px',
-      maxWidth: isMobile ? '320px' : 'none',
-      backgroundColor: '#f8f8f8',
-      borderRight: '1px solid #e0e0e0',
+      minWidth: isMobile ? '0' : '280px',
+      maxWidth: isMobile ? '320px' : '280px',
+      backgroundColor: 'var(--bg-secondary, #f8f8f8)',
+      borderRight: '1px solid var(--border-color, #e0e0e0)',
       overflow: 'auto',
       display: 'flex',
       flexDirection: 'column',
-      position: isMobile ? 'absolute' : 'relative',
-      top: isMobile ? 0 : undefined,
-      bottom: isMobile ? 0 : undefined,
-      left: isMobile ? 0 : undefined,
-      zIndex: isMobile ? 20 : 1,
+      height: '100%',
       boxShadow: isMobile ? '2px 0 12px rgba(0, 0, 0, 0.2)' : undefined
     }}>
       {isMobile && (
@@ -63,14 +60,16 @@ export default function Sidebar({ isOpen, onClose, isMobile = false }: SidebarPr
         type="private" 
         title="Meine Notizen" 
         icon="📁"
+        onFileSelect={onClose}
       />
 
       {/* Geteilte Ordner */}
-      <div style={{ borderTop: '1px solid #e0e0e0' }}>
+      <div style={{ borderTop: '1px solid var(--border-color, #e0e0e0)' }}>
         <FileTree 
           type="shared" 
           title="Geteilte Notizen" 
           icon="👥"
+          onFileSelect={onClose}
         />
       </div>
     </aside>

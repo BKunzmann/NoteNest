@@ -5,8 +5,9 @@
  */
 
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
+import { useEditorStore } from '../store/editorStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
 
 export default function NotesPage() {
@@ -22,6 +23,7 @@ export default function NotesPage() {
     selectFile,
     clearSelection
   } = useFileStore();
+  const { reset: resetEditor } = useEditorStore();
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
   useEffect(() => {
@@ -126,48 +128,55 @@ export default function NotesPage() {
     );
   }
 
+  // Funktion zum Schließen der Notiz
+  const handleCloseNote = () => {
+    clearSelection();
+    resetEditor();
+    // Navigiere zur Basis-Notes-Seite (ohne Parameter)
+    navigate('/notes');
+  };
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{
         padding: '1rem',
         borderBottom: '1px solid var(--border-color)',
-        backgroundColor: 'var(--bg-secondary)'
+        backgroundColor: 'var(--bg-secondary)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: '1rem'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
-              {selectedFile.name}
-            </h2>
-            {selectedPath && (
-              <div style={{ 
-                fontSize: '0.875rem', 
-                color: 'var(--text-secondary)', 
-                marginTop: '0.25rem' 
-              }}>
-                {selectedPath}
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => {
-              clearSelection();
-              navigate('/notes');
-            }}
-            style={{
-              padding: '0.5rem 0.9rem',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.9rem',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            Schließen
-          </button>
+        <div style={{ flex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
+            {selectedFile.name}
+          </h2>
+          {selectedPath && (
+            <div style={{ 
+              fontSize: '0.875rem', 
+              color: 'var(--text-secondary)', 
+              marginTop: '0.25rem' 
+            }}>
+              {selectedPath}
+            </div>
+          )}
         </div>
+        <button
+          onClick={handleCloseNote}
+          style={{
+            padding: '0.5rem 0.9rem',
+            backgroundColor: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Schließen
+        </button>
       </div>
 
       {/* Content */}

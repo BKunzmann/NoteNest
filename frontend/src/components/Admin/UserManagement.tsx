@@ -109,20 +109,22 @@ export default function UserManagement() {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="admin-header" style={{ marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0 }}>Benutzerverwaltung</h1>
+    <div style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="admin-header" style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ margin: 0, fontSize: 'clamp(1.25rem, 4vw, 1.75rem)' }}>Benutzerverwaltung</h1>
         <button
           onClick={() => setShowCreateDialog(true)}
           style={{
-            padding: '0.75rem 1.5rem',
+            padding: '0.75rem 1.25rem',
             backgroundColor: '#007AFF',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '1rem',
-            fontWeight: '500'
+            fontSize: '0.95rem',
+            fontWeight: '500',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           + Neuer Benutzer
@@ -142,6 +144,7 @@ export default function UserManagement() {
         </div>
       )}
 
+      {/* Scrollbarer Tabellen-Container */}
       <div style={{
         backgroundColor: 'white',
         border: '1px solid #e0e0e0',

@@ -4,7 +4,7 @@
  * Haupt-Layout mit Header, Sidebar und Content-Bereich
  */
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BottomToolbar from './BottomToolbar';
@@ -15,16 +15,22 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
+// Breakpoint für mobile Geräte
+const MOBILE_BREAKPOINT = 768;
+
 export default function AppLayout({ children }: AppLayoutProps) {
-  const getIsMobile = () => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
-  const [isMobile, setIsMobile] = useState(getIsMobile());
-  const [sidebarOpen, setSidebarOpen] = useState(!getIsMobile());
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const selectedFile = useFileStore((state) => state.selectedFile);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(getIsMobile());
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   useEffect(() => {
@@ -39,6 +45,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
     }
   }, [isMobile, selectedFile]);
 
+  const handleMenuClick = useCallback(() => {
+    setSidebarOpen((open) => !open);
+  }, []);
+
+  const handleSidebarClose = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
   return (
     <div style={{
       display: 'flex',
@@ -48,7 +62,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     }}>
       {/* Header */}
       <Header 
-        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+        onMenuClick={handleMenuClick}
         sidebarOpen={sidebarOpen}
       />
 
@@ -59,10 +73,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
         overflow: 'hidden',
         position: 'relative'
       }}>
-        {/* Sidebar */}
+        {/* Mobile Overlay */}
         {isMobile && sidebarOpen && (
           <div
-            onClick={() => setSidebarOpen(false)}
+            onClick={handleSidebarClose}
             style={{
               position: 'absolute',
               top: 0,
@@ -74,9 +88,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
             }}
           />
         )}
+
+        {/* Sidebar */}
         <Sidebar 
           isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          onClose={handleSidebarClose}
           isMobile={isMobile}
         />
 
@@ -87,7 +103,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
           backgroundColor: 'var(--bg-primary)',
           padding: isMobile ? '0.75rem' : '1rem',
           position: 'relative',
-          zIndex: 1
+          zIndex: 1,
+          width: isMobile ? '100%' : 'auto'
         }}>
           {children}
         </main>
