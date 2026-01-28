@@ -187,7 +187,6 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
  * Zählt die Anzahl der aktiven Admins
  */
 function countActiveAdmins(): number {
-  const { findUserByUsername } = require('../services/auth.service');
   const users = getAllUsers();
   return users.filter(user => user.is_admin && user.is_active).length;
 }
