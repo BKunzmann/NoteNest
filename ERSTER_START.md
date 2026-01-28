@@ -50,11 +50,19 @@ docker-compose up -d
 ## 6) Healthcheck
 
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3100/api/health
 ```
 
 Extern erreichst du die App (bei Standard-Mapping) unter:
 `http://<nas-ip>:3100`
+
+Hinweis: Wenn auf dem NAS Port 3000 bereits belegt ist, liefert
+`http://localhost:3000/api/health` die Antwort eines anderen Dienstes.
+
+Direkt im Container kannst du immer pruefen:
+```bash
+docker exec notenest sh -c "wget -qO- http://localhost:3000/api/health"
+```
 
 ## 7) Admin-Login
 
