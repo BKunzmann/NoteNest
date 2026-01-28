@@ -27,8 +27,8 @@ router.get('/users/:id/shared-folders', getUserSharedFolders);
 // POST /api/admin/users/:id/shared-folders - Zugriff gewähren
 router.post('/users/:id/shared-folders', grantSharedFolderAccess);
 
-// DELETE /api/admin/users/:id/shared-folders - Zugriff entziehen
-router.delete('/users/:id/shared-folders', revokeSharedFolderAccess);
+// DELETE /api/admin/users/:id/shared-folders/:folderId - Zugriff entziehen
+router.delete('/users/:id/shared-folders/:folderId', revokeSharedFolderAccess);
 
 export default router;
 

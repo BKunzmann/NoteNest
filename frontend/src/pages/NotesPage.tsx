@@ -5,12 +5,14 @@
  */
 
 import { useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
+import { useEditorStore } from '../store/editorStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
 
 export default function NotesPage() {
   const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
+  const navigate = useNavigate();
   const { 
     selectedFile, 
     selectedPath, 
@@ -18,8 +20,10 @@ export default function NotesPage() {
     fileContent, 
     isLoadingContent,
     loadFileContent,
-    selectFile
+    selectFile,
+    clearSelection
   } = useFileStore();
+  const { reset: resetEditor } = useEditorStore();
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
   useEffect(() => {
@@ -124,26 +128,69 @@ export default function NotesPage() {
     );
   }
 
+  // Funktion zum Schließen der Notiz
+  const handleCloseNote = () => {
+    clearSelection();
+    resetEditor();
+    // Navigiere zur Basis-Notes-Seite (ohne Parameter)
+    navigate('/notes');
+  };
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{
         padding: '1rem',
         borderBottom: '1px solid var(--border-color)',
-        backgroundColor: 'var(--bg-secondary)'
+        backgroundColor: 'var(--bg-secondary)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
       }}>
-        <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
-          {selectedFile.name}
-        </h2>
-        {selectedPath && (
-          <div style={{ 
-            fontSize: '0.875rem', 
-            color: 'var(--text-secondary)', 
-            marginTop: '0.25rem' 
-          }}>
-            {selectedPath}
-          </div>
-        )}
+        <div style={{ flex: 1 }}>
+          <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
+            {selectedFile.name}
+          </h2>
+          {selectedPath && (
+            <div style={{ 
+              fontSize: '0.875rem', 
+              color: 'var(--text-secondary)', 
+              marginTop: '0.25rem' 
+            }}>
+              {selectedPath}
+            </div>
+          )}
+        </div>
+        {/* Schließen-Button */}
+        <button
+          onClick={handleCloseNote}
+          title="Notiz schließen"
+          style={{
+            padding: '0.5rem',
+            backgroundColor: 'transparent',
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: '36px',
+            minHeight: '36px',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f0f0f0)';
+            e.currentTarget.style.borderColor = 'var(--text-secondary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.borderColor = 'var(--border-color)';
+          }}
+        >
+          ✕
+        </button>
       </div>
 
       {/* Content */}
