@@ -67,7 +67,8 @@ export default function SharedFoldersManagement() {
       setError(null);
       setSuccess(null);
       await adminAPI.addUserSharedFolder(selectedUser.id, selectedFolderToAdd);
-      setSuccess(`Ordner "${selectedFolderToAdd}" erfolgreich für ${selectedUser.username} freigegeben`);
+      const folderName = availableFolders.find(folder => folder.path === selectedFolderToAdd)?.name || selectedFolderToAdd;
+      setSuccess(`Ordner "${folderName}" erfolgreich für ${selectedUser.username} freigegeben`);
       setShowAddDialog(false);
       setSelectedFolderToAdd('');
       await loadUserFolders(selectedUser.id);
@@ -99,7 +100,7 @@ export default function SharedFoldersManagement() {
     if (!availableFolders) return [];
     const userFolderPaths = userFolders.map(uf => uf.folder_path);
     return availableFolders.filter(folder => 
-      folder.exists && !userFolderPaths.includes(folder.name)
+      folder.exists && !userFolderPaths.includes(folder.path)
     );
   };
 
@@ -373,7 +374,7 @@ export default function SharedFoldersManagement() {
               >
                 <option value="">-- Ordner wählen --</option>
                 {getAvailableFoldersToAdd().map((folder) => (
-                  <option key={folder.name} value={folder.name}>
+                  <option key={folder.path} value={folder.path}>
                     📁 {folder.name}
                   </option>
                 ))}

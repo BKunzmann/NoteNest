@@ -222,22 +222,25 @@ export default function SearchBar({ onClose }: SearchBarProps) {
               {(expandedResults.has(`${result.path}-${result.type}`) 
                 ? result.matches 
                 : result.matches.slice(0, 2)
-              ).map((match, matchIndex) => (
-                <div
-                  key={matchIndex}
-                  style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary, #666)',
-                    marginTop: '0.5rem',
-                    padding: '0.5rem',
-                    backgroundColor: 'var(--bg-secondary, #f9f9f9)',
-                    borderRadius: '4px',
-                    fontFamily: 'monospace'
-                  }}
-                >
-                  Zeile {match.line}: {match.context}
-                </div>
-              ))}
+              ).map((match, matchIndex) => {
+                const lineLabel = match.line === 0 ? 'Dateiname' : `Zeile ${match.line}`;
+                return (
+                  <div
+                    key={matchIndex}
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--text-secondary, #666)',
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      backgroundColor: 'var(--bg-secondary, #f9f9f9)',
+                      borderRadius: '4px',
+                      fontFamily: 'monospace'
+                    }}
+                  >
+                    {lineLabel}: {match.context}
+                  </div>
+                );
+              })}
               {result.matches.length > 2 && !expandedResults.has(`${result.path}-${result.type}`) && (
                 <div 
                   onClick={(e) => {

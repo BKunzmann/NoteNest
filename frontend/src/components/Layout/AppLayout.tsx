@@ -21,34 +21,33 @@ const MOBILE_BREAKPOINT = 768;
 export default function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const { selectedFile } = useFileStore();
+  const selectedFile = useFileStore((state) => state.selectedFile);
 
-  // Prüfe auf mobile Geräte
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth < MOBILE_BREAKPOINT;
-      setIsMobile(mobile);
-      // Sidebar standardmäßig geschlossen auf mobile
-      if (mobile && sidebarOpen) {
-        setSidebarOpen(false);
-      }
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Schließe Sidebar automatisch auf mobile, wenn eine Notiz geöffnet wird
   useEffect(() => {
-    if (isMobile && selectedFile && sidebarOpen) {
+    if (isMobile) {
       setSidebarOpen(false);
     }
-  }, [selectedFile, isMobile]);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile && selectedFile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile, selectedFile]);
 
   const handleMenuClick = useCallback(() => {
-    setSidebarOpen(!sidebarOpen);
-  }, [sidebarOpen]);
+    setSidebarOpen((open) => !open);
+  }, []);
 
   const handleSidebarClose = useCallback(() => {
     setSidebarOpen(false);
@@ -76,47 +75,35 @@ export default function AppLayout({ children }: AppLayoutProps) {
       }}>
         {/* Mobile Overlay */}
         {isMobile && sidebarOpen && (
-          <div 
+          <div
             onClick={handleSidebarClose}
             style={{
-              position: 'fixed',
+              position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 99,
-              transition: 'opacity 0.3s ease'
+              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+              zIndex: 10
             }}
           />
         )}
 
         {/* Sidebar */}
-        <div style={{
-          position: isMobile ? 'fixed' : 'relative',
-          top: isMobile ? '60px' : 0, // Unterhalb des Headers
-          left: 0,
-          bottom: isMobile ? '60px' : 0, // Oberhalb der BottomToolbar
-          zIndex: isMobile ? 100 : 'auto',
-          transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-          transition: 'transform 0.3s ease',
-          height: isMobile ? 'auto' : '100%'
-        }}>
-          <Sidebar 
-            isOpen={sidebarOpen}
-            onClose={handleSidebarClose}
-          />
-        </div>
+        <Sidebar 
+          isOpen={sidebarOpen}
+          onClose={handleSidebarClose}
+          isMobile={isMobile}
+        />
 
         {/* Content */}
         <main style={{
           flex: 1,
           overflow: 'auto',
           backgroundColor: 'var(--bg-primary)',
-          padding: '1rem',
+          padding: isMobile ? '0.75rem' : '1rem',
           position: 'relative',
           zIndex: 1,
-          // Auf mobilen Geräten volle Breite
           width: isMobile ? '100%' : 'auto'
         }}>
           {children}

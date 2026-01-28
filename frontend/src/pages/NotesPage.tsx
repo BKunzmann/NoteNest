@@ -145,7 +145,8 @@ export default function NotesPage() {
         backgroundColor: 'var(--bg-secondary)',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start'
+        alignItems: 'flex-start',
+        gap: '1rem'
       }}>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
@@ -161,35 +162,20 @@ export default function NotesPage() {
             </div>
           )}
         </div>
-        {/* Schließen-Button */}
         <button
           onClick={handleCloseNote}
-          title="Notiz schließen"
           style={{
-            padding: '0.5rem',
-            backgroundColor: 'transparent',
+            padding: '0.5rem 0.9rem',
+            backgroundColor: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
             border: '1px solid var(--border-color)',
-            borderRadius: '4px',
+            borderRadius: '6px',
             cursor: 'pointer',
-            fontSize: '1rem',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minWidth: '36px',
-            minHeight: '36px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f0f0f0)';
-            e.currentTarget.style.borderColor = 'var(--text-secondary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.borderColor = 'var(--border-color)';
+            fontSize: '0.9rem',
+            whiteSpace: 'nowrap'
           }}
         >
-          ✕
+          Schließen
         </button>
       </div>
 

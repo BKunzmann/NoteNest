@@ -110,16 +110,7 @@ export default function UserManagement() {
 
   return (
     <div style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header mit flexiblem Layout für mobile */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginBottom: '1.5rem',
-        gap: '1rem'
-      }}>
+      <div className="admin-header" style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ margin: 0, fontSize: 'clamp(1.25rem, 4vw, 1.75rem)' }}>Benutzerverwaltung</h1>
         <button
           onClick={() => setShowCreateDialog(true)}
@@ -157,122 +148,118 @@ export default function UserManagement() {
       <div style={{
         backgroundColor: 'white',
         border: '1px solid #e0e0e0',
-        borderRadius: '8px',
-        overflow: 'hidden'
+        borderRadius: '8px'
       }}>
-        <div style={{
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch'
-        }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Benutzername</th>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>E-Mail</th>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Auth-Typ</th>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Status</th>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Admin</th>
-              <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Erstellt</th>
-              <th style={{ padding: '1rem', textAlign: 'right', fontWeight: '600' }}>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                <td style={{ padding: '1rem' }}>{user.username}</td>
-                <td style={{ padding: '1rem' }}>{user.email || '-'}</td>
-                <td style={{ padding: '1rem' }}>{user.auth_type}</td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{
-                    padding: '0.25rem 0.75rem',
-                    borderRadius: '12px',
-                    fontSize: '0.875rem',
-                    backgroundColor: user.is_active ? '#d4edda' : '#f8d7da',
-                    color: user.is_active ? '#155724' : '#721c24'
-                  }}>
-                    {user.is_active ? 'Aktiv' : 'Inaktiv'}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{
-                    padding: '0.25rem 0.75rem',
-                    borderRadius: '12px',
-                    fontSize: '0.875rem',
-                    backgroundColor: user.is_admin ? '#cfe2ff' : '#e9ecef',
-                    color: user.is_admin ? '#084298' : '#495057'
-                  }}>
-                    {user.is_admin ? 'Admin' : 'Benutzer'}
-                  </span>
-                </td>
-                <td style={{ padding: '1rem', fontSize: '0.875rem', color: '#666' }}>
-                  {new Date(user.created_at).toLocaleDateString('de-DE')}
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'right' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                    {user.auth_type === 'local' && (
+        <div className="admin-table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #e0e0e0' }}>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Benutzername</th>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>E-Mail</th>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Auth-Typ</th>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Status</th>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Admin</th>
+                <th style={{ padding: '1rem', textAlign: 'left', fontWeight: '600' }}>Erstellt</th>
+                <th style={{ padding: '1rem', textAlign: 'right', fontWeight: '600' }}>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
+                  <td style={{ padding: '1rem' }}>{user.username}</td>
+                  <td style={{ padding: '1rem' }}>{user.email || '-'}</td>
+                  <td style={{ padding: '1rem' }}>{user.auth_type}</td>
+                  <td style={{ padding: '1rem' }}>
+                    <span style={{
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '12px',
+                      fontSize: '0.875rem',
+                      backgroundColor: user.is_active ? '#d4edda' : '#f8d7da',
+                      color: user.is_active ? '#155724' : '#721c24'
+                    }}>
+                      {user.is_active ? 'Aktiv' : 'Inaktiv'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '1rem' }}>
+                    <span style={{
+                      padding: '0.25rem 0.75rem',
+                      borderRadius: '12px',
+                      fontSize: '0.875rem',
+                      backgroundColor: user.is_admin ? '#cfe2ff' : '#e9ecef',
+                      color: user.is_admin ? '#084298' : '#495057'
+                    }}>
+                      {user.is_admin ? 'Admin' : 'Benutzer'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '1rem', fontSize: '0.875rem', color: '#666' }}>
+                    {new Date(user.created_at).toLocaleDateString('de-DE')}
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                      {user.auth_type === 'local' && (
+                        <button
+                          onClick={() => setShowResetPasswordDialog(user.id)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            backgroundColor: '#ffc107',
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.875rem'
+                          }}
+                        >
+                          Passwort
+                        </button>
+                      )}
                       <button
-                        onClick={() => setShowResetPasswordDialog(user.id)}
+                        onClick={() => handleToggleAdmin(user.id, user.is_admin)}
                         style={{
                           padding: '0.5rem 1rem',
-                          backgroundColor: '#ffc107',
-                          color: '#000',
+                          backgroundColor: user.is_admin ? '#dc3545' : '#28a745',
+                          color: 'white',
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontSize: '0.875rem'
                         }}
                       >
-                        Passwort
+                        {user.is_admin ? 'Admin entfernen' : 'Admin setzen'}
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleToggleAdmin(user.id, user.is_admin)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        backgroundColor: user.is_admin ? '#dc3545' : '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      {user.is_admin ? 'Admin entfernen' : 'Admin setzen'}
-                    </button>
-                    <button
-                      onClick={() => handleToggleActive(user.id, user.is_active)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        backgroundColor: user.is_active ? '#dc3545' : '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      {user.is_active ? 'Deaktivieren' : 'Aktivieren'}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        backgroundColor: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      Löschen
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      <button
+                        onClick={() => handleToggleActive(user.id, user.is_active)}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          backgroundColor: user.is_active ? '#dc3545' : '#28a745',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        {user.is_active ? 'Deaktivieren' : 'Aktivieren'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          backgroundColor: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        Löschen
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

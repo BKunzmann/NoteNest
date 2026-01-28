@@ -10,8 +10,15 @@
 import fs from 'fs/promises';
 import path from 'path';
 import db from '../config/database';
+import { IS_NAS_MODE } from '../config/constants';
 import { FileItem } from '../types/file';
 import { trackFileOperation } from '../middleware/metrics.middleware';
+import {
+  getDefaultPrivateRoot,
+  getDefaultSharedRoot,
+  isPathWithinRoot,
+  resolvePathWithinRoot
+} from '../utils/pathAccess';
 
 interface UserSettings {
   id: number;
@@ -82,6 +89,144 @@ export function getUserSettings(userId: number): UserSettings | null {
   return settings || null;
 }
 
+function getUsernameById(userId: number): string {
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return user.username;
+}
+
+function normalizeVirtualPath(filePath: string): string {
+  let normalized = filePath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
+  }
+  normalized = normalized.replace(/\/+/g, '/');
+  return normalized;
+}
+
+function getSafePrivateBasePath(userId: number, settings: UserSettings): string {
+  const username = getUsernameById(userId);
+  const privateRoot = getDefaultPrivateRoot(username);
+
+  if (settings.private_folder_path) {
+    try {
+      return resolvePathWithinRoot(settings.private_folder_path, privateRoot);
+    } catch (error) {
+      console.warn('Invalid private folder path detected, falling back to user root:', {
+        userId,
+        username,
+        private_folder_path: settings.private_folder_path
+      });
+    }
+  }
+
+  return privateRoot;
+}
+
+function getSharedRoots(userId: number, settings: UserSettings): string[] {
+  if (IS_NAS_MODE) {
+    const rows = db.prepare(`
+      SELECT folder_path
+      FROM user_shared_folders
+      WHERE user_id = ?
+      ORDER BY folder_path
+    `).all(userId) as Array<{ folder_path: string }>;
+
+    return rows.map(row => path.resolve(row.folder_path));
+  }
+
+  const sharedRoot = getDefaultSharedRoot();
+  if (settings.shared_folder_path) {
+    try {
+      return [resolvePathWithinRoot(settings.shared_folder_path, sharedRoot)];
+    } catch (error) {
+      console.warn('Invalid shared folder path detected, falling back to default shared root:', {
+        userId,
+        shared_folder_path: settings.shared_folder_path
+      });
+    }
+  }
+
+  return [sharedRoot];
+}
+
+function resolveSharedPath(userId: number, filePath: string, settings: UserSettings): string {
+  const sharedRoots = getSharedRoots(userId, settings);
+  if (sharedRoots.length === 0) {
+    throw new Error('Shared folder access denied');
+  }
+
+  const normalized = normalizeVirtualPath(filePath);
+  const segments = normalized.split('/').filter(Boolean);
+
+  if (segments.length === 0) {
+    throw new Error('Shared folder access denied');
+  }
+
+  const rootName = segments[0];
+  const matchingRoot = sharedRoots.find(root => path.basename(root) === rootName);
+
+  if (matchingRoot) {
+    const remaining = segments.slice(1).join('/');
+    const fullPath = path.join(matchingRoot, remaining);
+
+    if (!isPathWithinRoot(fullPath, matchingRoot)) {
+      throw new Error('Path traversal detected');
+    }
+
+    return fullPath;
+  }
+
+  for (const root of sharedRoots) {
+    try {
+      return resolvePathWithinRoot(filePath, root);
+    } catch {
+      // ignore, try next root
+    }
+  }
+
+  throw new Error('Shared folder access denied');
+}
+
+async function listSharedRootItems(userId: number, settings: UserSettings): Promise<FileItem[]> {
+  const sharedRoots = getSharedRoots(userId, settings);
+  if (sharedRoots.length === 0) {
+    return [];
+  }
+
+  const items: FileItem[] = [];
+
+  for (const root of sharedRoots) {
+    try {
+      const stats = await fs.stat(root);
+      if (!stats.isDirectory()) {
+        continue;
+      }
+
+      const name = path.basename(root);
+      const canReadItem = await checkPermissions(root, 'read');
+      const canWriteItem = await checkPermissions(root, 'write');
+
+      items.push({
+        name,
+        path: `/${name}`,
+        type: 'folder',
+        lastModified: stats.mtime.toISOString(),
+        isEditable: false,
+        canRead: canReadItem,
+        canWrite: canWriteItem
+      });
+    } catch (error) {
+      continue;
+    }
+  }
+
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  return items;
+}
+
 /**
  * Ermittelt den vollständigen Pfad für einen Benutzer
  */
@@ -95,59 +240,32 @@ export function resolveUserPath(
   if (!settings) {
     throw new Error('User settings not found');
   }
-  
-  let basePath: string;
-  
+
   if (type === 'private') {
-    basePath = settings.private_folder_path || (
-      process.env.NODE_ENV === 'production' 
-        ? `/data/users/${userId}` 
-        : `/app/data/users/${userId}`
-    );
-  } else {
-    basePath = settings.shared_folder_path || (
-      process.env.NODE_ENV === 'production' 
-        ? '/data/shared' 
-        : '/app/data/shared'
-    );
+    const basePath = getSafePrivateBasePath(userId, settings);
+    const normalized = normalizeVirtualPath(filePath);
+    const cleanPath = normalized.startsWith('/') ? normalized.slice(1) : normalized;
+    const fullPath = path.join(basePath, cleanPath);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('resolveUserPath:', {
+        userId,
+        filePath,
+        basePath,
+        normalized,
+        cleanPath,
+        fullPath
+      });
+    }
+
+    if (!isPathWithinRoot(fullPath, basePath)) {
+      throw new Error('Path traversal detected');
+    }
+
+    return path.resolve(fullPath);
   }
-  
-  // Normalisiere Pfad
-  // Stelle sicher, dass der Pfad mit / beginnt (relativ zum Base-Pfad)
-  let normalized = filePath.replace(/\\/g, '/'); // Windows-Pfade zu Unix-Pfaden
-  if (!normalized.startsWith('/')) {
-    normalized = '/' + normalized;
-  }
-  // Entferne doppelte Slashes
-  normalized = normalized.replace(/\/+/g, '/');
-  
-  // Entferne führenden Slash für path.join
-  const cleanPath = normalized.startsWith('/') ? normalized.slice(1) : normalized;
-  
-  // Kombiniere Base-Pfad mit Datei-Pfad
-  const fullPath = path.join(basePath, cleanPath);
-  
-  // Debug-Logging (nur in Development)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('resolveUserPath:', {
-      userId,
-      filePath,
-      basePath,
-      normalized,
-      cleanPath,
-      fullPath
-    });
-  }
-  
-  // Prüfe, ob der resultierende Pfad innerhalb des Base-Pfads liegt
-  const resolvedBase = path.resolve(basePath);
-  const resolvedFull = path.resolve(fullPath);
-  
-  if (!resolvedFull.startsWith(resolvedBase)) {
-    throw new Error('Path traversal detected');
-  }
-  
-  return resolvedFull;
+
+  return resolveSharedPath(userId, filePath, settings);
 }
 
 /**
@@ -185,7 +303,19 @@ export async function listDirectory(
   dirPath: string,
   type: 'private' | 'shared'
 ): Promise<FileItem[]> {
-  const fullPath = resolveUserPath(userId, dirPath, type);
+  const settings = getUserSettings(userId);
+  if (!settings) {
+    throw new Error('User settings not found');
+  }
+
+  const normalizedDirPath = normalizeVirtualPath(dirPath);
+  if (type === 'shared' && normalizedDirPath === '/') {
+    return await listSharedRootItems(userId, settings);
+  }
+
+  const fullPath = type === 'shared'
+    ? resolveSharedPath(userId, dirPath, settings)
+    : resolveUserPath(userId, dirPath, type);
   
   // Prüfe, ob Verzeichnis existiert
   try {

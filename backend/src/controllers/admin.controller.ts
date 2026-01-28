@@ -11,7 +11,9 @@ import {
   adminDeleteUser,
   adminResetPassword,
   adminUpdateUserRole,
-  adminUpdateUserStatus
+  adminUpdateUserStatus,
+  countActiveAdmins,
+  getUserByIdForAdmin
 } from '../services/admin.service';
 import { RegisterRequest } from '../types/auth';
 
@@ -118,13 +120,15 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Verhindere das Löschen des letzten Admins
-    const users = getAllUsers();
-    const targetUser = users.find(u => u.id === userId);
-    
-    if (targetUser?.is_admin) {
-      const adminCount = users.filter(u => u.is_admin && u.is_active).length;
-      if (adminCount <= 1) {
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
         res.status(400).json({ 
           error: 'Es muss mindestens ein Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
         });
@@ -184,15 +188,6 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 }
 
 /**
- * Zählt die Anzahl der aktiven Admins
- */
-function countActiveAdmins(): number {
-  const { findUserByUsername } = require('../services/auth.service');
-  const users = getAllUsers();
-  return users.filter(user => user.is_admin && user.is_active).length;
-}
-
-/**
  * PATCH /api/admin/users/:id/role
  * Aktualisiert den Admin-Status eines Benutzers
  */
@@ -211,22 +206,21 @@ export async function updateUserRole(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     // Verhindere, dass ein Admin sich selbst die Admin-Rechte entzieht
     if (req.user && req.user.id === userId && !isAdmin) {
       res.status(400).json({ error: 'Sie können sich nicht selbst die Admin-Rechte entziehen' });
       return;
     }
 
-    // Verhindere das Entfernen des letzten Admins
-    if (!isAdmin) {
-      const adminCount = countActiveAdmins();
-      
-      // Hole den Benutzer, dessen Rolle geändert werden soll
-      const users = getAllUsers();
-      const targetUser = users.find(u => u.id === userId);
-      
-      // Wenn der Ziel-Benutzer derzeit Admin ist und es nur noch einen Admin gibt
-      if (targetUser?.is_admin && adminCount <= 1) {
+    if (!isAdmin && targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
         res.status(400).json({ 
           error: 'Es muss mindestens ein Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
         });
@@ -267,22 +261,21 @@ export async function updateUserStatus(req: Request, res: Response): Promise<voi
       return;
     }
 
+    const targetUser = getUserByIdForAdmin(userId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
     // Verhindere, dass ein Admin sich selbst deaktiviert
     if (req.user && req.user.id === userId && !isActive) {
       res.status(400).json({ error: 'Sie können Ihr eigenes Konto nicht deaktivieren' });
       return;
     }
 
-    // Verhindere das Deaktivieren des letzten Admins
-    if (!isActive) {
-      const adminCount = countActiveAdmins();
-      
-      // Hole den Benutzer, dessen Status geändert werden soll
-      const users = getAllUsers();
-      const targetUser = users.find(u => u.id === userId);
-      
-      // Wenn der Ziel-Benutzer Admin ist und es nur noch einen aktiven Admin gibt
-      if (targetUser?.is_admin && adminCount <= 1) {
+    if (!isActive && targetUser.is_admin && targetUser.is_active) {
+      const activeAdmins = countActiveAdmins();
+      if (activeAdmins <= 1) {
         res.status(400).json({ 
           error: 'Es muss mindestens ein aktiver Administrator vorhanden sein. Ernennen Sie erst einen anderen Benutzer zum Admin.' 
         });

@@ -7,9 +7,9 @@
 import { Request, Response } from 'express';
 import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
-import { 
-  listAvailableSharedFolders, 
-  validateNasSharedPath 
+import {
+  listAvailableSharedFolders,
+  validateNasSharedPath
 } from '../utils/nasPathValidator';
 
 /**
@@ -25,7 +25,8 @@ export async function getAvailableSharedFolders(_req: Request, res: Response): P
       console.warn('Warning listing shared folders:', result.error);
     }
 
-    res.json({ folders: result.folders || [], nasMode: IS_NAS_MODE });
+    const folders = result.folders || [];
+    res.json({ folders, nasMode: IS_NAS_MODE });
   } catch (error) {
     console.error('Error listing shared folders:', error);
     res.status(500).json({ error: 'Failed to list shared folders', folders: [] });
@@ -86,29 +87,29 @@ export async function grantSharedFolderAccess(req: Request, res: Response): Prom
 }
 
 /**
- * DELETE /api/admin/users/:id/shared-folders/:folderId
+ * DELETE /api/admin/users/:id/shared-folders
  * Entfernt Shared-Ordner-Zugriff für einen Benutzer
  */
 export async function revokeSharedFolderAccess(req: Request, res: Response): Promise<void> {
   try {
     const userId = parseInt(req.params.id, 10);
-    const folderId = parseInt(req.params.folderId, 10);
+    const { folderPath } = req.body;
 
     if (isNaN(userId)) {
       res.status(400).json({ error: 'Invalid user ID' });
       return;
     }
 
-    if (isNaN(folderId)) {
-      res.status(400).json({ error: 'Invalid folder ID' });
+    if (!folderPath) {
+      res.status(400).json({ error: 'Folder path is required' });
       return;
     }
 
-    // Entferne Zugriff per ID
+    // Entferne Zugriff per Pfad
     const result = db.prepare(`
       DELETE FROM user_shared_folders
-      WHERE id = ? AND user_id = ?
-    `).run(folderId, userId);
+      WHERE user_id = ? AND folder_path = ?
+    `).run(userId, folderPath);
 
     if (result.changes === 0) {
       res.status(404).json({ error: 'Access not found' });
@@ -146,6 +147,37 @@ export async function getUserSharedFolders(req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error getting user shared folders:', error);
     res.status(500).json({ error: 'Failed to get shared folders', folders: [] });
+  }
+}
+
+/**
+ * DELETE /api/admin/users/:id/shared-folders/:folderId
+ * Entfernt Shared-Ordner-Zugriff über ID
+ */
+export async function revokeSharedFolderAccessById(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    const folderId = parseInt(req.params.folderId, 10);
+
+    if (isNaN(userId) || isNaN(folderId)) {
+      res.status(400).json({ error: 'Invalid parameters' });
+      return;
+    }
+
+    const result = db.prepare(`
+      DELETE FROM user_shared_folders
+      WHERE id = ? AND user_id = ?
+    `).run(folderId, userId);
+
+    if (result.changes === 0) {
+      res.status(404).json({ error: 'Access not found' });
+      return;
+    }
+
+    res.json({ message: 'Shared folder access revoked' });
+  } catch (error) {
+    console.error('Error revoking shared folder access by id:', error);
+    res.status(500).json({ error: 'Failed to revoke access' });
   }
 }
 
