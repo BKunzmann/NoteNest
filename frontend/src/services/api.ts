@@ -621,6 +621,24 @@ export const adminAPI = {
   async removeUserSharedFolder(userId: number, folderId: number): Promise<{ message: string }> {
     const response = await api.delete<{ message: string }>(`/admin/users/${userId}/shared-folders/${folderId}`);
     return response.data;
+  },
+
+  /**
+   * Gibt die Liste der ausgeblendeten Ordner zurück
+   */
+  async getHiddenFolders(): Promise<{ folders: string[] }> {
+    const response = await api.get<{ folders: string[] }>('/admin/config/hidden-folders');
+    return response.data;
+  },
+
+  /**
+   * Aktualisiert die Liste der ausgeblendeten Ordner
+   */
+  async updateHiddenFolders(folders: string[]): Promise<{ message: string; folders: string[] }> {
+    const response = await api.put<{ message: string; folders: string[] }>('/admin/config/hidden-folders', {
+      folders
+    });
+    return response.data;
   }
 };
 

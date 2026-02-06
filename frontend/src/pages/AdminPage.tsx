@@ -9,8 +9,9 @@ import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import UserManagement from '../components/Admin/UserManagement';
 import SharedFoldersManagement from '../components/Admin/SharedFoldersManagement';
+import HiddenFoldersManagement from '../components/Admin/HiddenFoldersManagement';
 
-type AdminTab = 'users' | 'shared-folders';
+type AdminTab = 'users' | 'shared-folders' | 'hidden-folders';
 
 export default function AdminPage() {
   const { user, isAuthenticated } = useAuthStore();
@@ -71,6 +72,12 @@ export default function AdminPage() {
           >
             📁 Shared-Ordner
           </button>
+          <button
+            onClick={() => setActiveTab('hidden-folders')}
+            style={tabStyle('hidden-folders')}
+          >
+            🚫 Ausgeblendete Ordner
+          </button>
         </div>
       </div>
 
@@ -78,6 +85,7 @@ export default function AdminPage() {
       <div>
         {activeTab === 'users' && <UserManagement />}
         {activeTab === 'shared-folders' && <SharedFoldersManagement />}
+        {activeTab === 'hidden-folders' && <HiddenFoldersManagement />}
       </div>
     </div>
   );

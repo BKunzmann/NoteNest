@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import SearchBar from '../Search/SearchBar';
+import { getVersionString } from '../../config/version';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -106,7 +107,7 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
       {/* Right: Settings + User Menu */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        {user?.is_admin && (
+        {user?.is_admin === true && (
           <button
             onClick={() => navigate('/admin')}
             style={{
@@ -192,6 +193,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
                 <div style={{ fontSize: '0.875rem', color: '#666' }}>
                   {user?.email || 'Keine E-Mail'}
                 </div>
+              </div>
+              <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid #e0e0e0', fontSize: '0.75rem', color: '#999' }}>
+                {getVersionString()}
               </div>
               <button
                 onClick={handleLogout}
