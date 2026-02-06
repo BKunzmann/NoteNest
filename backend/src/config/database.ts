@@ -79,12 +79,23 @@ export function initializeDatabase(): void {
       theme VARCHAR(20) DEFAULT 'light' NOT NULL,
       default_export_size VARCHAR(10) DEFAULT 'A4' NOT NULL,
       default_bible_translation VARCHAR(20) DEFAULT 'LUT' NOT NULL,
+      show_only_notes BOOLEAN DEFAULT 0 NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(user_id)
     )
   `);
+
+  // Migration: Füge show_only_notes Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE user_settings ADD COLUMN show_only_notes BOOLEAN DEFAULT 0 NOT NULL`);
+  } catch (error: any) {
+    // Spalte existiert bereits, ignoriere Fehler
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
 
   // Tabelle: user_bible_favorites
   db.exec(`
