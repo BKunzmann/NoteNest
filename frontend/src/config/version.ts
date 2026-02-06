@@ -8,10 +8,12 @@
 export const VERSION = '1.0.0';
 
 // Build-Datum (wird beim Build gesetzt)
-export const BUILD_DATE = process.env.BUILD_DATE || new Date().toISOString();
+// Vite verwendet import.meta.env, aber nur Variablen mit VITE_ Prefix sind verfügbar
+// Für Build-Zeit-Variablen verwenden wir import.meta.env oder Fallback
+export const BUILD_DATE = (import.meta.env.VITE_BUILD_DATE as string | undefined) || new Date().toISOString();
 
 // Git-Commit-Hash (wird beim Build gesetzt, optional)
-export const GIT_COMMIT = process.env.GIT_COMMIT || 'unknown';
+export const GIT_COMMIT = (import.meta.env.VITE_GIT_COMMIT as string | undefined) || 'unknown';
 
 /**
  * Gibt vollständige Versions-Informationen zurück
