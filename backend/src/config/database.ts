@@ -400,4 +400,3 @@ export async function initializeDefaultAdmin(): Promise<void> {
 // Export database instance
 // @ts-ignore - better-sqlite3 type export issue (known TypeScript limitation)
 export default db;
-
