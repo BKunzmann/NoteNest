@@ -12,7 +12,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import db from '../config/database';
-import { readFile, resolveUserPath, listDirectory, isIndexable } from './file.service';
+import { readFile, resolveUserPath, listDirectory, isIndexable, isPathInHiddenFolder } from './file.service';
 
 /**
  * Berechnet SHA-256 Hash einer Datei
@@ -114,6 +114,11 @@ export async function indexFile(
   try {
     // Prüfe, ob Datei indexierbar ist
     if (!isIndexable(filePath)) {
+      return;
+    }
+    
+    // Prüfe, ob Datei in einem ausgeblendeten Ordner liegt
+    if (isPathInHiddenFolder(filePath)) {
       return;
     }
     
@@ -485,9 +490,13 @@ export function searchIndex(
   
   // Konvertiere Map zu Array und sortiere nach Relevanz
   const resultArray = Array.from(results.values());
-  resultArray.sort((a, b) => b.relevance - a.relevance);
   
-  return resultArray;
+  // Filtere Ergebnisse aus ausgeblendeten Ordnern
+  const filteredResults = resultArray.filter(result => !isPathInHiddenFolder(result.path));
+  
+  filteredResults.sort((a, b) => b.relevance - a.relevance);
+  
+  return filteredResults;
 }
 
 /**

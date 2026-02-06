@@ -15,7 +15,9 @@ import {
   updateUserRole,
   updateUserStatus,
   reindexAll,
-  getIndexStatus
+  getIndexStatus,
+  getHiddenFolders,
+  updateHiddenFolders
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -35,6 +37,10 @@ router.patch('/users/:id/status', updateUserStatus);
 // Such-Index-Verwaltung
 router.post('/search/reindex', reindexAll);
 router.get('/search/index-status', getIndexStatus);
+
+// Konfiguration
+router.get('/config/hidden-folders', getHiddenFolders);
+router.put('/config/hidden-folders', updateHiddenFolders);
 
 export default router;
 

@@ -226,6 +226,27 @@ export function initializeDatabase(): void {
       ('index_max_file_size_mb', '50', 'Maximale Dateigröße für Indexierung in MB')
   `);
 
+  // Standard-Konfiguration für ausgeblendete Ordner
+  const defaultHiddenFolders = JSON.stringify([
+    '._DAV',
+    '.Trashes',
+    '@eaDir',
+    '#recycle',
+    '.DS_Store',
+    'Thumbs.db',
+    '.git',
+    '.svn',
+    '.idea',
+    '.vscode',
+    'node_modules'
+  ]);
+  
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO app_config (key, value, description) VALUES
+      (?, ?, 'Liste der Ordner, die in der Dateiansicht ausgeblendet werden (JSON-Array)')
+  `);
+  stmt.run('hidden_folders', defaultHiddenFolders);
+
   // Tabelle: search_index (Metadaten pro indexierter Datei)
   db.exec(`
     CREATE TABLE IF NOT EXISTS search_index (

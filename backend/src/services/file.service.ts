@@ -200,6 +200,81 @@ export async function checkPermissions(
 }
 
 /**
+ * Holt die Liste der zu versteckenden Ordner aus der app_config
+ */
+export function getHiddenFoldersConfig(): string[] {
+  try {
+    const result = db.prepare('SELECT value FROM app_config WHERE key = ?').get('hidden_folders') as { value: string } | undefined;
+    
+    if (result?.value) {
+      // Parse JSON-Array aus der Datenbank
+      return JSON.parse(result.value);
+    }
+  } catch (error) {
+    console.warn('Error reading hidden_folders config:', error);
+  }
+  
+  // Fallback: Standard-Liste
+  return [
+    '._DAV',
+    '.Trashes',
+    '@eaDir',
+    '#recycle',
+    '.DS_Store',
+    'Thumbs.db',
+    '.git',
+    '.svn',
+    '.idea',
+    '.vscode',
+    'node_modules'
+  ];
+}
+
+/**
+ * Prüft, ob ein Ordner ausgeblendet werden soll
+ */
+function shouldHideFolder(folderName: string): boolean {
+  // Hole Liste der zu versteckenden Ordner aus app_config
+  const hiddenFoldersConfig = getHiddenFoldersConfig();
+  
+  // Prüfe, ob der Ordner in der Liste ist (case-insensitive)
+  const normalizedName = folderName.toLowerCase();
+  return hiddenFoldersConfig.some(hidden => 
+    normalizedName === hidden.toLowerCase() || 
+    normalizedName.startsWith(hidden.toLowerCase() + '.') ||
+    normalizedName.startsWith('.' + hidden.toLowerCase())
+  );
+}
+
+/**
+ * Prüft, ob ein Dateipfad in einem ausgeblendeten Ordner liegt
+ */
+export function isPathInHiddenFolder(filePath: string): boolean {
+  const hiddenFoldersConfig = getHiddenFoldersConfig();
+  
+  // Normalisiere Pfad (verwende / als Trennzeichen)
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  
+  // Teile Pfad in Segmente
+  const pathSegments = normalizedPath.split('/').filter(segment => segment.length > 0);
+  
+  // Prüfe jedes Segment, ob es einem ausgeblendeten Ordner entspricht
+  for (const segment of pathSegments) {
+    const normalizedSegment = segment.toLowerCase();
+    if (hiddenFoldersConfig.some(hidden => {
+      const normalizedHidden = hidden.toLowerCase();
+      return normalizedSegment === normalizedHidden || 
+             normalizedSegment.startsWith(normalizedHidden + '.') ||
+             normalizedSegment.startsWith('.' + normalizedHidden);
+    })) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Listet Verzeichnis-Inhalt auf
  */
 export async function listDirectory(
@@ -238,6 +313,11 @@ export async function listDirectory(
   for (const entry of entries) {
     const entryPath = path.join(fullPath, entry.name);
     const relativePath = path.join(dirPath, entry.name);
+    
+    // Filtere ausgeblendete Ordner
+    if (entry.isDirectory() && shouldHideFolder(entry.name)) {
+      continue;
+    }
     
     try {
       const stats = await fs.stat(entryPath);

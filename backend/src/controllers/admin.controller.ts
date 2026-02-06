@@ -431,3 +431,68 @@ export async function getIndexStatus(_req: Request, res: Response): Promise<void
   }
 }
 
+/**
+ * GET /api/admin/config/hidden-folders
+ * Gibt die Liste der ausgeblendeten Ordner zurück
+ */
+export async function getHiddenFolders(req: Request, res: Response): Promise<void> {
+  try {
+    const db = (await import('../config/database')).default;
+    const result = db.prepare('SELECT value FROM app_config WHERE key = ?').get('hidden_folders') as { value: string } | undefined;
+    
+    if (result?.value) {
+      const folders = JSON.parse(result.value);
+      res.json({ folders });
+    } else {
+      res.json({ folders: [] });
+    }
+  } catch (error: any) {
+    console.error('Error getting hidden folders:', error);
+    res.status(500).json({ error: 'Failed to get hidden folders' });
+  }
+}
+
+/**
+ * PUT /api/admin/config/hidden-folders
+ * Aktualisiert die Liste der ausgeblendeten Ordner
+ */
+export async function updateHiddenFolders(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { folders } = req.body;
+
+    if (!Array.isArray(folders)) {
+      res.status(400).json({ error: 'folders must be an array' });
+      return;
+    }
+
+    // Validiere, dass alle Einträge Strings sind
+    if (!folders.every((f: any) => typeof f === 'string')) {
+      res.status(400).json({ error: 'All folder names must be strings' });
+      return;
+    }
+
+    const db = (await import('../config/database')).default;
+    const foldersJson = JSON.stringify(folders);
+    
+    // Aktualisiere oder erstelle Eintrag
+    db.prepare(`
+      INSERT INTO app_config (key, value, description, updated_by, updated_at)
+      VALUES ('hidden_folders', ?, 'Liste der Ordner, die in der Dateiansicht ausgeblendet werden (JSON-Array)', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(foldersJson, req.user.id);
+
+    res.json({ message: 'Hidden folders updated successfully', folders });
+  } catch (error: any) {
+    console.error('Error updating hidden folders:', error);
+    res.status(500).json({ error: error.message || 'Failed to update hidden folders' });
+  }
+}
+
