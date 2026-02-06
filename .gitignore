@@ -70,6 +70,8 @@ coverage/
 !CHANGELOG.md
 !ERSTER_START.md
 !docs/**/*.md
+# Persönliche Notizen (lokal, nicht im Repository)
+_pers.*.md
 *.txt
 scripts/*.ps1
 env.template

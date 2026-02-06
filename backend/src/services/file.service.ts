@@ -13,6 +13,28 @@ import db from '../config/database';
 import { FileItem } from '../types/file';
 import { trackFileOperation } from '../middleware/metrics.middleware';
 
+// Unterstützte Dateiendungen für Indexierung (alle Markdown-Varianten + .txt)
+const INDEXABLE_EXTENSIONS = [
+  '.md',
+  '.markdown',
+  '.mdown',
+  '.mkd',
+  '.mkdn',
+  '.mkdown',
+  '.mdwn',
+  '.mdtxt',
+  '.mdtext',
+  '.txt'
+];
+
+/**
+ * Prüft, ob eine Datei indexierbar ist
+ */
+export function isIndexable(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase();
+  return INDEXABLE_EXTENSIONS.includes(ext);
+}
+
 interface UserSettings {
   id: number;
   user_id: number;
@@ -359,6 +381,15 @@ export async function createFile(
   
   // Metrics-Tracking
   trackFileOperation('create', type);
+  
+  // Index aktualisieren (asynchron, blockiert nicht)
+  if (isIndexable(filePath)) {
+    import('./index.service').then(({ indexFile }) => {
+      indexFile(userId, filePath, type).catch((error) => {
+        console.warn(`Failed to index file after create: ${filePath}`, error);
+      });
+    });
+  }
 }
 
 /**
@@ -396,6 +427,15 @@ export async function updateFile(
   
   // Metrics-Tracking
   trackFileOperation('update', type);
+  
+  // Index aktualisieren (asynchron, blockiert nicht)
+  if (isIndexable(filePath)) {
+    import('./index.service').then(({ updateIndex }) => {
+      updateIndex(userId, filePath, type).catch((error) => {
+        console.warn(`Failed to update index after file update: ${filePath}`, error);
+      });
+    });
+  }
 }
 
 /**
@@ -430,6 +470,15 @@ export async function deleteFile(
     await fs.rmdir(fullPath, { recursive: true });
   } else {
     await fs.unlink(fullPath);
+    
+    // Index aktualisieren (asynchron, blockiert nicht)
+    if (isIndexable(filePath)) {
+      import('./index.service').then(({ removeFromIndex }) => {
+        removeFromIndex(userId, filePath, type).catch((error) => {
+          console.warn(`Failed to remove from index after delete: ${filePath}`, error);
+        });
+      });
+    }
   }
   
   // Metrics-Tracking
@@ -513,5 +562,25 @@ export async function moveFile(
   
   // Verschiebe Datei/Ordner
   await fs.rename(fromPath, toPath);
+  
+  // Index aktualisieren (asynchron, blockiert nicht)
+  // Prüfe, ob es eine Datei war (nicht Ordner)
+  try {
+    const toStats = await fs.stat(toPath);
+    if (!toStats.isDirectory() && isIndexable(to)) {
+      // Entferne alten Eintrag
+      import('./index.service').then(({ removeFromIndex, indexFile }) => {
+        removeFromIndex(userId, from, fromType).catch((error) => {
+          console.warn(`Failed to remove old index entry after move: ${from}`, error);
+        });
+        // Füge neuen Eintrag hinzu
+        indexFile(userId, to, toType).catch((error) => {
+          console.warn(`Failed to index file after move: ${to}`, error);
+        });
+      });
+    }
+  } catch (error) {
+    // Ignoriere Fehler beim Stat-Check
+  }
 }
 

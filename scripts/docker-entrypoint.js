@@ -30,6 +30,13 @@ function parseEnvFile(filePath) {
     return {};
   }
   
+  // Prüfe, ob es ein Verzeichnis ist (kann bei Volume-Mounts passieren)
+  const stats = fs.statSync(filePath);
+  if (stats.isDirectory()) {
+    console.warn(`⚠️  ${filePath} ist ein Verzeichnis, nicht eine Datei. Überspringe.`);
+    return {};
+  }
+  
   const content = fs.readFileSync(filePath, 'utf8');
   const env = {};
   
@@ -51,6 +58,16 @@ function parseEnvFile(filePath) {
  */
 function writeEnvFile(filePath, env) {
   const lines = [];
+  
+  // Prüfe, ob filePath ein Verzeichnis ist (kann bei Volume-Mounts passieren)
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    if (stats.isDirectory()) {
+      console.warn(`⚠️  ${filePath} ist ein Verzeichnis, kann nicht überschrieben werden.`);
+      console.log('⚠️  Überspringe Schreiben der .env Datei.');
+      return;
+    }
+  }
   
   // Lese Original-Datei für Kommentare und Formatierung
   let originalContent = '';
@@ -98,10 +115,18 @@ function main() {
   let env = {};
   let needsUpdate = false;
   
-  // Prüfe ob .env existiert
+  // Prüfe ob .env existiert und eine Datei ist
   if (fs.existsSync(ENV_FILE)) {
-    env = parseEnvFile(ENV_FILE);
-    console.log('✅ .env Datei gefunden');
+    const stats = fs.statSync(ENV_FILE);
+    if (stats.isDirectory()) {
+      console.warn(`⚠️  ${ENV_FILE} ist ein Verzeichnis, nicht eine Datei.`);
+      console.log('⚠️  .env Datei nicht gefunden (Verzeichnis erkannt)');
+      env = {};
+      needsUpdate = true;
+    } else {
+      env = parseEnvFile(ENV_FILE);
+      console.log('✅ .env Datei gefunden');
+    }
   } else {
     console.log('⚠️  .env Datei nicht gefunden');
     
@@ -171,29 +196,55 @@ main();
 // Das Entrypoint-Script wird mit dem CMD als Argumente aufgerufen
 const args = process.argv.slice(2);
 if (args.length > 0) {
-  // Ersetze den aktuellen Prozess mit dem Befehl
-  const { spawn } = require('child_process');
-  const child = spawn(args[0], args.slice(1), {
-    stdio: 'inherit',
-    env: process.env
-  });
-  
-  child.on('exit', (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-    } else {
-      process.exit(code || 0);
-    }
-  });
-  
-  child.on('error', (error) => {
-    console.error('❌ Fehler beim Starten der Anwendung:', error);
-    process.exit(1);
-  });
-  
-  // Weiterleite Signale
-  process.on('SIGTERM', () => child.kill('SIGTERM'));
-  process.on('SIGINT', () => child.kill('SIGINT'));
+  // Wenn der erste Befehl "sh" ist und "-c" folgt, führe den gesamten String aus
+  if (args[0] === 'sh' && args[1] === '-c' && args[2]) {
+    const { exec } = require('child_process');
+    const child = exec(args[2], {
+      stdio: 'inherit',
+      env: process.env
+    });
+    
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.kill(process.pid, signal);
+      } else {
+        process.exit(code || 0);
+      }
+    });
+    
+    child.on('error', (error) => {
+      console.error('❌ Fehler beim Starten der Anwendung:', error);
+      process.exit(1);
+    });
+    
+    // Weiterleite Signale
+    process.on('SIGTERM', () => child.kill('SIGTERM'));
+    process.on('SIGINT', () => child.kill('SIGINT'));
+  } else {
+    // Normale Ausführung
+    const { spawn } = require('child_process');
+    const child = spawn(args[0], args.slice(1), {
+      stdio: 'inherit',
+      env: process.env
+    });
+    
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.kill(process.pid, signal);
+      } else {
+        process.exit(code || 0);
+      }
+    });
+    
+    child.on('error', (error) => {
+      console.error('❌ Fehler beim Starten der Anwendung:', error);
+      process.exit(1);
+    });
+    
+    // Weiterleite Signale
+    process.on('SIGTERM', () => child.kill('SIGTERM'));
+    process.on('SIGINT', () => child.kill('SIGINT'));
+  }
 } else {
   console.log('⚠️  Kein Befehl angegeben, nur Entrypoint ausgeführt');
   process.exit(0);

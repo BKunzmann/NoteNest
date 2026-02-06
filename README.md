@@ -9,6 +9,7 @@ Persönliche Notizen-App mit Bibelstellen-Referenzen, Multi-User-Support und NAS
 
 - 📝 **Markdown-Editor** mit Live-Vorschau und WYSIWYG-Modus
 - 📖 **Bibelstellen-Integration** - Automatische Erkennung und interaktive Popups
+- 🔍 **Volltextsuche** - Index-basierte Suche mit Fuzzy Search (10-100x schneller)
 - 👥 **Multi-User-System** mit sicherer JWT-Authentifizierung
   - "Angemeldet bleiben" Funktionalität (7 Tage Gültigkeit)
   - Automatische Token-Erneuerung

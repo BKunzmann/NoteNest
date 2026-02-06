@@ -45,7 +45,7 @@ services:
       - notenest-network
     
     # --- Command ---
-    command: npm run dev
+    # Command wird vom Dockerfile CMD verwendet
     
     # --- Restart Policy ---
     restart: unless-stopped

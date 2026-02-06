@@ -14,6 +14,7 @@ import {
   adminUpdateUserStatus
 } from '../services/admin.service';
 import { RegisterRequest } from '../types/auth';
+import { indexAllFiles } from '../services/index.service';
 
 /**
  * GET /api/admin/users
@@ -300,6 +301,133 @@ export async function updateUserStatus(req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error('Error updating user status:', error);
     res.status(500).json({ error: 'Failed to update user status' });
+  }
+}
+
+/**
+ * POST /api/admin/search/reindex
+ * Startet eine vollständige Re-Indexierung aller Dateien
+ * Optional: ?userId=X für einen spezifischen Benutzer
+ * Optional: ?type=private|shared für einen spezifischen Ordner-Typ
+ */
+export async function reindexAll(req: Request, res: Response): Promise<void> {
+  try {
+    const userIdParam = req.query.userId as string | undefined;
+    const folderType = req.query.type as 'private' | 'shared' | undefined;
+    
+    // Validiere folderType
+    if (folderType && folderType !== 'private' && folderType !== 'shared') {
+      res.status(400).json({ error: 'Invalid folder type. Must be "private" or "shared"' });
+      return;
+    }
+    
+    // Wenn userId angegeben, prüfe ob Benutzer existiert
+    if (userIdParam) {
+      const userId = parseInt(userIdParam, 10);
+      if (isNaN(userId)) {
+        res.status(400).json({ error: 'Invalid user ID' });
+        return;
+      }
+      
+      const users = getAllUsers();
+      const user = users.find(u => u.id === userId);
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+      
+      // Starte Re-Indexierung für einen Benutzer (asynchron)
+      res.json({ 
+        message: 'Re-indexing started',
+        userId,
+        folderType: folderType || 'all'
+      });
+      
+      // Führe Indexierung im Hintergrund aus
+      indexAllFiles(userId, folderType)
+        .then(result => {
+          console.log(`Re-indexing completed for user ${userId}: ${result.indexed} indexed, ${result.errors} errors`);
+        })
+        .catch(error => {
+          console.error(`Re-indexing failed for user ${userId}:`, error);
+        });
+      
+      return;
+    }
+    
+    // Re-Indexierung für alle Benutzer
+    const users = getAllUsers();
+    const activeUsers = users.filter(u => u.is_active);
+    
+    res.json({ 
+      message: 'Re-indexing started for all users',
+      userCount: activeUsers.length,
+      folderType: folderType || 'all'
+    });
+    
+    // Führe Indexierung für alle Benutzer im Hintergrund aus
+    Promise.all(
+      activeUsers.map(user => 
+        indexAllFiles(user.id, folderType)
+          .then(result => {
+            console.log(`Re-indexing completed for user ${user.id} (${user.username}): ${result.indexed} indexed, ${result.errors} errors`);
+            return result;
+          })
+          .catch(error => {
+            console.error(`Re-indexing failed for user ${user.id} (${user.username}):`, error);
+            return { indexed: 0, errors: 1 };
+          })
+      )
+    ).then(results => {
+      const totalIndexed = results.reduce((sum, r) => sum + r.indexed, 0);
+      const totalErrors = results.reduce((sum, r) => sum + r.errors, 0);
+      console.log(`Re-indexing completed for all users: ${totalIndexed} indexed, ${totalErrors} errors`);
+    });
+    
+  } catch (error) {
+    console.error('Error starting re-indexing:', error);
+    res.status(500).json({ error: 'Failed to start re-indexing' });
+  }
+}
+
+/**
+ * GET /api/admin/search/index-status
+ * Gibt Statistiken über den Index zurück
+ */
+export async function getIndexStatus(_req: Request, res: Response): Promise<void> {
+  try {
+    const db = (await import('../config/database')).default;
+    
+    // Hole Index-Statistiken
+    const totalFiles = db.prepare('SELECT COUNT(*) as count FROM search_index').get() as { count: number };
+    const totalTokens = db.prepare('SELECT COUNT(*) as count FROM search_tokens').get() as { count: number };
+    const totalSize = db.prepare('SELECT SUM(file_size) as size FROM search_index').get() as { size: number | null };
+    const byType = db.prepare(`
+      SELECT file_type, COUNT(*) as count 
+      FROM search_index 
+      GROUP BY file_type
+    `).all() as Array<{ file_type: string; count: number }>;
+    const byExtension = db.prepare(`
+      SELECT file_extension, COUNT(*) as count 
+      FROM search_index 
+      GROUP BY file_extension
+      ORDER BY count DESC
+      LIMIT 10
+    `).all() as Array<{ file_extension: string; count: number }>;
+    
+    res.json({
+      totalFiles: totalFiles.count,
+      totalTokens: totalTokens.count,
+      totalSize: totalSize.size || 0,
+      byType: byType.reduce((acc, row) => {
+        acc[row.file_type] = row.count;
+        return acc;
+      }, {} as Record<string, number>),
+      topExtensions: byExtension
+    });
+  } catch (error) {
+    console.error('Error getting index status:', error);
+    res.status(500).json({ error: 'Failed to get index status' });
   }
 }
 

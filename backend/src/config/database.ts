@@ -206,6 +206,85 @@ export function initializeDatabase(): void {
     ON file_metadata(user_id, file_path)
   `);
 
+  // Tabelle: app_config (globale App-Konfiguration, u.a. Suchindex-Einstellungen)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      key VARCHAR(100) PRIMARY KEY,
+      value TEXT NOT NULL,
+      description TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER,
+      FOREIGN KEY (updated_by) REFERENCES users(id)
+    )
+  `);
+
+  // Standard-Konfigurationseinträge für den Suchindex
+  db.exec(`
+    INSERT OR IGNORE INTO app_config (key, value, description) VALUES
+      ('index_notes_only', 'true', 'Nur Notizdateien (Markdown/TXT) indexieren'),
+      ('index_parallel_workers', '4', 'Anzahl paralleler Worker für Indexierung'),
+      ('index_max_file_size_mb', '50', 'Maximale Dateigröße für Indexierung in MB')
+  `);
+
+  // Tabelle: search_index (Metadaten pro indexierter Datei)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS search_index (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      file_path VARCHAR(500) NOT NULL,
+      file_type VARCHAR(10) NOT NULL, -- 'private' | 'shared'
+      file_name VARCHAR(255) NOT NULL,
+      file_extension VARCHAR(10) NOT NULL,
+      content_hash VARCHAR(64) NOT NULL,
+      file_size INTEGER NOT NULL,
+      word_count INTEGER,
+      indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_modified DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, file_path, file_type)
+    )
+  `);
+
+  // Indexe für search_index
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_search_index_user_path
+    ON search_index(user_id, file_path, file_type)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_search_index_extension
+    ON search_index(file_extension)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_search_index_modified
+    ON search_index(last_modified)
+  `);
+
+  // Tabelle: search_tokens (invertierter Index für Textsuche)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS search_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token VARCHAR(255) NOT NULL,
+      file_id INTEGER NOT NULL,
+      line_number INTEGER,
+      position INTEGER,
+      context TEXT,
+      FOREIGN KEY (file_id) REFERENCES search_index(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Indexe für search_tokens
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_search_tokens_token
+    ON search_tokens(token)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_search_tokens_file
+    ON search_tokens(file_id)
+  `);
+
   console.log('✅ Database initialized');
 }
 

@@ -13,7 +13,9 @@ import {
   deleteUser,
   resetPassword,
   updateUserRole,
-  updateUserStatus
+  updateUserStatus,
+  reindexAll,
+  getIndexStatus
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -29,6 +31,10 @@ router.delete('/users/:id', deleteUser);
 router.post('/users/:id/reset-password', resetPassword);
 router.patch('/users/:id/role', updateUserRole);
 router.patch('/users/:id/status', updateUserStatus);
+
+// Such-Index-Verwaltung
+router.post('/search/reindex', reindexAll);
+router.get('/search/index-status', getIndexStatus);
 
 export default router;
 
