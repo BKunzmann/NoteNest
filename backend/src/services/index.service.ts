@@ -13,7 +13,6 @@ import path from 'path';
 import crypto from 'crypto';
 import db from '../config/database';
 import { readFile, resolveUserPath, listDirectory, isIndexable } from './file.service';
-import { FileItem } from '../types/file';
 
 /**
  * Berechnet SHA-256 Hash einer Datei

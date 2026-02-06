@@ -9,8 +9,6 @@ import request from 'supertest';
 import express from 'express';
 import db from '../../config/database';
 import { initializeDatabase } from '../../config/database';
-import { authenticateToken } from '../../middleware/auth.middleware';
-import { requireAdmin } from '../../middleware/admin.middleware';
 import { reindexAll, getIndexStatus } from '../../controllers/admin.controller';
 import fs from 'fs/promises';
 import path from 'path';
@@ -20,7 +18,6 @@ describe('Admin Search Endpoints', () => {
   let app: express.Application;
   let adminUserId: number;
   let regularUserId: number;
-  let adminToken: string;
   let testDir: string;
   
   beforeEach(async () => {
@@ -59,7 +56,7 @@ describe('Admin Search Endpoints', () => {
     app.use(express.json());
     
     // Mock Auth-Middleware (setze req.user)
-    app.use((req, res, next) => {
+    app.use((req, _res, next) => {
       (req as any).user = { id: adminUserId, username: 'admin', is_admin: true };
       next();
     });

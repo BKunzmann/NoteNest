@@ -5,8 +5,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import request from 'supertest';
-import express from 'express';
 import db from '../../config/database';
 import { initializeDatabase } from '../../config/database';
 import { searchNotes } from '../../services/search.service';
