@@ -7,8 +7,33 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Zuerst: Build testen, damit bei Fehlern die genaue Meldung sichtbar ist
+  verify-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install and build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Install and build backend
+        run: |
+          cd backend
+          npm install
+          npm run build
+
   build-and-push:
     runs-on: ubuntu-latest
+    needs: verify-build
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
