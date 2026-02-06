@@ -10,6 +10,7 @@ export interface UserSettings {
   theme: string;
   default_export_size: string;
   default_bible_translation: string;
+  show_only_notes: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -20,5 +21,6 @@ export interface UpdateSettingsRequest {
   theme?: string;
   default_export_size?: string;
   default_bible_translation?: string;
+  show_only_notes?: boolean;
 }
 

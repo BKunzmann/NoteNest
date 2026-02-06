@@ -141,7 +141,7 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { private_folder_path, shared_folder_path, theme, default_export_size, default_bible_translation } = req.body;
+    const { private_folder_path, shared_folder_path, theme, default_export_size, default_bible_translation, show_only_notes } = req.body;
 
     // Validiere private Pfade
     if (private_folder_path !== undefined && private_folder_path !== null) {
@@ -199,7 +199,8 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       shared_folder_path,
       theme,
       default_export_size,
-      default_bible_translation
+      default_bible_translation,
+      show_only_notes
     });
 
     res.json(updated);
