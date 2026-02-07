@@ -437,6 +437,7 @@ export async function getIndexStatus(_req: Request, res: Response): Promise<void
  */
 export async function getHiddenFolders(req: Request, res: Response): Promise<void> {
   try {
+    void req;
     const db = (await import('../config/database')).default;
     const result = db.prepare('SELECT value FROM app_config WHERE key = ?').get('hidden_folders') as { value: string } | undefined;
     

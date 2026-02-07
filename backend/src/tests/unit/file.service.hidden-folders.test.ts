@@ -9,7 +9,6 @@ import {
   isPathInHiddenFolder,
   listDirectory 
 } from '../../services/file.service';
-import { resolveUserPath } from '../../services/file.service';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
