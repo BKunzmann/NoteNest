@@ -56,6 +56,13 @@ export interface MoveFileRequest {
   toType: 'private' | 'shared';
 }
 
+export interface CopyFileRequest {
+  from: string;
+  to: string;
+  fromType: 'private' | 'shared';
+  toType: 'private' | 'shared';
+}
+
 export interface RenameFileRequest {
   path: string;
   newName: string;

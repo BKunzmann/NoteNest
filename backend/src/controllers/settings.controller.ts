@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
+import { resolveUserPath } from '../services/file.service';
 
 /**
  * Validiert, ob ein Pfad für den Benutzer erlaubt ist
@@ -106,6 +107,36 @@ function isPathAllowedForUser(
 }
 
 /**
+ * Normalisiert einen relativen Ordnerpfad für Notizablage.
+ * Erlaubte Beispiele: "/", "/predigten", "predigten/2026"
+ */
+function normalizeRelativeFolderPath(inputPath: string): string {
+  const trimmed = inputPath.trim();
+  if (!trimmed) {
+    return '/';
+  }
+
+  // Windows-Trennzeichen vereinheitlichen und Normalisierung ohne Base-Pfad
+  let normalized = path.posix.normalize(trimmed.replace(/\\/g, '/'));
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+
+  // Path Traversal verhindern
+  if (normalized.includes('..')) {
+    throw new Error('Ungültiger Standardordner: Path Traversal ist nicht erlaubt');
+  }
+
+  // Doppel-Slashes entfernen und Root sicherstellen
+  normalized = normalized.replace(/\/+/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = '/';
+  }
+
+  return normalized;
+}
+
+/**
  * GET /api/settings
  * Gibt aktuelle Benutzer-Einstellungen zurück
  */
@@ -141,10 +172,30 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { private_folder_path, shared_folder_path, theme, default_export_size, default_bible_translation, show_only_notes } = req.body;
+    const {
+      private_folder_path,
+      shared_folder_path,
+      theme,
+      default_export_size,
+      default_bible_translation,
+      show_only_notes,
+      default_note_type,
+      default_note_folder_path,
+      sidebar_view_mode
+    } = req.body;
+
+    const existingSettings = getUserSettings(req.user.id);
+    if (!existingSettings) {
+      res.status(404).json({ error: 'Settings not found' });
+      return;
+    }
 
     // Validiere private Pfade
     if (private_folder_path !== undefined && private_folder_path !== null) {
+      if (typeof private_folder_path !== 'string') {
+        res.status(400).json({ error: 'private_folder_path must be a string' });
+        return;
+      }
       // Sicherheitsprüfung: Ist der Pfad für diesen Benutzer erlaubt?
       const pathCheck = isPathAllowedForUser(
         req.user.id, 
@@ -160,9 +211,8 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
 
       try {
         // Prüfe, ob Pfad existiert oder erstellt werden kann
-        const dir = path.dirname(private_folder_path);
-        await fs.mkdir(dir, { recursive: true });
-        await fs.access(dir);
+        await fs.mkdir(private_folder_path, { recursive: true });
+        await fs.access(private_folder_path);
       } catch (error: any) {
         res.status(400).json({ error: `Invalid private folder path: ${error.message}` });
         return;
@@ -171,6 +221,10 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
 
     // Validiere shared Pfade
     if (shared_folder_path !== undefined && shared_folder_path !== null) {
+      if (typeof shared_folder_path !== 'string') {
+        res.status(400).json({ error: 'shared_folder_path must be a string' });
+        return;
+      }
       // Sicherheitsprüfung: Ist der Pfad für diesen Benutzer erlaubt?
       const pathCheck = isPathAllowedForUser(
         req.user.id, 
@@ -185,18 +239,79 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       }
 
       try {
-        const dir = path.dirname(shared_folder_path);
-        await fs.mkdir(dir, { recursive: true });
-        await fs.access(dir);
+        await fs.mkdir(shared_folder_path, { recursive: true });
+        await fs.access(shared_folder_path);
       } catch (error: any) {
         res.status(400).json({ error: `Invalid shared folder path: ${error.message}` });
         return;
       }
     }
 
+    // Validiere default_note_type
+    if (
+      default_note_type !== undefined &&
+      default_note_type !== 'private' &&
+      default_note_type !== 'shared'
+    ) {
+      res.status(400).json({ error: 'Invalid default_note_type (allowed: private, shared)' });
+      return;
+    }
+
+    // Validiere sidebar_view_mode
+    if (
+      sidebar_view_mode !== undefined &&
+      sidebar_view_mode !== 'recent' &&
+      sidebar_view_mode !== 'folders'
+    ) {
+      res.status(400).json({ error: 'Invalid sidebar_view_mode (allowed: recent, folders)' });
+      return;
+    }
+
+    // Normalisiere/validiere default_note_folder_path
+    let normalizedDefaultFolderPath: string | undefined;
+    if (default_note_folder_path !== undefined) {
+      if (typeof default_note_folder_path !== 'string') {
+        res.status(400).json({ error: 'default_note_folder_path must be a string' });
+        return;
+      }
+
+      try {
+        normalizedDefaultFolderPath = normalizeRelativeFolderPath(default_note_folder_path);
+      } catch (error: any) {
+        res.status(400).json({ error: error.message || 'Invalid default_note_folder_path' });
+        return;
+      }
+    }
+
+    // Stelle sicher, dass der Standardordner existiert und für den Benutzer auflösbar ist
+    const finalDefaultType = (default_note_type ??
+      existingSettings.default_note_type ??
+      'private') as 'private' | 'shared';
+    const finalDefaultFolderPath = normalizedDefaultFolderPath ??
+      existingSettings.default_note_folder_path ??
+      '/';
+
+    try {
+      const resolvedDefaultFolderPath = resolveUserPath(
+        req.user.id,
+        finalDefaultFolderPath,
+        finalDefaultType
+      );
+      await fs.mkdir(resolvedDefaultFolderPath, { recursive: true });
+      await fs.access(resolvedDefaultFolderPath);
+    } catch (error: any) {
+      res.status(400).json({
+        error: `Invalid default note folder (${finalDefaultType}:${finalDefaultFolderPath}): ${error.message}`
+      });
+      return;
+    }
+
     const updated = updateUserSettings(req.user.id, {
       private_folder_path,
       shared_folder_path,
+      default_note_type,
+      default_note_folder_path: normalizedDefaultFolderPath,
+      sidebar_view_mode,
       theme,
       default_export_size,
       default_bible_translation,

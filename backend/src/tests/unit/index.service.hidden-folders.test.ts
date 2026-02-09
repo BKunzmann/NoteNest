@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import db from '../../config/database';
+import db, { initializeDatabase } from '../../config/database';
 import { indexFile, searchIndex } from '../../services/index.service';
 import { isPathInHiddenFolder } from '../../services/file.service';
 import fs from 'fs/promises';
@@ -15,11 +15,12 @@ describe('Index Service with Hidden Folders', () => {
   let testDir: string;
 
   beforeEach(async () => {
+    initializeDatabase();
     // Erstelle Test-User
     const userResult = db.prepare(`
       INSERT INTO users (username, password_hash, auth_type, is_active)
       VALUES (?, ?, 'local', 1)
-    `).run('testuser_index', 'hash', 'local');
+    `).run('testuser_index', 'hash');
     testUserId = userResult.lastInsertRowid as number;
 
     // Erstelle User Settings

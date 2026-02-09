@@ -25,6 +25,9 @@ export default function SettingsPage() {
 
   const [privatePath, setPrivatePath] = useState('');
   const [sharedPath, setSharedPath] = useState('');
+  const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
+  const [defaultNoteFolderPath, setDefaultNoteFolderPath] = useState('/');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [exportSize, setExportSize] = useState('A4');
   const [bibleTranslation, setBibleTranslation] = useState('LUT1912');
@@ -76,6 +79,9 @@ export default function SettingsPage() {
       setSettings(data);
       setPrivatePath(data.private_folder_path || '');
       setSharedPath(data.shared_folder_path || '');
+      setDefaultNoteType(data.default_note_type || 'private');
+      setDefaultNoteFolderPath(data.default_note_folder_path || '/');
+      setSidebarViewMode(data.sidebar_view_mode || 'recent');
       setTheme((data.theme || 'light') as 'light' | 'dark');
       setExportSize(data.default_export_size || 'A4');
       // Normalisiere Standard-Übersetzung (LUT -> LUT1912, etc.)
@@ -224,6 +230,9 @@ export default function SettingsPage() {
       const updates: UpdateSettingsRequest = {
         private_folder_path: privatePath || null,
         shared_folder_path: sharedPath || null,
+        default_note_type: defaultNoteType,
+        default_note_folder_path: defaultNoteFolderPath || '/',
+        sidebar_view_mode: sidebarViewMode,
         theme,
         default_export_size: exportSize,
         default_bible_translation: bibleTranslation
@@ -433,11 +442,71 @@ export default function SettingsPage() {
               Pfad zu geteilten Notizen (optional, z.B. /app/data/shared)
             </div>
           </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="defaultNoteType" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Standardablage für neue Notizen
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <select
+                id="defaultNoteType"
+                value={defaultNoteType}
+                onChange={(e) => setDefaultNoteType(e.target.value as 'private' | 'shared')}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="private">Privat</option>
+                <option value="shared">Geteilt</option>
+              </select>
+              <input
+                type="text"
+                value={defaultNoteFolderPath}
+                onChange={(e) => setDefaultNoteFolderPath(e.target.value)}
+                placeholder="/"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+            <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
+              Neue Notizen landen standardmäßig hier (z.B. /Predigten/2026).
+            </div>
+          </div>
         </div>
 
         {/* Weitere Einstellungen */}
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Weitere Einstellungen</h2>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="sidebarViewMode" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Standard-Sidebar-Ansicht
+            </label>
+            <select
+              id="sidebarViewMode"
+              value={sidebarViewMode}
+              onChange={(e) => setSidebarViewMode(e.target.value as 'recent' | 'folders')}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="recent">Zuletzt bearbeitet (gruppiert)</option>
+              <option value="folders">Ordneransicht</option>
+            </select>
+          </div>
 
           <div style={{ marginBottom: '1rem' }}>
             <label htmlFor="theme" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>

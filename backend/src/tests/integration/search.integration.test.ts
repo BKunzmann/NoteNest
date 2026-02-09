@@ -25,7 +25,7 @@ describe('Search Integration', () => {
     const result = db.prepare(`
       INSERT INTO users (username, password_hash, auth_type, is_active)
       VALUES (?, ?, 'local', 1)
-    `).run('testuser', 'hash', 'local');
+    `).run('testuser', 'hash');
     testUserId = result.lastInsertRowid as number;
     
     // Erstelle Test-Verzeichnis

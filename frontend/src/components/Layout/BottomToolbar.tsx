@@ -11,14 +11,38 @@ import CreateFileDialog from '../FileManager/CreateFileDialog';
 import DeleteConfirmDialog from '../FileManager/DeleteConfirmDialog';
 import { exportAPI, settingsAPI, fileAPI } from '../../services/api';
 
+function normalizeFolderPath(inputPath: string): string {
+  let normalized = inputPath.trim() || '/';
+  normalized = normalized.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  normalized = normalized.replace(/\/+/g, '/');
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized || '/';
+}
+
+function getParentPath(filePath: string): string {
+  const normalized = normalizeFolderPath(filePath);
+  if (normalized === '/') {
+    return '/';
+  }
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= 1) {
+    return '/';
+  }
+  return `/${segments.slice(0, -1).join('/')}`;
+}
+
 export default function BottomToolbar() {
   const { 
     privatePath, 
-    sharedPath, 
+    sharedPath,
     selectedType, 
     selectedFile, 
     selectedPath,
-    sharedFiles,
     deleteItem,
     loadFiles
   } = useFileStore();
@@ -28,29 +52,62 @@ export default function BottomToolbar() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [createType, setCreateType] = useState<'private' | 'shared'>('private');
+  const [createPath, setCreatePath] = useState<string>('/');
+  const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
+  const [defaultNotePath, setDefaultNotePath] = useState<string>('/');
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Bestimme Kontext: Wenn shared Files geladen sind oder selectedType shared ist, dann shared
-  const determineContext = (): 'private' | 'shared' => {
-    if (selectedType === 'shared') return 'shared';
-    if (selectedType === 'private') return 'private';
-    // Fallback: Wenn shared Files vorhanden sind, nehme shared, sonst private
-    return sharedFiles.length > 0 ? 'shared' : 'private';
+  useEffect(() => {
+    let isMounted = true;
+    settingsAPI.getSettings()
+      .then((settings) => {
+        if (!isMounted) {
+          return;
+        }
+        setDefaultNoteType(settings.default_note_type || 'private');
+        setDefaultNotePath(normalizeFolderPath(settings.default_note_folder_path || '/'));
+      })
+      .catch((error) => {
+        console.error('Fehler beim Laden der Standardablage:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const determineContext = (): { type: 'private' | 'shared'; path: string } => {
+    if (selectedType && selectedPath) {
+      if (selectedFile?.type === 'folder') {
+        return { type: selectedType, path: normalizeFolderPath(selectedPath) };
+      }
+      return { type: selectedType, path: getParentPath(selectedPath) };
+    }
+
+    if (selectedType === 'private') {
+      return { type: 'private', path: normalizeFolderPath(privatePath) };
+    }
+
+    if (selectedType === 'shared') {
+      return { type: 'shared', path: normalizeFolderPath(sharedPath) };
+    }
+
+    return { type: defaultNoteType, path: defaultNotePath };
   };
 
   const handleCreateFile = () => {
     const context = determineContext();
-    setCreateType(context);
+    setCreateType(context.type);
+    setCreatePath(context.path);
     setShowCreateFile(true);
   };
 
   const handleCreateFolder = () => {
     const context = determineContext();
-    setCreateType(context);
+    setCreateType(context.type);
+    setCreatePath(context.path);
     setShowCreateFolder(true);
   };
-
-  const currentPath = createType === 'private' ? privatePath : sharedPath;
 
   const handleDelete = async () => {
     if (!selectedFile || !selectedPath || !selectedType) {
@@ -496,8 +553,9 @@ export default function BottomToolbar() {
           isOpen={showCreateFile}
           onClose={() => setShowCreateFile(false)}
           type="file"
-          folderType={createType}
-          currentPath={currentPath}
+          initialFolderType={createType}
+          initialPath={createPath}
+          allowTargetSelection={true}
         />
       )}
 
@@ -506,8 +564,9 @@ export default function BottomToolbar() {
           isOpen={showCreateFolder}
           onClose={() => setShowCreateFolder(false)}
           type="folder"
-          folderType={createType}
-          currentPath={currentPath}
+          initialFolderType={createType}
+          initialPath={createPath}
+          allowTargetSelection={true}
         />
       )}
 

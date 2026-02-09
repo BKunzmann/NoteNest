@@ -76,6 +76,9 @@ export function initializeDatabase(): void {
       user_id INTEGER NOT NULL,
       private_folder_path VARCHAR(500),
       shared_folder_path VARCHAR(500),
+      default_note_type VARCHAR(10) DEFAULT 'private' NOT NULL,
+      default_note_folder_path VARCHAR(500) DEFAULT '/' NOT NULL,
+      sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL,
       theme VARCHAR(20) DEFAULT 'light' NOT NULL,
       default_export_size VARCHAR(10) DEFAULT 'A4' NOT NULL,
       default_bible_translation VARCHAR(20) DEFAULT 'LUT' NOT NULL,
@@ -92,6 +95,33 @@ export function initializeDatabase(): void {
     db.exec(`ALTER TABLE user_settings ADD COLUMN show_only_notes BOOLEAN DEFAULT 0 NOT NULL`);
   } catch (error: any) {
     // Spalte existiert bereits, ignoriere Fehler
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
+
+  // Migration: Füge default_note_type Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE user_settings ADD COLUMN default_note_type VARCHAR(10) DEFAULT 'private' NOT NULL`);
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
+
+  // Migration: Füge default_note_folder_path Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE user_settings ADD COLUMN default_note_folder_path VARCHAR(500) DEFAULT '/' NOT NULL`);
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
+
+  // Migration: Füge sidebar_view_mode Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL`);
+  } catch (error: any) {
     if (!error.message.includes('duplicate column name')) {
       console.warn('Migration warning:', error.message);
     }

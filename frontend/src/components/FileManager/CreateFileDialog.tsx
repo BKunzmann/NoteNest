@@ -4,7 +4,7 @@
  * Dialog zum Erstellen einer neuen Datei oder eines Ordners
  */
 
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { fileAPI } from '../../services/api';
 import { useFileStore } from '../../store/fileStore';
 
@@ -12,22 +12,65 @@ interface CreateFileDialogProps {
   isOpen: boolean;
   onClose: () => void;
   type: 'file' | 'folder';
-  folderType: 'private' | 'shared';
-  currentPath: string;
+  initialFolderType: 'private' | 'shared';
+  initialPath: string;
+  allowTargetSelection?: boolean;
+  onCreated?: (created: { path: string; type: 'private' | 'shared'; name: string }) => void;
+}
+
+function normalizeFolderPath(inputPath: string): string {
+  let normalized = inputPath.trim() || '/';
+  normalized = normalized.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  normalized = normalized.replace(/\/+/g, '/');
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized || '/';
+}
+
+function buildTargetPath(folderPath: string, name: string): string {
+  const normalizedFolderPath = normalizeFolderPath(folderPath);
+  const cleanedName = name.trim().replace(/[\\/]/g, '');
+  if (!cleanedName) {
+    return normalizedFolderPath;
+  }
+
+  return normalizedFolderPath === '/'
+    ? `/${cleanedName}`
+    : `${normalizedFolderPath}/${cleanedName}`;
 }
 
 export default function CreateFileDialog({
   isOpen,
   onClose,
   type,
-  folderType,
-  currentPath
+  initialFolderType,
+  initialPath,
+  allowTargetSelection = true,
+  onCreated
 }: CreateFileDialogProps) {
   const [name, setName] = useState('');
   const [content, setContent] = useState('');
+  const [folderType, setFolderType] = useState<'private' | 'shared'>(initialFolderType);
+  const [targetPath, setTargetPath] = useState<string>(normalizeFolderPath(initialPath));
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { loadFiles } = useFileStore();
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setName('');
+    setContent('');
+    setError(null);
+    setFolderType(initialFolderType);
+    setTargetPath(normalizeFolderPath(initialPath));
+  }, [initialFolderType, initialPath, isOpen, type]);
 
   if (!isOpen) {
     return null;
@@ -42,28 +85,37 @@ export default function CreateFileDialog({
       return;
     }
 
+    if (name.includes('..')) {
+      setError('Ungültiger Name');
+      return;
+    }
+
     setIsCreating(true);
 
     try {
-      const filePath = currentPath === '/' 
-        ? `/${name}${type === 'file' ? '.md' : ''}`
-        : `${currentPath}/${name}${type === 'file' ? '.md' : ''}`;
+      const normalizedTargetPath = normalizeFolderPath(targetPath);
+      const baseName = name.trim();
+      const finalName = type === 'file' && !baseName.toLowerCase().endsWith('.md')
+        ? `${baseName}.md`
+        : baseName;
+      const filePath = buildTargetPath(normalizedTargetPath, finalName);
 
       if (type === 'file') {
         await fileAPI.createFile({
           path: filePath,
           content: content,
-          type: folderType
+          type: folderType,
         });
       } else {
         await fileAPI.createFolder({
           path: filePath,
-          type: folderType
+          type: folderType,
         });
       }
 
       // Lade Dateien neu
-      await loadFiles(currentPath, folderType);
+      await loadFiles(normalizedTargetPath, folderType);
+      onCreated?.({ path: filePath, type: folderType, name: finalName });
       
       // Schließe Dialog
       setName('');
@@ -116,6 +168,53 @@ export default function CreateFileDialog({
         )}
 
         <form onSubmit={handleSubmit}>
+          {allowTargetSelection && (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="storageType" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Ablagebereich
+                </label>
+                <select
+                  id="storageType"
+                  value={folderType}
+                  onChange={(e) => setFolderType(e.target.value as 'private' | 'shared')}
+                  disabled={isCreating}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="private">Privat</option>
+                  <option value="shared">Geteilt</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="targetPath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  Zielordner
+                </label>
+                <input
+                  id="targetPath"
+                  type="text"
+                  value={targetPath}
+                  onChange={(e) => setTargetPath(e.target.value)}
+                  disabled={isCreating}
+                  placeholder="/"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem'
+                  }}
+                />
+              </div>
+            </>
+          )}
+
           <div style={{ marginBottom: '1rem' }}>
             <label htmlFor="name" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Name {type === 'file' && '(ohne .md)'}
@@ -136,6 +235,30 @@ export default function CreateFileDialog({
               required
               autoFocus
             />
+          </div>
+
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            backgroundColor: '#f7f7f7',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            color: '#555'
+          }}>
+            <strong>Zielspeicherort:</strong>{' '}
+            <code>
+              {buildTargetPath(
+                targetPath,
+                type === 'file'
+                  ? (
+                    name.trim().toLowerCase().endsWith('.md')
+                      ? (name.trim() || 'name.md')
+                      : `${name.trim() || 'name'}.md`
+                  )
+                  : (name.trim() || 'name')
+              )}
+            </code>{' '}
+            ({folderType === 'private' ? 'Privat' : 'Geteilt'})
           </div>
 
           {type === 'file' && (

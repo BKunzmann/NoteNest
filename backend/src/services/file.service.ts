@@ -8,6 +8,7 @@
  */
 
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 import db from '../config/database';
 import { FileItem } from '../types/file';
@@ -40,9 +41,13 @@ interface UserSettings {
   user_id: number;
   private_folder_path: string | null;
   shared_folder_path: string | null;
+  default_note_type: 'private' | 'shared';
+  default_note_folder_path: string;
+  sidebar_view_mode: 'recent' | 'folders';
   theme: string;
   default_export_size: string;
   default_bible_translation: string;
+  show_only_notes: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +96,15 @@ export function getFileType(fileName: string): { type: string; isEditable: boole
   }
   
   return { type: 'unknown', isEditable: false };
+}
+
+function normalizeRelativePath(relativePath: string): string {
+  let normalized = relativePath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
+  }
+  normalized = normalized.replace(/\/+/g, '/');
+  return normalized;
 }
 
 /**
@@ -361,6 +375,109 @@ export async function listDirectory(
   });
   
   return items;
+}
+
+/**
+ * Listet zuletzt bearbeitete Dateien rekursiv auf (optional nur Notizen).
+ */
+export async function listRecentFiles(
+  userId: number,
+  type: 'private' | 'shared',
+  options?: { notesOnly?: boolean; limit?: number }
+): Promise<FileItem[]> {
+  const notesOnly = options?.notesOnly ?? false;
+  const limit = Math.max(1, Math.min(options?.limit ?? 200, 1000));
+  const rootPath = resolveUserPath(userId, '/', type);
+
+  try {
+    const rootStats = await fs.stat(rootPath);
+    if (!rootStats.isDirectory()) {
+      throw new Error('Path is not a directory');
+    }
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      await fs.mkdir(rootPath, { recursive: true });
+      return [];
+    }
+    throw error;
+  }
+
+  const canReadRoot = await checkPermissions(rootPath, 'read');
+  if (!canReadRoot) {
+    return [];
+  }
+
+  const files: FileItem[] = [];
+
+  async function walk(currentDir: string): Promise<void> {
+    let entries: fsSync.Dirent[];
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const absoluteEntryPath = path.join(currentDir, entry.name);
+      const relativeEntryPath = normalizeRelativePath(path.relative(rootPath, absoluteEntryPath));
+
+      if (entry.isDirectory()) {
+        if (shouldHideFolder(entry.name) || isPathInHiddenFolder(relativeEntryPath)) {
+          continue;
+        }
+        await walk(absoluteEntryPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      // Zusätzliche Sicherheitsprüfung auf ausgeblendete Pfade
+      if (isPathInHiddenFolder(relativeEntryPath)) {
+        continue;
+      }
+
+      const fileType = getFileType(entry.name);
+      const isNote = fileType.isEditable && (fileType.type === 'md' || fileType.type === 'txt');
+      if (notesOnly && !isNote) {
+        continue;
+      }
+
+      try {
+        const stats = await fs.stat(absoluteEntryPath);
+        const canReadItem = await checkPermissions(absoluteEntryPath, 'read');
+        if (!canReadItem) {
+          continue;
+        }
+        const canWriteItem = await checkPermissions(absoluteEntryPath, 'write');
+
+        files.push({
+          name: entry.name,
+          path: relativeEntryPath,
+          type: 'file',
+          size: stats.size,
+          lastModified: stats.mtime.toISOString(),
+          fileType: fileType.type,
+          isEditable: fileType.isEditable,
+          canRead: canReadItem,
+          canWrite: canWriteItem
+        });
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  await walk(rootPath);
+
+  files.sort((a, b) => {
+    const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
+    const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
+    return bTime - aTime;
+  });
+
+  return files.slice(0, limit);
 }
 
 /**
@@ -641,7 +758,23 @@ export async function moveFile(
   }
   
   // Verschiebe Datei/Ordner
-  await fs.rename(fromPath, toPath);
+  try {
+    await fs.rename(fromPath, toPath);
+  } catch (error: any) {
+    // Fallback für Cross-Device-Moves (z.B. zwischen unterschiedlichen Mounts)
+    if (error.code !== 'EXDEV') {
+      throw error;
+    }
+
+    const sourceStats = await fs.stat(fromPath);
+    if (sourceStats.isDirectory()) {
+      await fs.cp(fromPath, toPath, { recursive: true, force: false, errorOnExist: true });
+      await fs.rm(fromPath, { recursive: true, force: true });
+    } else {
+      await fs.copyFile(fromPath, toPath, fsSync.constants.COPYFILE_EXCL);
+      await fs.unlink(fromPath);
+    }
+  }
   
   // Index aktualisieren (asynchron, blockiert nicht)
   // Prüfe, ob es eine Datei war (nicht Ordner)
@@ -662,5 +795,68 @@ export async function moveFile(
   } catch (error) {
     // Ignoriere Fehler beim Stat-Check
   }
+}
+
+/**
+ * Kopiert eine Datei oder einen Ordner.
+ */
+export async function copyFile(
+  userId: number,
+  from: string,
+  to: string,
+  fromType: 'private' | 'shared',
+  toType: 'private' | 'shared'
+): Promise<void> {
+  const fromPath = resolveUserPath(userId, from, fromType);
+  const toPath = resolveUserPath(userId, to, toType);
+
+  // Prüfe, ob Quelle existiert
+  let sourceStats: fsSync.Stats;
+  try {
+    sourceStats = await fs.stat(fromPath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error('Source file or folder not found');
+    }
+    throw error;
+  }
+
+  // Prüfe, ob Ziel bereits existiert
+  try {
+    await fs.access(toPath);
+    throw new Error('Destination already exists');
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  const destinationDir = path.dirname(toPath);
+  await fs.mkdir(destinationDir, { recursive: true });
+
+  // Prüfe Berechtigungen
+  const canReadFrom = await checkPermissions(fromPath, 'read');
+  const canWriteTo = await checkPermissions(destinationDir, 'write');
+  if (!canReadFrom || !canWriteTo) {
+    throw new Error('No write permission');
+  }
+
+  if (sourceStats.isDirectory()) {
+    await fs.cp(fromPath, toPath, { recursive: true, force: false, errorOnExist: true });
+  } else {
+    await fs.copyFile(fromPath, toPath, fsSync.constants.COPYFILE_EXCL);
+
+    // Index aktualisieren (asynchron, blockiert nicht)
+    if (isIndexable(to)) {
+      import('./index.service').then(({ indexFile }) => {
+        indexFile(userId, to, toType).catch((error) => {
+          console.warn(`Failed to index file after copy: ${to}`, error);
+        });
+      });
+    }
+  }
+
+  // Metrics-Tracking: Copy verhält sich aus Metriksicht wie "create"
+  trackFileOperation('create', toType);
 }
  
