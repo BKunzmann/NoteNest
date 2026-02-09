@@ -4,11 +4,29 @@
  * Hauptseite für Notizen-Verwaltung
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
 import { useEditorStore } from '../store/editorStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
+import DeleteConfirmDialog from '../components/FileManager/DeleteConfirmDialog';
+import FileActionDialog from '../components/FileManager/FileActionDialog';
+import ContextMenu, { ContextMenuAction } from '../components/FileManager/ContextMenu';
+import CreateFileDialog from '../components/FileManager/CreateFileDialog';
+import { settingsAPI } from '../services/api';
+
+function normalizeFolderPath(inputPath: string): string {
+  let normalized = inputPath.trim() || '/';
+  normalized = normalized.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  normalized = normalized.replace(/\/+/g, '/');
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized || '/';
+}
 
 export default function NotesPage() {
   const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
@@ -21,9 +39,29 @@ export default function NotesPage() {
     isLoadingContent,
     loadFileContent,
     selectFile,
-    clearSelection
+    clearSelection,
+    deleteItem
   } = useFileStore();
   const { reset: resetEditor } = useEditorStore();
+  const [contextPosition, setContextPosition] = useState<{ x: number; y: number } | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [showQuickCreateDialog, setShowQuickCreateDialog] = useState(false);
+  const [quickCreateTarget, setQuickCreateTarget] = useState<{ type: 'private' | 'shared'; path: string }>({
+    type: 'private',
+    path: '/'
+  });
+  const longPressTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
   useEffect(() => {
@@ -79,6 +117,21 @@ export default function NotesPage() {
   //   resetEditor();
   // }, [clearSelection, resetEditor]);
 
+  const handleStartNewNote = async () => {
+    try {
+      const settings = await settingsAPI.getSettings();
+      setQuickCreateTarget({
+        type: settings.default_note_type || 'private',
+        path: normalizeFolderPath(settings.default_note_folder_path || '/')
+      });
+    } catch (error) {
+      console.error('Fehler beim Laden der Standardablage:', error);
+      setQuickCreateTarget({ type: 'private', path: '/' });
+    } finally {
+      setShowQuickCreateDialog(true);
+    }
+  };
+
   if (!selectedFile) {
     return (
       <div style={{
@@ -96,6 +149,50 @@ export default function NotesPage() {
         <div style={{ fontSize: '0.875rem' }}>
           Klicke auf eine Datei in der Sidebar, um sie zu öffnen
         </div>
+
+        <button
+          type="button"
+          onClick={() => void handleStartNewNote()}
+          style={{
+            marginTop: '1.5rem',
+            border: 'none',
+            backgroundColor: 'var(--accent-color)',
+            color: '#fff',
+            borderRadius: '8px',
+            padding: '0.7rem 1rem',
+            cursor: 'pointer',
+            fontWeight: 600
+          }}
+        >
+          Neue Notiz im Standardordner
+        </button>
+
+        {showQuickCreateDialog && (
+          <CreateFileDialog
+            isOpen={showQuickCreateDialog}
+            onClose={() => setShowQuickCreateDialog(false)}
+            type="file"
+            initialFolderType={quickCreateTarget.type}
+            initialPath={quickCreateTarget.path}
+            allowTargetSelection={true}
+            onCreated={(created) => {
+              selectFile(
+                {
+                  name: created.name,
+                  path: created.path,
+                  type: 'file',
+                  fileType: 'md',
+                  isEditable: true,
+                  canRead: true,
+                  canWrite: true
+                },
+                created.path,
+                created.type
+              );
+              navigate('/notes');
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -136,6 +233,82 @@ export default function NotesPage() {
     navigate('/notes');
   };
 
+  const closeContextMenu = useCallback(() => {
+    setContextPosition(null);
+  }, []);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const openContextMenu = useCallback((x: number, y: number) => {
+    if (!selectedFile || !selectedPath || !selectedType) {
+      return;
+    }
+    setContextPosition({ x, y });
+  }, [selectedFile, selectedPath, selectedType]);
+
+  const handleHeaderContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    openContextMenu(event.clientX, event.clientY);
+  };
+
+  const handleHeaderTouchStart = (event: React.TouchEvent) => {
+    if (!selectedFile || !selectedPath || !selectedType || event.touches.length === 0) {
+      return;
+    }
+    clearLongPress();
+    const touch = event.touches[0];
+    longPressTimerRef.current = window.setTimeout(() => {
+      openContextMenu(touch.clientX, touch.clientY);
+      clearLongPress();
+    }, 500);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedPath || !selectedType || !selectedFile) {
+      return;
+    }
+    try {
+      await deleteItem(selectedPath, selectedType);
+      clearSelection();
+      resetEditor();
+      navigate('/notes');
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+    } finally {
+      setShowDeleteDialog(false);
+    }
+  };
+
+  const noteMenuActions: ContextMenuAction[] = useMemo(() => {
+    if (!selectedFile || !selectedPath || !selectedType) {
+      return [];
+    }
+
+    return [
+      {
+        id: 'copy-note',
+        label: 'Kopieren...',
+        onClick: () => setShowCopyDialog(true)
+      },
+      {
+        id: 'move-note',
+        label: 'Verschieben...',
+        onClick: () => setShowMoveDialog(true)
+      },
+      {
+        id: 'delete-note',
+        label: 'Löschen',
+        onClick: () => setShowDeleteDialog(true),
+        destructive: true
+      }
+    ];
+  }, [selectedFile, selectedPath, selectedType]);
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
@@ -146,7 +319,13 @@ export default function NotesPage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start'
-      }}>
+      }}
+      onContextMenu={handleHeaderContextMenu}
+      onTouchStart={handleHeaderTouchStart}
+      onTouchEnd={clearLongPress}
+      onTouchMove={clearLongPress}
+      onTouchCancel={clearLongPress}
+      >
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>
             {selectedFile.name}
@@ -161,36 +340,63 @@ export default function NotesPage() {
             </div>
           )}
         </div>
-        {/* Schließen-Button */}
-        <button
-          onClick={handleCloseNote}
-          title="Notiz schließen"
-          style={{
-            padding: '0.5rem',
-            backgroundColor: 'transparent',
-            border: '1px solid var(--border-color)',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '1rem',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minWidth: '36px',
-            minHeight: '36px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f0f0f0)';
-            e.currentTarget.style.borderColor = 'var(--text-secondary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.borderColor = 'var(--border-color)';
-          }}
-        >
-          ✕
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              openContextMenu(rect.left, rect.bottom + 6);
+            }}
+            title="Dateiaktionen"
+            style={{
+              padding: '0.5rem',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '36px',
+              minHeight: '36px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ⋯
+          </button>
+
+          {/* Schließen-Button */}
+          <button
+            onClick={handleCloseNote}
+            title="Notiz schließen"
+            style={{
+              padding: '0.5rem',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--border-color)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '36px',
+              minHeight: '36px',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--bg-hover, #f0f0f0)';
+              e.currentTarget.style.borderColor = 'var(--text-secondary)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -259,6 +465,46 @@ export default function NotesPage() {
           </div>
         )}
       </div>
+
+      <ContextMenu
+        isOpen={contextPosition !== null}
+        x={contextPosition?.x || 0}
+        y={contextPosition?.y || 0}
+        actions={noteMenuActions}
+        onClose={closeContextMenu}
+      />
+
+      {showDeleteDialog && selectedFile && (
+        <DeleteConfirmDialog
+          isOpen={true}
+          onClose={() => setShowDeleteDialog(false)}
+          onConfirm={() => void handleDeleteSelected()}
+          itemName={selectedFile.name}
+          itemType={selectedFile.type}
+        />
+      )}
+
+      {showMoveDialog && selectedPath && selectedType && selectedFile && (
+        <FileActionDialog
+          isOpen={true}
+          mode="move"
+          sourcePath={selectedPath}
+          sourceType={selectedType}
+          sourceName={selectedFile.name}
+          onClose={() => setShowMoveDialog(false)}
+        />
+      )}
+
+      {showCopyDialog && selectedPath && selectedType && selectedFile && (
+        <FileActionDialog
+          isOpen={true}
+          mode="copy"
+          sourcePath={selectedPath}
+          sourceType={selectedType}
+          sourceName={selectedFile.name}
+          onClose={() => setShowCopyDialog(false)}
+        />
+      )}
     </div>
   );
 }

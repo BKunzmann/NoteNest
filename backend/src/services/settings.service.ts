@@ -11,6 +11,9 @@ export interface UserSettings {
   user_id: number;
   private_folder_path: string | null;
   shared_folder_path: string | null;
+  default_note_type: 'private' | 'shared';
+  default_note_folder_path: string;
+  sidebar_view_mode: 'recent' | 'folders';
   theme: string;
   default_export_size: string;
   default_bible_translation: string;
@@ -48,6 +51,21 @@ export function updateUserSettings(
   if (updates.shared_folder_path !== undefined) {
     fields.push('shared_folder_path = ?');
     values.push(updates.shared_folder_path);
+  }
+
+  if (updates.default_note_type !== undefined) {
+    fields.push('default_note_type = ?');
+    values.push(updates.default_note_type);
+  }
+
+  if (updates.default_note_folder_path !== undefined) {
+    fields.push('default_note_folder_path = ?');
+    values.push(updates.default_note_folder_path);
+  }
+
+  if (updates.sidebar_view_mode !== undefined) {
+    fields.push('sidebar_view_mode = ?');
+    values.push(updates.sidebar_view_mode);
   }
   
   if (updates.theme !== undefined) {
@@ -108,6 +126,9 @@ export function createUserSettings(
   const settings: Partial<UserSettings> = {
     private_folder_path: defaults?.private_folder_path ?? null,
     shared_folder_path: defaults?.shared_folder_path ?? null,
+    default_note_type: defaults?.default_note_type ?? 'private',
+    default_note_folder_path: defaults?.default_note_folder_path ?? '/',
+    sidebar_view_mode: defaults?.sidebar_view_mode ?? 'recent',
     theme: defaults?.theme ?? 'light',
     default_export_size: defaults?.default_export_size ?? 'A4',
     default_bible_translation: defaults?.default_bible_translation ?? 'LUT1912',
@@ -116,12 +137,26 @@ export function createUserSettings(
   };
 
   db.prepare(`
-    INSERT INTO user_settings (user_id, private_folder_path, shared_folder_path, theme, default_export_size, default_bible_translation, show_only_notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_settings (
+      user_id,
+      private_folder_path,
+      shared_folder_path,
+      default_note_type,
+      default_note_folder_path,
+      sidebar_view_mode,
+      theme,
+      default_export_size,
+      default_bible_translation,
+      show_only_notes
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     settings.private_folder_path,
     settings.shared_folder_path,
+    settings.default_note_type,
+    settings.default_note_folder_path,
+    settings.sidebar_view_mode,
     settings.theme,
     settings.default_export_size,
     settings.default_bible_translation,

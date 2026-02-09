@@ -4,9 +4,18 @@
  * Zeigt eine einzelne Datei oder einen Ordner
  */
 
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileItem as FileItemType } from '../../types/file';
 import { useFileStore } from '../../store/fileStore';
+
+interface ContextRequestPayload {
+  file: FileItemType;
+  type: 'private' | 'shared';
+  path: string;
+  x: number;
+  y: number;
+}
 
 interface FileItemProps {
   file: FileItemType;
@@ -14,35 +23,67 @@ interface FileItemProps {
   currentPath: string;
   onFolderClick: (path: string) => void;
   onFileSelect?: () => void; // Callback wenn Datei ausgewählt wird (für mobile Sidebar)
+  onContextRequest?: (payload: ContextRequestPayload) => void;
 }
 
-export default function FileItem({ file, type, currentPath, onFolderClick, onFileSelect }: FileItemProps) {
+function normalizePath(inputPath: string): string {
+  let normalized = inputPath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  return normalized.replace(/\/+/g, '/');
+}
+
+export default function FileItem({
+  file,
+  type,
+  currentPath,
+  onFolderClick,
+  onFileSelect,
+  onContextRequest
+}: FileItemProps) {
   const { selectFile } = useFileStore();
   const navigate = useNavigate();
+  const longPressTimerRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const getItemPath = (): string => {
+    if (file.path) {
+      return normalizePath(file.path);
+    }
+    return currentPath === '/' ? normalizePath(file.name) : normalizePath(`${currentPath}/${file.name}`);
+  };
+
+  const triggerContextMenu = (x: number, y: number) => {
+    if (!onContextRequest) {
+      return;
+    }
+    onContextRequest({
+      file,
+      type,
+      path: getItemPath(),
+      x,
+      y
+    });
+    suppressNextClickRef.current = true;
+  };
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+
     if (file.type === 'folder') {
       // Ordner: Navigiere in Ordner
-      const newPath = currentPath === '/' 
-        ? `/${file.name}` 
-        : `${currentPath}/${file.name}`;
+      const newPath = getItemPath();
       onFolderClick(newPath);
     } else {
       // Datei: Wähle Datei aus
-      // Verwende file.path direkt, da es bereits den vollständigen relativen Pfad enthält
-      // Normalisiere den Pfad: Entferne doppelte Slashes und stelle sicher, dass er mit / beginnt
-      let filePath = file.path || (currentPath === '/' 
-        ? `/${file.name}` 
-        : `${currentPath}/${file.name}`);
-      
-      // Normalisiere: Stelle sicher, dass Pfad mit / beginnt und keine doppelten Slashes hat
-      if (!filePath.startsWith('/')) {
-        filePath = '/' + filePath;
-      }
-      filePath = filePath.replace(/\/+/g, '/'); // Entferne doppelte Slashes
-      
+      const filePath = getItemPath();
+
       console.log('FileItem: Selecting file', { 
         fileName: file.name, 
         filePath: file.path, 
@@ -66,6 +107,44 @@ export default function FileItem({ file, type, currentPath, onFolderClick, onFil
         }, 100);
       }
     }
+  };
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleContextMenu = (event: React.MouseEvent) => {
+    if (!onContextRequest) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    triggerContextMenu(event.clientX, event.clientY);
+  };
+
+  const handleTouchStart = (event: React.TouchEvent) => {
+    if (!onContextRequest || event.touches.length === 0) {
+      return;
+    }
+
+    clearLongPress();
+    const touch = event.touches[0];
+    longPressTimerRef.current = window.setTimeout(() => {
+      triggerContextMenu(touch.clientX, touch.clientY);
+      clearLongPress();
+    }, 500);
   };
 
   const getIcon = () => {
@@ -120,6 +199,11 @@ export default function FileItem({ file, type, currentPath, onFolderClick, onFil
     <div
       style={getStyle()}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={clearLongPress}
+      onTouchMove={clearLongPress}
+      onTouchCancel={clearLongPress}
       title={file.type === 'file' && !file.isEditable ? 'Nicht bearbeitbar' : undefined}
     >
       <span>{getIcon()}</span>

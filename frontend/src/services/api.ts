@@ -9,11 +9,13 @@ import { AuthResponse, LoginRequest, RegisterRequest, AuthMode, User } from '../
 import {
   FileListResponse,
   FileContentResponse,
+  RecentFilesResponse,
   CreateFileRequest,
   UpdateFileRequest,
   DeleteFileRequest,
   CreateFolderRequest,
   MoveFileRequest,
+  CopyFileRequest,
   RenameFileRequest
 } from '../types/file';
 import { UserSettings, UpdateSettingsRequest } from '../types/settings';
@@ -191,6 +193,20 @@ export const fileAPI = {
   },
 
   /**
+   * Listet zuletzt bearbeitete Dateien rekursiv auf
+   */
+  async listRecentFiles(
+    type: 'private' | 'shared' = 'private',
+    notesOnly: boolean = false,
+    limit: number = 200
+  ): Promise<RecentFilesResponse> {
+    const response = await api.get<RecentFilesResponse>('/files/recent', {
+      params: { type, notesOnly, limit }
+    });
+    return response.data;
+  },
+
+  /**
    * Liest Datei-Inhalt
    */
   async getFileContent(path: string, type: 'private' | 'shared' = 'private'): Promise<FileContentResponse> {
@@ -247,6 +263,14 @@ export const fileAPI = {
    */
   async moveFile(data: MoveFileRequest): Promise<{ success: boolean; from: string; to: string; message: string }> {
     const response = await api.post('/files/move', data);
+    return response.data;
+  },
+
+  /**
+   * Kopiert eine Datei/Ordner
+   */
+  async copyFile(data: CopyFileRequest): Promise<{ success: boolean; from: string; to: string; message: string }> {
+    const response = await api.post('/files/copy', data);
     return response.data;
   },
 

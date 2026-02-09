@@ -7,12 +7,14 @@
 import { Request, Response } from 'express';
 import {
   listDirectory,
+  listRecentFiles,
   readFile,
   createFile,
   updateFile,
   deleteFile,
   createFolder,
-  moveFile
+  moveFile,
+  copyFile
 } from '../services/file.service';
 import {
   CreateFileRequest,
@@ -20,6 +22,7 @@ import {
   DeleteFileRequest,
   CreateFolderRequest,
   MoveFileRequest,
+  CopyFileRequest,
   RenameFileRequest
 } from '../types/file';
 
@@ -62,6 +65,44 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
   } catch (error: any) {
     console.error('List files error:', error);
     res.status(500).json({ error: error.message || 'Failed to list files' });
+  }
+}
+
+/**
+ * GET /api/files/recent
+ * Listet zuletzt bearbeitete Dateien rekursiv auf
+ */
+export async function listRecentFilesHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { type = 'private', notesOnly = 'false', limit = '200' } = req.query;
+    if (type !== 'private' && type !== 'shared') {
+      res.status(400).json({ error: 'Invalid type (allowed: private, shared)' });
+      return;
+    }
+
+    const parsedLimit = Number.parseInt(String(limit), 10);
+    const safeLimit = Number.isFinite(parsedLimit) ? parsedLimit : 200;
+    const onlyNotes = String(notesOnly).toLowerCase() === 'true' || String(notesOnly) === '1';
+
+    const items = await listRecentFiles(req.user.id, type, {
+      notesOnly: onlyNotes,
+      limit: safeLimit
+    });
+
+    res.json({
+      type,
+      notesOnly: onlyNotes,
+      count: items.length,
+      items
+    });
+  } catch (error: any) {
+    console.error('List recent files error:', error);
+    res.status(500).json({ error: error.message || 'Failed to list recent files' });
   }
 }
 
@@ -343,6 +384,52 @@ export async function moveFileHandler(req: Request, res: Response): Promise<void
     }
     console.error('Move file error:', error);
     res.status(500).json({ error: error.message || 'Failed to move file' });
+  }
+}
+
+/**
+ * POST /api/files/copy
+ * Kopiert eine Datei/Ordner
+ */
+export async function copyFileHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data: CopyFileRequest = req.body;
+
+    if (!data.from || !data.to || !data.fromType || !data.toType) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+
+    await copyFile(
+      req.user.id,
+      data.from,
+      data.to,
+      data.fromType,
+      data.toType
+    );
+
+    res.status(201).json({
+      success: true,
+      from: data.from,
+      to: data.to,
+      message: 'File or folder copied successfully'
+    });
+  } catch (error: any) {
+    if (error.message === 'Source file or folder not found') {
+      res.status(404).json({ error: 'Source file or folder not found' });
+      return;
+    }
+    if (error.message === 'Destination already exists') {
+      res.status(409).json({ error: 'Destination already exists' });
+      return;
+    }
+    console.error('Copy file error:', error);
+    res.status(500).json({ error: error.message || 'Failed to copy file or folder' });
   }
 }
 

@@ -10,6 +10,28 @@ import { fileAPI } from '../services/api';
 import { getCachedNote, cacheNote, isIndexedDBAvailable } from '../services/offlineStorage';
 import { isOnline } from '../services/syncService';
 
+function normalizeStorePath(filePath: string): string {
+  let normalized = filePath;
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
+  }
+  return normalized.replace(/\/+/g, '/');
+}
+
+function getParentFolderPath(filePath: string): string {
+  const normalized = normalizeStorePath(filePath);
+  if (normalized === '/') {
+    return '/';
+  }
+
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length <= 1) {
+    return '/';
+  }
+
+  return `/${parts.slice(0, -1).join('/')}`;
+}
+
 interface FileState {
   // Private Files
   privateFiles: FileItem[];
@@ -36,8 +58,10 @@ interface FileState {
   loadFileContent: (path: string, type: 'private' | 'shared') => Promise<void>;
   selectFile: (file: FileItem | null, path: string | null, type: 'private' | 'shared' | null) => void;
   clearSelection: () => void;
-  clearError: () => void;
+  clearError: (type?: 'private' | 'shared') => void;
   deleteItem: (filePath: string, type: 'private' | 'shared') => Promise<void>;
+  moveItem: (from: string, fromType: 'private' | 'shared', to: string, toType: 'private' | 'shared') => Promise<void>;
+  copyItem: (from: string, fromType: 'private' | 'shared', to: string, toType: 'private' | 'shared') => Promise<void>;
 }
 
 export const useFileStore = create<FileState>((set, get) => ({
@@ -173,12 +197,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     // Normalisiere den Pfad, bevor er gesetzt wird
     let normalizedPath = filePath;
     if (normalizedPath) {
-      // Stelle sicher, dass der Pfad mit / beginnt
-      if (!normalizedPath.startsWith('/')) {
-        normalizedPath = '/' + normalizedPath;
-      }
-      // Entferne doppelte Slashes
-      normalizedPath = normalizedPath.replace(/\/+/g, '/');
+      normalizedPath = normalizeStorePath(normalizedPath);
     }
     
     set({
@@ -243,6 +262,98 @@ export const useFileStore = create<FileState>((set, get) => ({
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Fehler beim Löschen';
       if (type === 'private') {
+        set({ privateError: errorMessage });
+      } else {
+        set({ sharedError: errorMessage });
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Verschiebt Datei/Ordner
+   */
+  moveItem: async (from: string, fromType: 'private' | 'shared', to: string, toType: 'private' | 'shared') => {
+    try {
+      const normalizedFrom = normalizeStorePath(from);
+      const normalizedTo = normalizeStorePath(to);
+
+      await fileAPI.moveFile({
+        from: normalizedFrom,
+        to: normalizedTo,
+        fromType,
+        toType
+      });
+
+      const state = get();
+      if (state.selectedPath === normalizedFrom && state.selectedType === fromType && state.selectedFile) {
+        const newName = normalizedTo.split('/').filter(Boolean).pop() || state.selectedFile.name;
+        set({
+          selectedPath: normalizedTo,
+          selectedType: toType,
+          selectedFile: {
+            ...state.selectedFile,
+            name: newName,
+            path: normalizedTo
+          }
+        });
+      }
+
+      const sourceDir = getParentFolderPath(normalizedFrom);
+      const targetDir = getParentFolderPath(normalizedTo);
+
+      if (fromType === 'private') {
+        if (state.privatePath === sourceDir) {
+          await get().loadFiles(state.privatePath, 'private');
+        }
+      } else if (state.sharedPath === sourceDir) {
+        await get().loadFiles(state.sharedPath, 'shared');
+      }
+
+      if (toType === 'private') {
+        if (get().privatePath === targetDir) {
+          await get().loadFiles(get().privatePath, 'private');
+        }
+      } else if (get().sharedPath === targetDir) {
+        await get().loadFiles(get().sharedPath, 'shared');
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Fehler beim Verschieben';
+      if (fromType === 'private') {
+        set({ privateError: errorMessage });
+      } else {
+        set({ sharedError: errorMessage });
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Kopiert Datei/Ordner
+   */
+  copyItem: async (from: string, fromType: 'private' | 'shared', to: string, toType: 'private' | 'shared') => {
+    try {
+      const normalizedFrom = normalizeStorePath(from);
+      const normalizedTo = normalizeStorePath(to);
+
+      await fileAPI.copyFile({
+        from: normalizedFrom,
+        to: normalizedTo,
+        fromType,
+        toType
+      });
+
+      const targetDir = getParentFolderPath(normalizedTo);
+      if (toType === 'private') {
+        if (get().privatePath === targetDir) {
+          await get().loadFiles(get().privatePath, 'private');
+        }
+      } else if (get().sharedPath === targetDir) {
+        await get().loadFiles(get().sharedPath, 'shared');
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Fehler beim Kopieren';
+      if (fromType === 'private') {
         set({ privateError: errorMessage });
       } else {
         set({ sharedError: errorMessage });

@@ -7,6 +7,9 @@ export interface UserSettings {
   user_id: number;
   private_folder_path: string | null;
   shared_folder_path: string | null;
+  default_note_type: 'private' | 'shared';
+  default_note_folder_path: string;
+  sidebar_view_mode: 'recent' | 'folders';
   theme: string;
   default_export_size: string;
   default_bible_translation: string;
@@ -18,6 +21,9 @@ export interface UserSettings {
 export interface UpdateSettingsRequest {
   private_folder_path?: string | null;
   shared_folder_path?: string | null;
+  default_note_type?: 'private' | 'shared';
+  default_note_folder_path?: string;
+  sidebar_view_mode?: 'recent' | 'folders';
   theme?: string;
   default_export_size?: string;
   default_bible_translation?: string;
