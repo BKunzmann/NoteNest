@@ -10,6 +10,37 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 ## [Unreleased]
 
 ### ✨ Features
+- **Notiz-/Dateiaktionen per Kontextmenü**:
+  - Rechtsklick und Longpress in der Sidebar und im Notiz-Header
+  - Aktionen: **Löschen**, **Kopieren**, **Verschieben**
+  - Neuer Dialog für Copy/Move mit Zieltyp, Zielordner und Zielname
+- **Neue Standardablage für Notizen pro Benutzer**:
+  - Neue Benutzereinstellungen:
+    - `default_note_type` (`private`/`shared`)
+    - `default_note_folder_path`
+    - `sidebar_view_mode` (`recent`/`folders`)
+  - Startseite (`/notes`) bietet „Neue Notiz im Standardordner“
+- **Sidebar-Ansicht „Zuletzt bearbeitet“ (umschaltbar)**:
+  - Standardansicht gruppiert nach Zeiträumen (Heute, Gestern, letzte 7/30 Tage, älter)
+  - Umschaltbar auf klassische Ordneransicht
+  - Persistenz der Ansicht pro Benutzer
+- **Datei-API erweitert**:
+  - `GET /api/files/recent` für rekursive „zuletzt bearbeitet“-Listen
+  - `POST /api/files/copy` für Datei-/Ordnerkopien
+  - Verbesserter Move-Fallback bei Cross-Device-Moves (`EXDEV`)
+
+### 🐛 Bugfixes
+- **Erstell-Dialog (Neu/Ordner)** zeigt jetzt klar den Zielbereich und Zielordner an und erlaubt die Auswahl direkt im Dialog.
+- **Pfad-/Einstellungsvalidierung** in den Settings wurde erweitert (inkl. Erstellung/Prüfung des Standardordners).
+
+### ✅ Tests
+- Neue Backend-Tests:
+  - `file.service.copy-recent.test.ts`
+  - `settings.service.defaults.test.ts`
+- Neuer Frontend-Test:
+  - `recentGrouping.test.ts`
+
+### ✨ Features
 - **Volltextsuche mit Index**: Hochperformante Index-basierte Suche
   - **10-100x schneller** als vorherige Dateisystem-Suche
   - **Fuzzy Search** mit Tippfehler-Toleranz (Levenshtein-Distanz ≤ 2)

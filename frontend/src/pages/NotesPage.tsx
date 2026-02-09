@@ -4,7 +4,7 @@
  * Hauptseite für Notizen-Verwaltung
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useFileStore } from '../store/fileStore';
 import { useEditorStore } from '../store/editorStore';
@@ -233,9 +233,9 @@ export default function NotesPage() {
     navigate('/notes');
   };
 
-  const closeContextMenu = useCallback(() => {
+  const closeContextMenu = () => {
     setContextPosition(null);
-  }, []);
+  };
 
   const clearLongPress = () => {
     if (longPressTimerRef.current !== null) {
@@ -244,12 +244,12 @@ export default function NotesPage() {
     }
   };
 
-  const openContextMenu = useCallback((x: number, y: number) => {
+  const openContextMenu = (x: number, y: number) => {
     if (!selectedFile || !selectedPath || !selectedType) {
       return;
     }
     setContextPosition({ x, y });
-  }, [selectedFile, selectedPath, selectedType]);
+  };
 
   const handleHeaderContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -284,12 +284,9 @@ export default function NotesPage() {
     }
   };
 
-  const noteMenuActions: ContextMenuAction[] = useMemo(() => {
-    if (!selectedFile || !selectedPath || !selectedType) {
-      return [];
-    }
-
-    return [
+  const noteMenuActions: ContextMenuAction[] = (!selectedFile || !selectedPath || !selectedType)
+    ? []
+    : [
       {
         id: 'copy-note',
         label: 'Kopieren...',
@@ -307,7 +304,6 @@ export default function NotesPage() {
         destructive: true
       }
     ];
-  }, [selectedFile, selectedPath, selectedType]);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

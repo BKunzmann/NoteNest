@@ -28,13 +28,13 @@ describe('Admin Search Endpoints', () => {
     const adminResult = db.prepare(`
       INSERT INTO users (username, password_hash, auth_type, is_active, is_admin)
       VALUES (?, ?, 'local', 1, 1)
-    `).run('admin', 'hash', 'local');
+    `).run('admin', 'hash');
     adminUserId = adminResult.lastInsertRowid as number;
     
     const regularResult = db.prepare(`
       INSERT INTO users (username, password_hash, auth_type, is_active, is_admin)
       VALUES (?, ?, 'local', 1, 0)
-    `).run('user', 'hash', 'local');
+    `).run('user', 'hash');
     regularUserId = regularResult.lastInsertRowid as number;
     
     // Erstelle Test-Verzeichnis

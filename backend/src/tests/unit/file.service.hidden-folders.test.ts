@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import db from '../../config/database';
+import db, { initializeDatabase } from '../../config/database';
 import { 
   getHiddenFoldersConfig, 
   isPathInHiddenFolder,
@@ -15,6 +15,7 @@ import os from 'os';
 
 describe('Hidden Folders Configuration', () => {
   beforeEach(() => {
+    initializeDatabase();
     // Setze Standard-Konfiguration für Tests
     const defaultHiddenFolders = JSON.stringify([
       '._DAV',
@@ -103,11 +104,12 @@ describe('listDirectory with Hidden Folders', () => {
   let testDir: string;
 
   beforeEach(async () => {
+    initializeDatabase();
     // Erstelle Test-User
     const userResult = db.prepare(`
       INSERT INTO users (username, password_hash, auth_type, is_active)
       VALUES (?, ?, 'local', 1)
-    `).run('testuser_hidden', 'hash', 'local');
+    `).run('testuser_hidden', 'hash');
     testUserId = userResult.lastInsertRowid as number;
 
     // Erstelle User Settings
