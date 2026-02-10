@@ -1,22 +1,25 @@
 import { FileItem } from '../types/file';
 
-export type RecentGroupKey = 'today' | 'yesterday' | 'last7Days' | 'last30Days' | 'older';
+type RelativeRecentGroupKey = 'today' | 'yesterday' | 'last7Days' | 'last30Days';
+export type RecentGroupKey = RelativeRecentGroupKey | `year:${number}`;
 
-const RECENT_GROUP_ORDER: RecentGroupKey[] = [
+const RELATIVE_GROUP_ORDER: RelativeRecentGroupKey[] = [
   'today',
   'yesterday',
   'last7Days',
-  'last30Days',
-  'older'
+  'last30Days'
 ];
 
-const RECENT_GROUP_LABELS: Record<RecentGroupKey, string> = {
+const RELATIVE_GROUP_LABELS: Record<RelativeRecentGroupKey, string> = {
   today: 'Heute',
   yesterday: 'Gestern',
   last7Days: 'Letzte 7 Tage',
-  last30Days: 'Letzte 30 Tage',
-  older: 'Älter'
+  last30Days: 'Letzte 30 Tage'
 };
+
+function isYearGroupKey(key: RecentGroupKey): key is `year:${number}` {
+  return key.startsWith('year:');
+}
 
 function toDayStart(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -25,7 +28,7 @@ function toDayStart(date: Date): Date {
 export function getRecentGroupKey(dateString: string, now: Date = new Date()): RecentGroupKey {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) {
-    return 'older';
+    return `year:${toDayStart(now).getFullYear()}`;
   }
 
   const currentDay = toDayStart(now).getTime();
@@ -44,7 +47,7 @@ export function getRecentGroupKey(dateString: string, now: Date = new Date()): R
   if (diffInDays <= 30) {
     return 'last30Days';
   }
-  return 'older';
+  return `year:${date.getFullYear()}`;
 }
 
 export function groupFilesByRecent(
@@ -63,18 +66,34 @@ export function groupFilesByRecent(
     }
   }
 
-  return RECENT_GROUP_ORDER
-    .filter((key) => grouped.has(key))
-    .map((key) => {
+  const years = Array.from(grouped.keys())
+    .filter((key): key is `year:${number}` => isYearGroupKey(key))
+    .sort((a, b) => {
+      const yearA = Number(a.split(':')[1] || 0);
+      const yearB = Number(b.split(':')[1] || 0);
+      return yearB - yearA;
+    });
+
+  const orderedKeys: RecentGroupKey[] = [
+    ...RELATIVE_GROUP_ORDER.filter((key) => grouped.has(key)),
+    ...years
+  ];
+
+  return orderedKeys.map((key) => {
       const items = grouped.get(key) || [];
       items.sort((a, b) => {
         const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
         const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
         return bTime - aTime;
       });
+
+      const label = isYearGroupKey(key)
+        ? key.split(':')[1]
+        : RELATIVE_GROUP_LABELS[key];
+
       return {
         key,
-        label: RECENT_GROUP_LABELS[key],
+        label,
         items
       };
     });

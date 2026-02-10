@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface ContextMenuAction {
   id: string;
@@ -23,12 +23,20 @@ export default function ContextMenu({
   actions,
   onClose
 }: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    const handleOutsideClick = () => onClose();
+    const handleOutsideClick = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (target && menuRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -57,6 +65,7 @@ export default function ContextMenu({
 
   return (
     <div
+      ref={menuRef}
       role="menu"
       style={{
         position: 'fixed',

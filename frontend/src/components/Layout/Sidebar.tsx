@@ -12,21 +12,20 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
-  if (!isOpen) {
-    return null;
-  }
-
   return (
     <aside style={{
-      width: '280px',
-      minWidth: '280px',
-      maxWidth: '280px',
+      width: isOpen ? '280px' : '0px',
+      minWidth: isOpen ? '280px' : '0px',
+      maxWidth: isOpen ? '280px' : '0px',
       backgroundColor: 'var(--bg-secondary, #f8f8f8)',
-      borderRight: '1px solid var(--border-color, #e0e0e0)',
+      borderRight: isOpen ? '1px solid var(--border-color, #e0e0e0)' : 'none',
       overflow: 'auto',
       display: 'flex',
       flexDirection: 'column',
-      height: '100%'
+      height: '100%',
+      opacity: isOpen ? 1 : 0,
+      pointerEvents: isOpen ? 'auto' : 'none',
+      transition: 'width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease'
     }}>
       {/* Private Ordner */}
       <FileTree 

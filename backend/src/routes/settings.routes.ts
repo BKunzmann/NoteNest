@@ -12,6 +12,7 @@ const router = Router();
 router.use(authenticateToken);
 
 router.get('/', settingsController.getSettings);
+router.get('/path-options', settingsController.getSettingsPathOptions);
 router.put('/', settingsController.updateSettings);
 
 export default router;

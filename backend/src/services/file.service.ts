@@ -107,6 +107,205 @@ function normalizeRelativePath(relativePath: string): string {
   return normalized;
 }
 
+function getMetadataPathKey(type: 'private' | 'shared', relativePath: string): string {
+  const normalizedRelativePath = normalizeRelativePath(relativePath);
+  return `${type}:${normalizedRelativePath}`;
+}
+
+function parseMetadataPathKey(metadataPathKey: string): {
+  type: 'private' | 'shared' | null;
+  path: string;
+} {
+  if (metadataPathKey.startsWith('private:')) {
+    return {
+      type: 'private',
+      path: normalizeRelativePath(metadataPathKey.slice('private:'.length))
+    };
+  }
+  if (metadataPathKey.startsWith('shared:')) {
+    return {
+      type: 'shared',
+      path: normalizeRelativePath(metadataPathKey.slice('shared:'.length))
+    };
+  }
+
+  // Legacy fallback: falls alte Datensätze ohne Prefix existieren
+  return {
+    type: null,
+    path: normalizeRelativePath(metadataPathKey)
+  };
+}
+
+function getParentPath(relativePath: string): string {
+  const normalizedRelativePath = normalizeRelativePath(relativePath);
+  const segments = normalizedRelativePath.split('/').filter(Boolean);
+  if (segments.length <= 1) {
+    return '/';
+  }
+  return `/${segments.slice(0, -1).join('/')}`;
+}
+
+function upsertFileMetadata(
+  userId: number,
+  relativePath: string,
+  type: 'private' | 'shared',
+  size: number,
+  lastModifiedIso: string
+): void {
+  const normalizedRelativePath = normalizeRelativePath(relativePath);
+  const metadataKey = getMetadataPathKey(type, normalizedRelativePath);
+  const parentPath = getParentPath(normalizedRelativePath);
+  const metadataParent = getMetadataPathKey(type, parentPath);
+  const fileName = path.basename(normalizedRelativePath);
+
+  db.prepare(`
+    INSERT INTO file_metadata (user_id, file_path, file_name, parent_folder, file_size, last_modified)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, file_path) DO UPDATE SET
+      file_name = excluded.file_name,
+      parent_folder = excluded.parent_folder,
+      file_size = excluded.file_size,
+      last_modified = excluded.last_modified
+  `).run(
+    userId,
+    metadataKey,
+    fileName,
+    metadataParent,
+    size,
+    lastModifiedIso
+  );
+}
+
+function removeFileMetadata(userId: number, relativePath: string, type: 'private' | 'shared'): void {
+  const metadataKey = getMetadataPathKey(type, relativePath);
+  db.prepare(`
+    DELETE FROM file_metadata
+    WHERE user_id = ?
+      AND (file_path = ? OR file_path LIKE ?)
+  `).run(userId, metadataKey, `${metadataKey}/%`);
+}
+
+function updateMovedFileMetadata(
+  userId: number,
+  fromPath: string,
+  toPath: string,
+  fromType: 'private' | 'shared',
+  toType: 'private' | 'shared'
+): void {
+  const fromKey = getMetadataPathKey(fromType, fromPath);
+  const toKey = getMetadataPathKey(toType, toPath);
+
+  const rows = db.prepare(`
+    SELECT id, file_path, file_size, last_modified
+    FROM file_metadata
+    WHERE user_id = ?
+      AND (file_path = ? OR file_path LIKE ?)
+  `).all(userId, fromKey, `${fromKey}/%`) as Array<{
+    id: number;
+    file_path: string;
+    file_size: number | null;
+    last_modified: string | null;
+  }>;
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const transaction = db.transaction(() => {
+    const deleteStmt = db.prepare(`
+      DELETE FROM file_metadata
+      WHERE user_id = ?
+        AND (file_path = ? OR file_path LIKE ?)
+    `);
+
+    const upsertStmt = db.prepare(`
+      INSERT INTO file_metadata (user_id, file_path, file_name, parent_folder, file_size, last_modified)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, file_path) DO UPDATE SET
+        file_name = excluded.file_name,
+        parent_folder = excluded.parent_folder,
+        file_size = excluded.file_size,
+        last_modified = excluded.last_modified
+    `);
+
+    deleteStmt.run(userId, fromKey, `${fromKey}/%`);
+
+    for (const row of rows) {
+      const suffix = row.file_path.slice(fromKey.length);
+      const newKey = `${toKey}${suffix}`;
+      const parsed = parseMetadataPathKey(newKey);
+      const relativePath = parsed.path;
+      const fileName = path.basename(relativePath);
+      const parentFolder = getMetadataPathKey(toType, getParentPath(relativePath));
+
+      upsertStmt.run(
+        userId,
+        newKey,
+        fileName,
+        parentFolder,
+        row.file_size ?? null,
+        row.last_modified ?? null
+      );
+    }
+  });
+
+  transaction();
+}
+
+function copyFileMetadata(
+  userId: number,
+  fromPath: string,
+  toPath: string,
+  fromType: 'private' | 'shared',
+  toType: 'private' | 'shared'
+): void {
+  const fromKey = getMetadataPathKey(fromType, fromPath);
+  const toKey = getMetadataPathKey(toType, toPath);
+
+  const rows = db.prepare(`
+    SELECT file_path, file_size, last_modified
+    FROM file_metadata
+    WHERE user_id = ?
+      AND (file_path = ? OR file_path LIKE ?)
+  `).all(userId, fromKey, `${fromKey}/%`) as Array<{
+    file_path: string;
+    file_size: number | null;
+    last_modified: string | null;
+  }>;
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const upsertStmt = db.prepare(`
+    INSERT INTO file_metadata (user_id, file_path, file_name, parent_folder, file_size, last_modified)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, file_path) DO UPDATE SET
+      file_name = excluded.file_name,
+      parent_folder = excluded.parent_folder,
+      file_size = excluded.file_size,
+      last_modified = excluded.last_modified
+  `);
+
+  for (const row of rows) {
+    const suffix = row.file_path.slice(fromKey.length);
+    const newKey = `${toKey}${suffix}`;
+    const parsed = parseMetadataPathKey(newKey);
+    const relativePath = parsed.path;
+    const fileName = path.basename(relativePath);
+    const parentFolder = getMetadataPathKey(toType, getParentPath(relativePath));
+
+    upsertStmt.run(
+      userId,
+      newKey,
+      fileName,
+      parentFolder,
+      row.file_size ?? null,
+      row.last_modified ?? null
+    );
+  }
+}
+
 /**
  * Holt Benutzer-Einstellungen
  */
@@ -360,6 +559,16 @@ export async function listDirectory(
         canRead: canReadItem,
         canWrite: canWriteItem
       });
+
+      if (entry.isFile()) {
+        upsertFileMetadata(
+          userId,
+          normalizedRelativePath,
+          type,
+          stats.size,
+          stats.mtime.toISOString()
+        );
+      }
     } catch (error) {
       // Überspringe Dateien, auf die kein Zugriff besteht
       continue;
@@ -378,7 +587,8 @@ export async function listDirectory(
 }
 
 /**
- * Listet zuletzt bearbeitete Dateien rekursiv auf (optional nur Notizen).
+ * Listet zuletzt bearbeitete Dateien aus dem Index auf (optional nur Notizen).
+ * Vermeidet teure rekursive Dateisystem-Scans für große Datenmengen.
  */
 export async function listRecentFiles(
   userId: number,
@@ -387,90 +597,115 @@ export async function listRecentFiles(
 ): Promise<FileItem[]> {
   const notesOnly = options?.notesOnly ?? false;
   const limit = Math.max(1, Math.min(options?.limit ?? 200, 1000));
-  const rootPath = resolveUserPath(userId, '/', type);
+  const metadataLikePattern = `${type}:%`;
 
-  try {
-    const rootStats = await fs.stat(rootPath);
-    if (!rootStats.isDirectory()) {
-      throw new Error('Path is not a directory');
+  const metadataRows = db.prepare(`
+    SELECT file_path, file_name, file_size, last_modified
+    FROM file_metadata
+    WHERE user_id = ?
+      AND file_path LIKE ?
+      AND last_modified IS NOT NULL
+    ORDER BY datetime(last_modified) DESC
+    LIMIT ?
+  `).all(userId, metadataLikePattern, Math.max(limit * 3, 300)) as Array<{
+    file_path: string;
+    file_name: string;
+    file_size: number | null;
+    last_modified: string;
+  }>;
+
+  const mergedByPath = new Map<string, FileItem>();
+
+  for (const row of metadataRows) {
+    const parsed = parseMetadataPathKey(row.file_path);
+    if (parsed.type !== null && parsed.type !== type) {
+      continue;
     }
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      await fs.mkdir(rootPath, { recursive: true });
-      return [];
+
+    const relativePath = parsed.path;
+    if (isPathInHiddenFolder(relativePath)) {
+      continue;
     }
-    throw error;
+
+    const fileType = getFileType(row.file_name);
+    const isNote = fileType.isEditable && (fileType.type === 'md' || fileType.type === 'txt');
+    if (notesOnly && !isNote) {
+      continue;
+    }
+
+    mergedByPath.set(relativePath, {
+      name: row.file_name,
+      path: relativePath,
+      type: 'file',
+      size: row.file_size ?? undefined,
+      lastModified: row.last_modified,
+      fileType: fileType.type,
+      isEditable: fileType.isEditable
+    });
+
+    if (mergedByPath.size >= limit) {
+      break;
+    }
   }
 
-  const canReadRoot = await checkPermissions(rootPath, 'read');
-  if (!canReadRoot) {
-    return [];
-  }
+  // Fallback: ergänze aus search_index, falls noch zu wenig Treffer vorhanden sind
+  if (mergedByPath.size < limit) {
+    const searchIndexRows = db.prepare(`
+      SELECT file_path, file_name, file_extension, file_size, last_modified
+      FROM search_index
+      WHERE user_id = ?
+        AND file_type = ?
+      ORDER BY datetime(last_modified) DESC
+      LIMIT ?
+    `).all(userId, type, Math.max(limit * 3, 300)) as Array<{
+      file_path: string;
+      file_name: string;
+      file_extension: string;
+      file_size: number;
+      last_modified: string;
+    }>;
 
-  const files: FileItem[] = [];
-
-  async function walk(currentDir: string): Promise<void> {
-    let entries: fsSync.Dirent[];
-    try {
-      entries = await fs.readdir(currentDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      const absoluteEntryPath = path.join(currentDir, entry.name);
-      const relativeEntryPath = normalizeRelativePath(path.relative(rootPath, absoluteEntryPath));
-
-      if (entry.isDirectory()) {
-        if (shouldHideFolder(entry.name) || isPathInHiddenFolder(relativeEntryPath)) {
-          continue;
-        }
-        await walk(absoluteEntryPath);
+    for (const row of searchIndexRows) {
+      const normalizedPath = normalizeRelativePath(row.file_path);
+      if (isPathInHiddenFolder(normalizedPath)) {
+        continue;
+      }
+      if (mergedByPath.has(normalizedPath)) {
         continue;
       }
 
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      // Zusätzliche Sicherheitsprüfung auf ausgeblendete Pfade
-      if (isPathInHiddenFolder(relativeEntryPath)) {
-        continue;
-      }
-
-      const fileType = getFileType(entry.name);
+      const fileType = getFileType(row.file_name);
       const isNote = fileType.isEditable && (fileType.type === 'md' || fileType.type === 'txt');
       if (notesOnly && !isNote) {
         continue;
       }
 
-      try {
-        const stats = await fs.stat(absoluteEntryPath);
-        const canReadItem = await checkPermissions(absoluteEntryPath, 'read');
-        if (!canReadItem) {
-          continue;
-        }
-        const canWriteItem = await checkPermissions(absoluteEntryPath, 'write');
+      mergedByPath.set(normalizedPath, {
+        name: row.file_name,
+        path: normalizedPath,
+        type: 'file',
+        size: row.file_size,
+        lastModified: row.last_modified,
+        fileType: fileType.type,
+        isEditable: fileType.isEditable
+      });
 
-        files.push({
-          name: entry.name,
-          path: relativeEntryPath,
-          type: 'file',
-          size: stats.size,
-          lastModified: stats.mtime.toISOString(),
-          fileType: fileType.type,
-          isEditable: fileType.isEditable,
-          canRead: canReadItem,
-          canWrite: canWriteItem
-        });
-      } catch {
-        continue;
+      // Backfill file_metadata für künftige schnelle Aufrufe
+      upsertFileMetadata(
+        userId,
+        normalizedPath,
+        type,
+        row.file_size,
+        row.last_modified
+      );
+
+      if (mergedByPath.size >= limit) {
+        break;
       }
     }
   }
 
-  await walk(rootPath);
-
+  const files = Array.from(mergedByPath.values());
   files.sort((a, b) => {
     const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
     const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
@@ -575,6 +810,14 @@ export async function createFile(
   
   // Erstelle Datei
   await fs.writeFile(fullPath, content, 'utf-8');
+  const createdStats = await fs.stat(fullPath);
+  upsertFileMetadata(
+    userId,
+    filePath,
+    type,
+    createdStats.size,
+    createdStats.mtime.toISOString()
+  );
   
   // Metrics-Tracking
   trackFileOperation('create', type);
@@ -621,6 +864,14 @@ export async function updateFile(
   
   // Aktualisiere Datei
   await fs.writeFile(fullPath, content, 'utf-8');
+  const updatedStats = await fs.stat(fullPath);
+  upsertFileMetadata(
+    userId,
+    filePath,
+    type,
+    updatedStats.size,
+    updatedStats.mtime.toISOString()
+  );
   
   // Metrics-Tracking
   trackFileOperation('update', type);
@@ -665,8 +916,10 @@ export async function deleteFile(
   // Lösche Datei oder Ordner
   if (stats.isDirectory()) {
     await fs.rmdir(fullPath, { recursive: true });
+    removeFileMetadata(userId, filePath, type);
   } else {
     await fs.unlink(fullPath);
+    removeFileMetadata(userId, filePath, type);
     
     // Index aktualisieren (asynchron, blockiert nicht)
     if (isIndexable(filePath)) {
@@ -775,6 +1028,8 @@ export async function moveFile(
       await fs.unlink(fromPath);
     }
   }
+
+  updateMovedFileMetadata(userId, from, to, fromType, toType);
   
   // Index aktualisieren (asynchron, blockiert nicht)
   // Prüfe, ob es eine Datei war (nicht Ordner)
@@ -843,8 +1098,17 @@ export async function copyFile(
 
   if (sourceStats.isDirectory()) {
     await fs.cp(fromPath, toPath, { recursive: true, force: false, errorOnExist: true });
+    copyFileMetadata(userId, from, to, fromType, toType);
   } else {
     await fs.copyFile(fromPath, toPath, fsSync.constants.COPYFILE_EXCL);
+    const copiedStats = await fs.stat(toPath);
+    upsertFileMetadata(
+      userId,
+      to,
+      toType,
+      copiedStats.size,
+      copiedStats.mtime.toISOString()
+    );
 
     // Index aktualisieren (asynchron, blockiert nicht)
     if (isIndexable(to)) {

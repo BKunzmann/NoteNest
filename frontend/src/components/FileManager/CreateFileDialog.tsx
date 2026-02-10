@@ -7,6 +7,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { fileAPI } from '../../services/api';
 import { useFileStore } from '../../store/fileStore';
+import FolderNavigator from './FolderNavigator';
 
 interface CreateFileDialogProps {
   isOpen: boolean;
@@ -177,7 +178,12 @@ export default function CreateFileDialog({
                 <select
                   id="storageType"
                   value={folderType}
-                  onChange={(e) => setFolderType(e.target.value as 'private' | 'shared')}
+                  onChange={(e) => {
+                    const nextType = e.target.value as 'private' | 'shared';
+                    setFolderType(nextType);
+                    // Beim Wechsel des Ablagebereichs immer auf den Bereichs-Start springen
+                    setTargetPath('/');
+                  }}
                   disabled={isCreating}
                   style={{
                     width: '100%',
@@ -192,26 +198,14 @@ export default function CreateFileDialog({
                 </select>
               </div>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <label htmlFor="targetPath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                  Zielordner
-                </label>
-                <input
-                  id="targetPath"
-                  type="text"
-                  value={targetPath}
-                  onChange={(e) => setTargetPath(e.target.value)}
-                  disabled={isCreating}
-                  placeholder="/"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    fontSize: '1rem'
-                  }}
-                />
-              </div>
+              <FolderNavigator
+                storageType={folderType}
+                value={targetPath}
+                onChange={setTargetPath}
+                disabled={isCreating}
+                label="Zielordner"
+                helperText="Navigation ausschließlich über Ordnerauswahl, damit neue Dateien immer in gültigen Verzeichnissen landen."
+              />
             </>
           )}
 

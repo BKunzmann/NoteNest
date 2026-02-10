@@ -18,7 +18,11 @@ import {
   CopyFileRequest,
   RenameFileRequest
 } from '../types/file';
-import { UserSettings, UpdateSettingsRequest } from '../types/settings';
+import {
+  UserSettings,
+  UpdateSettingsRequest,
+  SettingsPathOptionsResponse
+} from '../types/settings';
 
 // Ermittle die API-URL automatisch basierend auf dem aktuellen Hostname
 // Wenn VITE_API_URL gesetzt ist, verwende diese
@@ -300,6 +304,14 @@ export const settingsAPI = {
    */
   async updateSettings(data: UpdateSettingsRequest): Promise<UserSettings> {
     const response = await api.put<UserSettings>('/settings', data);
+    return response.data;
+  },
+
+  /**
+   * Liefert sichere Pfadoptionen für Einstellungs-Dropdowns
+   */
+  async getPathOptions(): Promise<SettingsPathOptionsResponse> {
+    const response = await api.get<SettingsPathOptionsResponse>('/settings/path-options');
     return response.data;
   }
 };

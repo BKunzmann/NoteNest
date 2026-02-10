@@ -42,7 +42,7 @@ export default function FileItem({
   onFileSelect,
   onContextRequest
 }: FileItemProps) {
-  const { selectFile } = useFileStore();
+  const { selectFile, selectedPath, selectedType } = useFileStore();
   const navigate = useNavigate();
   const longPressTimerRef = useRef<number | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -168,6 +168,8 @@ export default function FileItem({
   };
 
   const getStyle = () => {
+    const itemPath = getItemPath();
+    const isSelected = selectedType === type && selectedPath === itemPath;
     const baseStyle: React.CSSProperties = {
       display: 'flex',
       alignItems: 'center',
@@ -176,7 +178,9 @@ export default function FileItem({
       cursor: file.type === 'folder' || file.isEditable ? 'pointer' : 'default',
       borderRadius: '4px',
       fontSize: '0.875rem',
-      marginBottom: '0.25rem'
+      marginBottom: '0.25rem',
+      backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent',
+      border: isSelected ? '1px solid rgba(10, 132, 255, 0.35)' : '1px solid transparent'
     };
 
     if (!file.isEditable && file.type === 'file') {

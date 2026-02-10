@@ -6,10 +6,15 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { settingsAPI, fileAPI, bibleAPI, BibleFavorite } from '../services/api';
-import { UserSettings, UpdateSettingsRequest } from '../types/settings';
+import { settingsAPI, bibleAPI, BibleFavorite } from '../services/api';
+import {
+  UserSettings,
+  UpdateSettingsRequest,
+  SettingsPathOptionsResponse
+} from '../types/settings';
 import { useThemeStore } from '../store/themeStore';
 import { getTranslationName } from '../utils/bibleTranslation';
+import FolderNavigator from '../components/FileManager/FolderNavigator';
 
 // Verfügbare Übersetzungen (tatsächlich in den JSON-Dateien vorhanden)
 import { LOCAL_TRANSLATIONS } from '../utils/bibleTranslation';
@@ -22,6 +27,7 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [pathOptions, setPathOptions] = useState<SettingsPathOptionsResponse | null>(null);
 
   const [privatePath, setPrivatePath] = useState('');
   const [sharedPath, setSharedPath] = useState('');
@@ -51,9 +57,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
+    loadPathOptions();
     loadFavorites();
     loadAvailableTranslations();
   }, []);
+
+  const loadPathOptions = async () => {
+    try {
+      const options = await settingsAPI.getPathOptions();
+      setPathOptions(options);
+    } catch (err) {
+      console.error('Error loading path options:', err);
+      setPathOptions({ privatePaths: [], sharedPaths: [] });
+    }
+  };
 
   const loadAvailableTranslations = async () => {
     try {
@@ -240,6 +257,7 @@ export default function SettingsPage() {
 
       const updated = await settingsAPI.updateSettings(updates);
       setSettings(updated);
+      window.dispatchEvent(new CustomEvent('notenest:settings-changed', { detail: updates }));
       
       // Wende Theme sofort an
       if (updates.theme) {
@@ -338,116 +356,96 @@ export default function SettingsPage() {
         <div style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Ordner-Konfiguration</h2>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="privatePath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Privater Ordner-Pfad
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                id="privatePath"
-                type="text"
-                value={privatePath}
-                onChange={(e) => setPrivatePath(e.target.value)}
-                placeholder="/data/users/benutzername"
-                style={{
-                  flex: 1,
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem'
-                }}
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    // Teste Pfad durch Versuch, Verzeichnis zu listen
-                    await fileAPI.listFiles('/', 'private');
-                    setSuccess('Pfad ist gültig und erreichbar');
-                    setError(null);
-                  } catch (err: any) {
-                    setError('Pfad ist nicht erreichbar: ' + (err.response?.data?.error || err.message));
-                    setSuccess(null);
-                  }
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  backgroundColor: '#f0f0f0',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  whiteSpace: 'nowrap'
-                }}
-                title="Pfad testen"
-              >
-                Testen
-              </button>
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
-              Pfad zu deinem privaten Notizen-Ordner (z.B. /app/data/users/benutzername)
-            </div>
-          </div>
+          {(() => {
+            const privateOptions = pathOptions?.privatePaths || [];
+            const sharedOptions = pathOptions?.sharedPaths || [];
+            const hasCurrentPrivate = privatePath
+              ? privateOptions.some(option => option.path === privatePath)
+              : false;
+            const hasCurrentShared = sharedPath
+              ? sharedOptions.some(option => option.path === sharedPath)
+              : false;
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label htmlFor="sharedPath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Geteilter Ordner-Pfad (optional)
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <input
-                id="sharedPath"
-                type="text"
-                value={sharedPath}
-                onChange={(e) => setSharedPath(e.target.value)}
-                placeholder="/data/shared"
-                style={{
-                  flex: 1,
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem'
-                }}
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!sharedPath) {
-                    setError('Bitte gib zuerst einen Pfad ein');
-                    return;
-                  }
-                  try {
-                    await fileAPI.listFiles('/', 'shared');
-                    setSuccess('Pfad ist gültig und erreichbar');
-                    setError(null);
-                  } catch (err: any) {
-                    setError('Pfad ist nicht erreichbar: ' + (err.response?.data?.error || err.message));
-                    setSuccess(null);
-                  }
-                }}
-                style={{
-                  padding: '0.75rem 1rem',
-                  backgroundColor: '#f0f0f0',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  whiteSpace: 'nowrap'
-                }}
-                title="Pfad testen"
-              >
-                Testen
-              </button>
-            </div>
-            <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
-              Pfad zu geteilten Notizen (optional, z.B. /app/data/shared)
-            </div>
-          </div>
+            return (
+              <>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="privatePath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    Privater Ordner-Pfad
+                  </label>
+                  <select
+                    id="privatePath"
+                    value={privatePath}
+                    onChange={(e) => setPrivatePath(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    {!hasCurrentPrivate && privatePath && (
+                      <option value={privatePath}>
+                        {privatePath} (aktuell)
+                      </option>
+                    )}
+                    {privateOptions.length === 0 && (
+                      <option value={privatePath || ''} disabled>
+                        Keine Pfadoptionen verfügbar
+                      </option>
+                    )}
+                    {privateOptions.map((option) => (
+                      <option key={`private-${option.path}`} value={option.path}>
+                        {option.label}: {option.path}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
+                    Auswahl über sichere Vorschläge, damit keine ungültigen Pfade gespeichert werden.
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label htmlFor="sharedPath" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    Geteilter Ordner-Pfad (optional)
+                  </label>
+                  <select
+                    id="sharedPath"
+                    value={sharedPath}
+                    onChange={(e) => setSharedPath(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    <option value="">Nicht gesetzt</option>
+                    {!hasCurrentShared && sharedPath && (
+                      <option value={sharedPath}>
+                        {sharedPath} (aktuell)
+                      </option>
+                    )}
+                    {sharedOptions.map((option) => (
+                      <option key={`shared-${option.path}`} value={option.path}>
+                        {option.label}: {option.path}
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
+                    Shared-Pfade werden aus den erlaubten Freigaben vorgeschlagen.
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           <div style={{ marginBottom: '1rem' }}>
             <label htmlFor="defaultNoteType" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Standardablage für neue Notizen
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ marginBottom: '0.75rem' }}>
               <select
                 id="defaultNoteType"
                 value={defaultNoteType}
@@ -463,20 +461,14 @@ export default function SettingsPage() {
                 <option value="private">Privat</option>
                 <option value="shared">Geteilt</option>
               </select>
-              <input
-                type="text"
-                value={defaultNoteFolderPath}
-                onChange={(e) => setDefaultNoteFolderPath(e.target.value)}
-                placeholder="/"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '1rem'
-                }}
-              />
             </div>
+            <FolderNavigator
+              storageType={defaultNoteType}
+              value={defaultNoteFolderPath}
+              onChange={setDefaultNoteFolderPath}
+              label="Standard-Zielordner"
+              helperText="Die Auswahl erfolgt per Ordnernavigation, um Tippfehler zu vermeiden."
+            />
             <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
               Neue Notizen landen standardmäßig hier (z.B. /Predigten/2026).
             </div>

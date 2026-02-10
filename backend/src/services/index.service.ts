@@ -379,13 +379,13 @@ export function searchIndex(
     relevance: number;
   }> = new Map();
   
-  // Baue WHERE-Klausel für folderType
-  let whereClause = 'si.user_id = ?';
-  const params: any[] = [userId];
+  // Baue WHERE-Klausel für die Subquery (ohne Alias)
+  let subqueryWhereClause = 'user_id = ?';
+  const subqueryParams: any[] = [userId];
   
   if (folderType) {
-    whereClause += ' AND si.file_type = ?';
-    params.push(folderType);
+    subqueryWhereClause += ' AND file_type = ?';
+    subqueryParams.push(folderType);
   }
   
   // Hole alle Tokens, die dem Suchbegriff ähnlich sind
@@ -393,9 +393,9 @@ export function searchIndex(
     SELECT DISTINCT token 
     FROM search_tokens 
     WHERE file_id IN (
-      SELECT id FROM search_index WHERE ${whereClause}
+      SELECT id FROM search_index WHERE ${subqueryWhereClause}
     )
-  `).all(...params) as Array<{ token: string }>;
+  `).all(...subqueryParams) as Array<{ token: string }>;
   
   // Finde passende Tokens (exakt oder fuzzy)
   const matchingTokens: string[] = [];
@@ -421,6 +421,13 @@ export function searchIndex(
   
   // Hole alle Dateien mit diesen Tokens
   const placeholders = matchingTokens.map(() => '?').join(',');
+  const fileTypeClause = folderType ? 'AND si.file_type = ?' : '';
+  const fileResultParams = [
+    userId,
+    ...matchingTokens,
+    ...(folderType ? [folderType] : [])
+  ];
+
   const fileResults = db.prepare(`
     SELECT DISTINCT 
       si.id,
@@ -434,9 +441,9 @@ export function searchIndex(
     INNER JOIN search_tokens st ON si.id = st.file_id
     WHERE si.user_id = ? 
       AND st.token IN (${placeholders})
-      ${folderType ? 'AND si.file_type = ?' : ''}
+      ${fileTypeClause}
     ORDER BY si.id, st.line_number
-  `).all(userId, ...matchingTokens, ...(folderType ? [folderType] : [])) as Array<{
+  `).all(...fileResultParams) as Array<{
     id: number;
     file_path: string;
     file_type: 'private' | 'shared';

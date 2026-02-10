@@ -30,3 +30,13 @@ export interface UpdateSettingsRequest {
   show_only_notes?: boolean;
 }
 
+export interface SettingsPathOption {
+  path: string;
+  label: string;
+}
+
+export interface SettingsPathOptionsResponse {
+  privatePaths: SettingsPathOption[];
+  sharedPaths: SettingsPathOption[];
+}
+

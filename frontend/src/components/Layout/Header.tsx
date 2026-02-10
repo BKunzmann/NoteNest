@@ -104,6 +104,34 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
       {/* Right: Settings + User Menu */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        {user?.is_admin && (
+          <button
+            onClick={() => {
+              if (location.pathname === '/admin') {
+                navigate('/notes');
+              } else {
+                navigate('/admin');
+              }
+            }}
+            style={{
+              padding: '0.5rem',
+              background: 'none',
+              border: 'none',
+              color: '#007AFF',
+              fontSize: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+            aria-label="Adminpanel"
+            title={location.pathname === '/admin' ? 'Zurück zu Notizen' : 'Adminpanel'}
+          >
+            👑
+          </button>
+        )}
+
         <button
           onClick={handleSettingsClick}
           style={{
