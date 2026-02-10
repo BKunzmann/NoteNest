@@ -9,6 +9,32 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### 🛠️ Stabilisierung & UX-Verbesserungen (2026-02-10)
+- **Admin-Navigation**: Die Admin-Krone im Header ist wieder sichtbar und führt erneut ins Adminpanel.
+- **Suche repariert**: Die Notizsuche funktioniert wieder zuverlässig (SQL-Fehler in der Indexabfrage behoben).
+- **„Zuletzt bearbeitet“ beschleunigt**:
+  - Umstellung auf **indexbasierte** Auslieferung statt rekursivem Dateisystem-Scan.
+  - Fallback-Merging aus bestehendem Suchindex.
+  - Zusätzliche Pflege von Datei-Metadaten bei Listen-/Create-/Update-/Move-/Copy-/Delete-Operationen.
+- **Gruppierung angepasst**: Statt „Älter“ werden ältere Einträge nun nach **Jahr** gruppiert (z. B. `2025`, `2024`).
+- **Sidebar-Verhalten verbessert**:
+  - Sidebar wird beim Einklappen nicht mehr unmontiert (State bleibt erhalten).
+  - Ordnerpfad bleibt erhalten, Selektion bleibt sichtbar, bis die Notiz explizit geschlossen wird.
+- **Kontextmenüs repariert**:
+  - Rechtsklick/Longpress-Menüs (Sidebar + 3-Punkte im Header) reagieren wieder korrekt auf Aktionen.
+- **Pfadauswahl gehärtet**:
+  - „Neue Datei…“ nutzt jetzt Ordnernavigation statt freiem Zielpfad-Textfeld.
+  - Wechsel des Ablagebereichs setzt den Zielordner auf den jeweiligen Bereichs-Start zurück.
+  - Einstellungen verwenden nun Dropdown-/Navigationsauswahl für private/geteilte Pfade und Standardablage.
+- **Bottom-Toolbar („Neu“) korrigiert**:
+  - In „Zuletzt“ wird der Standardordner vorgeschlagen.
+  - In „Ordner“ wird der aktuell geöffnete Ordnerpfad verwendet.
+
+### ✅ Tests
+- Backend: vollständige Jest-Suite erfolgreich (`12/12` Suites, `73/73` Tests).
+- Frontend: Build (TypeScript + Vite) erfolgreich.
+- Frontend: Vitest-Suite erfolgreich.
+
 ### ✨ Features
 - **Notiz-/Dateiaktionen per Kontextmenü**:
   - Rechtsklick und Longpress in der Sidebar und im Notiz-Header
