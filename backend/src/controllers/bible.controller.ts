@@ -194,7 +194,9 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    if (!req.user.is_admin) {
+
+    const adminRow = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(req.user.id) as { is_admin: number } | undefined;
+    if (!adminRow || adminRow.is_admin !== 1) {
       res.status(403).json({ error: 'Forbidden: admin access required' });
       return;
     }

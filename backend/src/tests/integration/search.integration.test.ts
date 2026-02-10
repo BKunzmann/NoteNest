@@ -15,7 +15,8 @@ import os from 'os';
 
 describe('Search Integration', () => {
   let testUserId: number;
-  let testDir: string;
+  let privateDir: string;
+  let sharedDir: string;
   
   beforeEach(async () => {
     // Initialisiere Datenbank
@@ -29,13 +30,14 @@ describe('Search Integration', () => {
     testUserId = result.lastInsertRowid as number;
     
     // Erstelle Test-Verzeichnis
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'notenest-test-'));
+    privateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'notenest-private-'));
+    sharedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'notenest-shared-'));
     
     // Erstelle User-Settings
     db.prepare(`
       INSERT INTO user_settings (user_id, private_folder_path, shared_folder_path)
       VALUES (?, ?, ?)
-    `).run(testUserId, testDir, testDir);
+    `).run(testUserId, privateDir, sharedDir);
   });
   
   afterEach(async () => {
@@ -47,7 +49,8 @@ describe('Search Integration', () => {
     
     // Lösche Test-Verzeichnis
     try {
-      await fs.rm(testDir, { recursive: true, force: true });
+      await fs.rm(privateDir, { recursive: true, force: true });
+      await fs.rm(sharedDir, { recursive: true, force: true });
     } catch {
       // Ignoriere Fehler beim Löschen
     }
@@ -56,11 +59,11 @@ describe('Search Integration', () => {
   describe('searchNotes', () => {
     beforeEach(async () => {
       // Erstelle und indexiere Test-Dateien
-      const file1 = path.join(testDir, 'projekt.md');
+      const file1 = path.join(privateDir, 'projekt.md');
       await fs.writeFile(file1, '# Projekt Planung\n\nDies ist ein wichtiges Projekt.', 'utf-8');
       await indexFile(testUserId, '/projekt.md', 'private');
       
-      const file2 = path.join(testDir, 'notizen.md');
+      const file2 = path.join(privateDir, 'notizen.md');
       await fs.writeFile(file2, '# Notizen\n\nHier sind einige Notizen.', 'utf-8');
       await indexFile(testUserId, '/notizen.md', 'private');
     });
@@ -111,7 +114,7 @@ describe('Search Integration', () => {
     });
 
     it('should find matches by filename even without content match', async () => {
-      const filePath = path.join(testDir, 'agenda_2026.md');
+      const filePath = path.join(privateDir, 'agenda_2026.md');
       await fs.writeFile(filePath, '# Ohne Suchbegriff im Inhalt', 'utf-8');
       await indexFile(testUserId, '/agenda_2026.md', 'private');
 
@@ -120,7 +123,7 @@ describe('Search Integration', () => {
     });
 
     it('should search across private and shared by default', async () => {
-      const filePath = path.join(testDir, 'team-plan.md');
+      const filePath = path.join(sharedDir, 'team-plan.md');
       await fs.writeFile(filePath, '# Team Plan', 'utf-8');
       await indexFile(testUserId, '/team-plan.md', 'shared');
 

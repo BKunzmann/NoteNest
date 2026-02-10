@@ -38,7 +38,8 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    let { path: dirPath = '/', type = 'private', notesOnly = 'false' } = req.query;
+    let { path: dirPath = '/' } = req.query;
+    const { type = 'private', notesOnly = 'false' } = req.query;
 
     if (typeof dirPath !== 'string' || (type !== 'private' && type !== 'shared')) {
       res.status(400).json({ error: 'Invalid parameters' });
@@ -150,7 +151,8 @@ export async function getFileContent(req: Request, res: Response): Promise<void>
       return;
     }
 
-    let { path: filePath, type = 'private' } = req.query;
+    let { path: filePath } = req.query;
+    const { type = 'private' } = req.query;
 
     console.log('Get file content - RAW query:', { path: filePath, type, query: req.query });
 

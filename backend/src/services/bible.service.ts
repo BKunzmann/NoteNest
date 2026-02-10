@@ -90,7 +90,7 @@ const BOOK_MAPPING: Record<string, string> = {
  */
 function normalizeBookName(bookName: string): string | null {
   // Normalisiere: Entferne führende/nachfolgende Leerzeichen, konvertiere zu Kleinbuchstaben
-  let normalized = bookName.toLowerCase().trim();
+  const normalized = bookName.toLowerCase().trim();
   
   // Versuche direktes Mapping
   if (BOOK_MAPPING[normalized]) {
