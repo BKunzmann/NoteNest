@@ -55,6 +55,7 @@ interface UserSettings {
   default_export_size: string;
   default_bible_translation: string;
   show_only_notes: boolean;
+  non_editable_files_mode: 'gray' | 'hide';
   created_at: string;
   updated_at: string;
 }
@@ -992,6 +993,76 @@ export async function listRecentFiles(
   });
 
   return files;
+}
+
+/**
+ * Liefert aggregierte Datei-Statistiken für die Sidebar.
+ * Nutzt primär file_metadata und ergänzt notfalls aus search_index.
+ */
+export function getFileStats(
+  userId: number,
+  type: 'private' | 'shared'
+): { totalFiles: number; totalNotes: number } {
+  const metadataLikePattern = `${type}:%`;
+  const metadataRows = db.prepare(`
+    SELECT file_path, file_name
+    FROM file_metadata
+    WHERE user_id = ?
+      AND (file_path LIKE ? OR file_path LIKE '/%')
+  `).all(userId, metadataLikePattern) as Array<{
+    file_path: string;
+    file_name: string;
+  }>;
+
+  const uniqueFiles = new Map<string, string>();
+  for (const row of metadataRows) {
+    const parsed = parseMetadataPathKey(row.file_path);
+    if (parsed.type !== null && parsed.type !== type) {
+      continue;
+    }
+    if (isPathInHiddenFolder(parsed.path)) {
+      continue;
+    }
+    uniqueFiles.set(parsed.path, row.file_name || path.basename(parsed.path));
+  }
+
+  let totalFiles = uniqueFiles.size;
+  let totalNotes = 0;
+  for (const fileName of uniqueFiles.values()) {
+    if (isNoteFileByName(fileName)) {
+      totalNotes += 1;
+    }
+  }
+
+  // Fallback für sehr frühe Migrationen ohne Metadata.
+  if (totalFiles === 0) {
+    const indexRows = db.prepare(`
+      SELECT file_path, file_name
+      FROM search_index
+      WHERE user_id = ?
+        AND file_type = ?
+    `).all(userId, type) as Array<{ file_path: string; file_name: string }>;
+
+    for (const row of indexRows) {
+      const normalizedPath = normalizeRelativePath(row.file_path);
+      if (isPathInHiddenFolder(normalizedPath)) {
+        continue;
+      }
+      if (!uniqueFiles.has(normalizedPath)) {
+        uniqueFiles.set(normalizedPath, row.file_name || path.basename(normalizedPath));
+      }
+    }
+
+    totalFiles = uniqueFiles.size;
+    totalNotes = 0;
+    for (const fileName of uniqueFiles.values()) {
+      if (isNoteFileByName(fileName)) {
+        totalNotes += 1;
+      }
+    }
+  }
+
+  return { totalFiles, totalNotes };
 }
 
 /**

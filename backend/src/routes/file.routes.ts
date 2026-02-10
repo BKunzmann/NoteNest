@@ -14,6 +14,7 @@ router.use(authenticateToken);
 // File Operations
 router.get('/list', fileController.listFiles);
 router.get('/recent', fileController.listRecentFilesHandler);
+router.get('/stats', fileController.getFileStatsHandler);
 router.get('/content', fileController.getFileContent);
 router.post('/create', fileController.createFileHandler);
 router.put('/update', fileController.updateFileHandler);

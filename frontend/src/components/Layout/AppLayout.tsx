@@ -54,6 +54,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
     setSidebarOpen(false);
   }, []);
 
+  useEffect(() => {
+    const handleOpenSidebar = () => {
+      setSidebarOpen(true);
+    };
+
+    window.addEventListener('notenest:open-sidebar', handleOpenSidebar as EventListener);
+    return () => window.removeEventListener('notenest:open-sidebar', handleOpenSidebar as EventListener);
+  }, []);
+
   return (
     <div style={{
       display: 'flex',

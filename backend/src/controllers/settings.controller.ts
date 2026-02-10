@@ -270,6 +270,7 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       default_export_size,
       default_bible_translation,
       show_only_notes,
+      non_editable_files_mode,
       default_note_type,
       default_note_folder_path,
       sidebar_view_mode
@@ -358,6 +359,48 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       return;
     }
 
+    if (default_bible_translation !== undefined) {
+      if (typeof default_bible_translation !== 'string') {
+        res.status(400).json({ error: 'default_bible_translation must be a string' });
+        return;
+      }
+
+      const localAndGenericTranslations = new Set([
+        'LUT',
+        'ELB',
+        'SCH',
+        'LUT1912',
+        'LUT1545',
+        'ELB1905',
+        'SCH1951'
+      ]);
+
+      try {
+        const { getAPITranslations } = await import('../services/bibleApi.service');
+        for (const translation of getAPITranslations()) {
+          localAndGenericTranslations.add(translation);
+        }
+      } catch (error) {
+        // API-Übersetzungen optional: Lokale/Gewohnte Codes bleiben erlaubt.
+      }
+
+      if (!localAndGenericTranslations.has(default_bible_translation)) {
+        res.status(400).json({
+          error: `Ungültige Bibel-Übersetzung. Erlaubt: ${Array.from(localAndGenericTranslations).join(', ')}`
+        });
+        return;
+      }
+    }
+
+    if (
+      non_editable_files_mode !== undefined &&
+      non_editable_files_mode !== 'gray' &&
+      non_editable_files_mode !== 'hide'
+    ) {
+      res.status(400).json({ error: 'Invalid non_editable_files_mode (allowed: gray, hide)' });
+      return;
+    }
+
     // Normalisiere/validiere default_note_folder_path
     let normalizedDefaultFolderPath: string | undefined;
     if (default_note_folder_path !== undefined) {
@@ -406,7 +449,8 @@ export async function updateSettings(req: Request, res: Response): Promise<void>
       theme,
       default_export_size,
       default_bible_translation,
-      show_only_notes
+      show_only_notes,
+      non_editable_files_mode
     });
 
     res.json(updated);

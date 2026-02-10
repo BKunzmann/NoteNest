@@ -18,6 +18,7 @@ export interface UserSettings {
   default_export_size: string;
   default_bible_translation: string;
   show_only_notes: boolean;
+  non_editable_files_mode: 'gray' | 'hide';
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +88,11 @@ export function updateUserSettings(
     fields.push('show_only_notes = ?');
     values.push(updates.show_only_notes ? 1 : 0);
   }
+
+  if (updates.non_editable_files_mode !== undefined) {
+    fields.push('non_editable_files_mode = ?');
+    values.push(updates.non_editable_files_mode);
+  }
   
   if (fields.length === 0) {
     const existing = getUserSettings(userId);
@@ -133,6 +139,7 @@ export function createUserSettings(
     default_export_size: defaults?.default_export_size ?? 'A4',
     default_bible_translation: defaults?.default_bible_translation ?? 'LUT1912',
     show_only_notes: defaults?.show_only_notes ?? false,
+    non_editable_files_mode: defaults?.non_editable_files_mode ?? 'gray',
     ...defaults
   };
 
@@ -147,9 +154,10 @@ export function createUserSettings(
       theme,
       default_export_size,
       default_bible_translation,
-      show_only_notes
+      show_only_notes,
+      non_editable_files_mode
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     settings.private_folder_path,
@@ -160,7 +168,8 @@ export function createUserSettings(
     settings.theme,
     settings.default_export_size,
     settings.default_bible_translation,
-    settings.show_only_notes ? 1 : 0
+    settings.show_only_notes ? 1 : 0,
+    settings.non_editable_files_mode
   );
 
   const created = getUserSettings(userId);

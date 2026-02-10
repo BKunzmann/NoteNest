@@ -9,6 +9,7 @@ import { AuthResponse, LoginRequest, RegisterRequest, AuthMode, User } from '../
 import {
   FileListResponse,
   FileContentResponse,
+  FileStatsResponse,
   RecentFilesResponse,
   CreateFileRequest,
   UpdateFileRequest,
@@ -210,6 +211,16 @@ export const fileAPI = {
   ): Promise<RecentFilesResponse> {
     const response = await api.get<RecentFilesResponse>('/files/recent', {
       params: { type, notesOnly, limit }
+    });
+    return response.data;
+  },
+
+  /**
+   * Liefert aggregierte Datei-Statistiken für Sidebar-Anzeige.
+   */
+  async getFileStats(type: 'private' | 'shared' = 'private'): Promise<FileStatsResponse> {
+    const response = await api.get<FileStatsResponse>('/files/stats', {
+      params: { type }
     });
     return response.data;
   },

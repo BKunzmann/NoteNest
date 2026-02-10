@@ -231,6 +231,7 @@ export default function NotesPage() {
     resetEditor();
     // Navigiere zur Basis-Notes-Seite (ohne Parameter)
     navigate('/notes');
+    window.dispatchEvent(new CustomEvent('notenest:open-sidebar'));
   };
 
   const closeContextMenu = () => {
@@ -277,6 +278,7 @@ export default function NotesPage() {
       clearSelection();
       resetEditor();
       navigate('/notes');
+      window.dispatchEvent(new CustomEvent('notenest:open-sidebar'));
     } catch (error) {
       console.error('Fehler beim Löschen:', error);
     } finally {

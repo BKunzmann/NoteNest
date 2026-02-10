@@ -83,6 +83,7 @@ export function initializeDatabase(): void {
       default_export_size VARCHAR(10) DEFAULT 'A4' NOT NULL,
       default_bible_translation VARCHAR(20) DEFAULT 'LUT' NOT NULL,
       show_only_notes BOOLEAN DEFAULT 0 NOT NULL,
+      non_editable_files_mode VARCHAR(10) DEFAULT 'gray' NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -121,6 +122,15 @@ export function initializeDatabase(): void {
   // Migration: Füge sidebar_view_mode Spalte hinzu, falls sie nicht existiert
   try {
     db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL`);
+  } catch (error: any) {
+    if (!error.message.includes('duplicate column name')) {
+      console.warn('Migration warning:', error.message);
+    }
+  }
+
+  // Migration: Füge non_editable_files_mode Spalte hinzu, falls sie nicht existiert
+  try {
+    db.exec(`ALTER TABLE user_settings ADD COLUMN non_editable_files_mode VARCHAR(10) DEFAULT 'gray' NOT NULL`);
   } catch (error: any) {
     if (!error.message.includes('duplicate column name')) {
       console.warn('Migration warning:', error.message);

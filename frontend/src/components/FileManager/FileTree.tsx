@@ -56,11 +56,14 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   } = useFileStore();
   
   const [showOnlyNotes, setShowOnlyNotes] = useState(false);
+  const [nonEditableFilesMode, setNonEditableFilesMode] = useState<'gray' | 'hide'>('gray');
   const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [recentFiles, setRecentFiles] = useState<FileItemType[]>([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
+  const [fileStats, setFileStats] = useState<{ totalFiles: number; totalNotes: number } | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContextState | null>(null);
   const [moveTarget, setMoveTarget] = useState<ContextState | null>(null);
@@ -80,15 +83,44 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
         const settings = await settingsAPI.getSettings();
         setShowOnlyNotes(settings.show_only_notes || false);
         setSidebarViewMode(settings.sidebar_view_mode || 'recent');
+        setNonEditableFilesMode(settings.non_editable_files_mode || 'gray');
       } catch (error) {
         console.error('Fehler beim Laden der Einstellungen:', error);
         setShowOnlyNotes(false);
         setSidebarViewMode('recent');
+        setNonEditableFilesMode('gray');
       } finally {
         setIsLoadingSettings(false);
       }
     };
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const handleSettingsChanged = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{
+        show_only_notes: boolean;
+        sidebar_view_mode: 'recent' | 'folders';
+        non_editable_files_mode: 'gray' | 'hide';
+      }> | undefined;
+
+      if (!detail) {
+        return;
+      }
+
+      if (typeof detail.show_only_notes === 'boolean') {
+        setShowOnlyNotes(detail.show_only_notes);
+      }
+      if (detail.sidebar_view_mode === 'recent' || detail.sidebar_view_mode === 'folders') {
+        setSidebarViewMode(detail.sidebar_view_mode);
+      }
+      if (detail.non_editable_files_mode === 'gray' || detail.non_editable_files_mode === 'hide') {
+        setNonEditableFilesMode(detail.non_editable_files_mode);
+      }
+    };
+
+    window.addEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
+    return () => window.removeEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
   }, []);
 
   const refreshRecentFiles = useCallback(async (notesOnlyOverride?: boolean) => {
@@ -106,9 +138,32 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     }
   }, [showOnlyNotes, type]);
 
-  const files = allFiles;
+  const refreshFileStats = useCallback(async () => {
+    setIsLoadingStats(true);
+    try {
+      const stats = await fileAPI.getFileStats(type);
+      setFileStats({ totalFiles: stats.totalFiles, totalNotes: stats.totalNotes });
+    } catch (statsError) {
+      console.error('Fehler beim Laden der Dateistatistik:', statsError);
+      setFileStats(null);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [type]);
 
-  const recentGroups = useMemo(() => groupFilesByRecent(recentFiles), [recentFiles]);
+  const files = useMemo(() => (
+    nonEditableFilesMode === 'hide'
+      ? allFiles.filter((file) => file.type === 'folder' || file.isEditable !== false)
+      : allFiles
+  ), [allFiles, nonEditableFilesMode]);
+
+  const filteredRecentFiles = useMemo(() => (
+    nonEditableFilesMode === 'hide'
+      ? recentFiles.filter((file) => file.type === 'folder' || file.isEditable !== false)
+      : recentFiles
+  ), [nonEditableFilesMode, recentFiles]);
+
+  const recentGroups = useMemo(() => groupFilesByRecent(filteredRecentFiles), [filteredRecentFiles]);
 
   useEffect(() => {
     if (isLoadingSettings) {
@@ -117,7 +172,8 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     const state = useFileStore.getState();
     const pathToLoad = type === 'private' ? state.privatePath : state.sharedPath;
     void loadFiles(pathToLoad || '/', type, showOnlyNotes);
-  }, [isLoadingSettings, loadFiles, showOnlyNotes, type]);
+    void refreshFileStats();
+  }, [isLoadingSettings, loadFiles, refreshFileStats, showOnlyNotes, type]);
 
   useEffect(() => {
     if (isLoadingSettings || sidebarViewMode !== 'recent') {
@@ -248,6 +304,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       } else {
         await loadFiles(currentPath, type, showOnlyNotes);
       }
+      await refreshFileStats();
     } catch (apiError) {
       console.error('Löschen fehlgeschlagen:', apiError);
     } finally {
@@ -336,8 +393,9 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
                 onClick={() => void handleToggleSidebarViewMode('recent')}
                 style={{
                   border: 'none',
-                  padding: '0.25rem 0.55rem',
-                  fontSize: '0.72rem',
+                  padding: '0.35rem 0.8rem',
+                  fontSize: '0.75rem',
+                  minWidth: '74px',
                   cursor: 'pointer',
                   backgroundColor: sidebarViewMode === 'recent' ? 'var(--accent-color)' : 'transparent',
                   color: sidebarViewMode === 'recent' ? '#fff' : 'var(--text-secondary)'
@@ -351,8 +409,9 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
                 onClick={() => void handleToggleSidebarViewMode('folders')}
                 style={{
                   border: 'none',
-                  padding: '0.25rem 0.55rem',
-                  fontSize: '0.72rem',
+                  padding: '0.35rem 0.8rem',
+                  fontSize: '0.75rem',
+                  minWidth: '74px',
                   cursor: 'pointer',
                   backgroundColor: sidebarViewMode === 'folders' ? 'var(--accent-color)' : 'transparent',
                   color: sidebarViewMode === 'folders' ? '#fff' : 'var(--text-secondary)'
@@ -415,6 +474,21 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
               />
             </div>
             <span>{showOnlyNotes ? 'Nur Notizen' : 'Alle Dateien'}</span>
+          </div>
+        )}
+
+        {!isLoadingSettings && (
+          <div style={{
+            marginTop: '0.15rem',
+            padding: '0 0.5rem',
+            fontSize: '0.72rem',
+            color: 'var(--text-secondary)'
+          }}>
+            {isLoadingStats
+              ? 'Gesamt wird berechnet...'
+              : fileStats
+                ? `Gesamt: ${showOnlyNotes ? fileStats.totalNotes : fileStats.totalFiles} ${showOnlyNotes ? 'Notizen' : 'Dokumente'}`
+                : ''}
           </div>
         )}
       </div>
@@ -650,6 +724,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           onSuccess={() => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
+            void refreshFileStats();
           }}
         />
       )}
@@ -666,6 +741,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           onSuccess={() => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
+            void refreshFileStats();
           }}
         />
       )}

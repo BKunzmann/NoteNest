@@ -453,7 +453,7 @@ export default function SearchBar({ onClose }: SearchBarProps) {
                     wordBreak: 'break-word'
                   }}
                 >
-                  Zeile {match.line}: {match.context}
+                  {match.line > 0 ? `Zeile ${match.line}: ${match.context}` : match.context}
                 </div>
               ))}
 

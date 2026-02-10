@@ -222,7 +222,7 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
                 fontSize: '0.72rem',
                 color: '#777'
               }}>
-                {getVersionString()} · © C-Autor
+                {getVersionString()} · © Benjamin Kunzmann
               </div>
             </div>
           )}

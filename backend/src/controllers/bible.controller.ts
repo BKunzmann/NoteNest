@@ -5,6 +5,9 @@
  */
 
 import { Request, Response } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
+import db from '../config/database';
 import { getBibleVerse, getBibleChapter, parseBibleReference } from '../services/bible.service';
 import { getUserSettings } from '../services/settings.service';
 
@@ -177,6 +180,90 @@ export async function getTranslations(_req: Request, res: Response): Promise<voi
   } catch (error: any) {
     console.error('Error getting translations:', error);
     res.status(500).json({ error: 'Failed to get translations' });
+  }
+}
+
+/**
+ * GET /api/bible/diagnostics
+ * Liefert Diagnoseinformationen für Produktiv-Fehleranalyse.
+ * Nur für Admins verfügbar.
+ */
+export async function getDiagnostics(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    if (!req.user.is_admin) {
+      res.status(403).json({ error: 'Forbidden: admin access required' });
+      return;
+    }
+
+    const verseStats = db.prepare(`
+      SELECT translation, COUNT(*) AS count
+      FROM bible_verses
+      GROUP BY translation
+      ORDER BY translation
+    `).all() as Array<{ translation: string; count: number }>;
+    const totalVerseCount = verseStats.reduce((sum, row) => sum + row.count, 0);
+    const cacheRow = db.prepare(`SELECT COUNT(*) AS count FROM bible_cache`).get() as { count: number } | undefined;
+
+    const configuredPath = process.env.BIBLE_LOCAL_PATH?.trim();
+    const pathCandidates = Array.from(new Set([
+      configuredPath || '',
+      '/data/bibles',
+      '/app/data/bibles'
+    ].filter(Boolean)));
+
+    const paths = await Promise.all(pathCandidates.map(async (candidatePath) => {
+      const normalized = path.resolve(candidatePath).replace(/\\/g, '/');
+      try {
+        await fs.access(normalized);
+        const entries = await fs.readdir(normalized, { withFileTypes: true });
+        const jsonFiles = entries
+          .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'))
+          .map((entry) => entry.name)
+          .sort();
+        return {
+          path: normalized,
+          exists: true,
+          jsonFiles,
+          jsonFileCount: jsonFiles.length
+        };
+      } catch {
+        return {
+          path: normalized,
+          exists: false,
+          jsonFiles: [] as string[],
+          jsonFileCount: 0
+        };
+      }
+    }));
+
+    res.json({
+      database: {
+        totalVerseCount,
+        translations: verseStats,
+        cacheEntries: cacheRow?.count ?? 0
+      },
+      config: {
+        bibleApiEnabled: process.env.BIBLE_API_ENABLED === 'true',
+        bibleApiUrl: process.env.BIBLE_API_URL || null,
+        bibleSupersearchEnabled: process.env.BIBLE_SUPERSEARCH_ENABLED === 'true',
+        bibleSupersearchUrl: process.env.BIBLE_SUPERSEARCH_URL || null,
+        configuredBibleLocalPath: configuredPath || null
+      },
+      paths,
+      checks: [
+        'Wenn totalVerseCount = 0, dann Import aus JSON mit npm run bible:import ausführen.',
+        'Wenn gewünschte JSON-Datei nicht in paths[].jsonFiles auftaucht, Volume-Mount in Docker prüfen.',
+        'Wenn bibleApiEnabled=true, aber verseStats leer ist, sollte wenigstens API-Fallback Treffer liefern (Netzwerk/API-Key prüfen).',
+        'Bei Übersetzungsproblemen Standardübersetzung in den Benutzereinstellungen auf LUT1912/ELB1905/SCH1951 setzen und erneut testen.'
+      ]
+    });
+  } catch (error: any) {
+    console.error('Error getting bible diagnostics:', error);
+    res.status(500).json({ error: 'Failed to get bible diagnostics' });
   }
 }
 

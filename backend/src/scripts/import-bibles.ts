@@ -49,11 +49,21 @@ const BOOK_NUMBER_MAP: Record<number, string> = {
 };
 
 function getBiblePath(): string {
+  if (process.env.BIBLE_LOCAL_PATH) {
+    return process.env.BIBLE_LOCAL_PATH;
+  }
+
   if (process.env.NODE_ENV === 'production') {
-    return process.env.BIBLE_LOCAL_PATH || '/app/data/bibles';
+    if (fs.existsSync('/data/bibles')) {
+      return '/data/bibles';
+    }
+    if (fs.existsSync('/app/data/bibles')) {
+      return '/app/data/bibles';
+    }
+    return '/data/bibles';
   }
   // Development: Relativer Pfad
-  return process.env.BIBLE_LOCAL_PATH || path.join(__dirname, '../../../data/bibles');
+  return path.join(__dirname, '../../../data/bibles');
 }
 
 async function importBibleFile(filePath: string, translation: string): Promise<number> {

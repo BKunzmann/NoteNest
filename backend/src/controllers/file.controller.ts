@@ -8,6 +8,7 @@ import { Request, Response } from 'express';
 import {
   listDirectory,
   listRecentFiles,
+  getFileStats,
   readFile,
   createFile,
   updateFile,
@@ -107,6 +108,34 @@ export async function listRecentFilesHandler(req: Request, res: Response): Promi
   } catch (error: any) {
     console.error('List recent files error:', error);
     res.status(500).json({ error: error.message || 'Failed to list recent files' });
+  }
+}
+
+/**
+ * GET /api/files/stats
+ * Liefert aggregierte Dateistatistik (Gesamt/Notizen) pro Bereich.
+ */
+export async function getFileStatsHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { type = 'private' } = req.query;
+    if (type !== 'private' && type !== 'shared') {
+      res.status(400).json({ error: 'Invalid type (allowed: private, shared)' });
+      return;
+    }
+
+    const stats = getFileStats(req.user.id, type);
+    res.json({
+      type,
+      ...stats
+    });
+  } catch (error: any) {
+    console.error('Get file stats error:', error);
+    res.status(500).json({ error: error.message || 'Failed to get file stats' });
   }
 }
 

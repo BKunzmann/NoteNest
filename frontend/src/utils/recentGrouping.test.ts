@@ -10,7 +10,7 @@ describe('recentGrouping utils', () => {
     expect(getRecentGroupKey('2026-02-08T08:00:00.000Z', now)).toBe('last7Days');
     expect(getRecentGroupKey('2026-02-04T08:00:00.000Z', now)).toBe('last7Days');
     expect(getRecentGroupKey('2026-01-20T08:00:00.000Z', now)).toBe('last30Days');
-    expect(getRecentGroupKey('2025-12-20T08:00:00.000Z', now)).toBe('years');
+    expect(getRecentGroupKey('2025-12-20T08:00:00.000Z', now)).toBe('year:2025');
   });
 
   it('should group and sort files by recency', () => {
@@ -22,7 +22,8 @@ describe('recentGrouping utils', () => {
     ];
 
     const groups = groupFilesByRecent(files, now);
-    expect(groups.map((group) => group.key)).toEqual(['last7Days', 'years']);
+    expect(groups.map((group) => group.key)).toEqual(['last7Days', 'year:2025']);
     expect(groups[0].items.map((item) => item.name)).toEqual(['today-2.md', 'today-1.md', 'week.md']);
+    expect(groups[1].label).toBe('2025');
   });
 });

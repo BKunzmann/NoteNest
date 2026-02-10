@@ -14,6 +14,7 @@ export interface UserSettings {
   default_export_size: string;
   default_bible_translation: string;
   show_only_notes: boolean;
+  non_editable_files_mode: 'gray' | 'hide';
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +29,7 @@ export interface UpdateSettingsRequest {
   default_export_size?: string;
   default_bible_translation?: string;
   show_only_notes?: boolean;
+  non_editable_files_mode?: 'gray' | 'hide';
 }
 
 export interface SettingsPathOption {

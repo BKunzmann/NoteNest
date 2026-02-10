@@ -37,6 +37,7 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [exportSize, setExportSize] = useState('A4');
   const [bibleTranslation, setBibleTranslation] = useState('LUT1912');
+  const [nonEditableFilesMode, setNonEditableFilesMode] = useState<'gray' | 'hide'>('gray');
   
   // Bibelübersetzungs-Favoriten
   const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
@@ -101,6 +102,7 @@ export default function SettingsPage() {
       setSidebarViewMode(data.sidebar_view_mode || 'recent');
       setTheme((data.theme || 'light') as 'light' | 'dark');
       setExportSize(data.default_export_size || 'A4');
+      setNonEditableFilesMode(data.non_editable_files_mode || 'gray');
       // Normalisiere Standard-Übersetzung (LUT -> LUT1912, etc.)
       const defaultTranslation = data.default_bible_translation || 'LUT1912';
       const normalized = defaultTranslation === 'LUT' ? 'LUT1912' : 
@@ -252,7 +254,8 @@ export default function SettingsPage() {
         sidebar_view_mode: sidebarViewMode,
         theme,
         default_export_size: exportSize,
-        default_bible_translation: bibleTranslation
+        default_bible_translation: bibleTranslation,
+        non_editable_files_mode: nonEditableFilesMode
       };
 
       const updated = await settingsAPI.updateSettings(updates);
@@ -523,6 +526,30 @@ export default function SettingsPage() {
               <option value="light">Hell</option>
               <option value="dark">Dunkel</option>
             </select>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label htmlFor="nonEditableFilesMode" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Nicht bearbeitbare Dateien in der Sidebar
+            </label>
+            <select
+              id="nonEditableFilesMode"
+              value={nonEditableFilesMode}
+              onChange={(e) => setNonEditableFilesMode(e.target.value as 'gray' | 'hide')}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="gray">Ausgegraut anzeigen</option>
+              <option value="hide">Gar nicht anzeigen</option>
+            </select>
+            <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
+              Betrifft z. B. PDF/DOCX/Bilddateien in Ordner- und Zuletzt-Ansicht.
+            </div>
           </div>
 
           <div style={{ marginBottom: '1rem' }}>

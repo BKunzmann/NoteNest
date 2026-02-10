@@ -1,14 +1,17 @@
 import { FileItem } from '../types/file';
 
-export type RecentGroupKey = 'last7Days' | 'last30Days' | 'years';
+export type RecentGroupKey = 'last7Days' | 'last30Days' | `year:${number}`;
 
-const GROUP_ORDER: RecentGroupKey[] = ['last7Days', 'last30Days', 'years'];
+const RELATIVE_GROUP_ORDER: Array<'last7Days' | 'last30Days'> = ['last7Days', 'last30Days'];
 
-const GROUP_LABELS: Record<RecentGroupKey, string> = {
+const RELATIVE_GROUP_LABELS: Record<'last7Days' | 'last30Days', string> = {
   last7Days: 'Letzte 7 Tage',
-  last30Days: 'Letzte 30 Tage',
-  years: 'Jahre'
+  last30Days: 'Letzte 30 Tage'
 };
+
+function isYearGroupKey(key: RecentGroupKey): key is `year:${number}` {
+  return key.startsWith('year:');
+}
 
 function toDayStart(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -17,7 +20,7 @@ function toDayStart(date: Date): Date {
 export function getRecentGroupKey(dateString: string, now: Date = new Date()): RecentGroupKey {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) {
-    return 'years';
+    return `year:${toDayStart(now).getFullYear()}`;
   }
 
   const currentDay = toDayStart(now).getTime();
@@ -30,7 +33,7 @@ export function getRecentGroupKey(dateString: string, now: Date = new Date()): R
   if (diffInDays <= 30) {
     return 'last30Days';
   }
-  return 'years';
+  return `year:${date.getFullYear()}`;
 }
 
 export function groupFilesByRecent(
@@ -49,7 +52,19 @@ export function groupFilesByRecent(
     }
   }
 
-  const orderedKeys = GROUP_ORDER.filter((key) => grouped.has(key));
+  const yearKeys = Array.from(grouped.keys())
+    .filter((key): key is `year:${number}` => isYearGroupKey(key))
+    .sort((a, b) => {
+      const yearA = Number(a.split(':')[1] || 0);
+      const yearB = Number(b.split(':')[1] || 0);
+      return yearB - yearA;
+    });
+
+  const orderedKeys: RecentGroupKey[] = [
+    ...RELATIVE_GROUP_ORDER.filter((key) => grouped.has(key)),
+    ...yearKeys
+  ];
+
   return orderedKeys.map((key) => {
     const items = grouped.get(key) || [];
     items.sort((a, b) => {
@@ -60,7 +75,7 @@ export function groupFilesByRecent(
 
     return {
       key,
-      label: GROUP_LABELS[key],
+      label: isYearGroupKey(key) ? key.split(':')[1] : RELATIVE_GROUP_LABELS[key],
       items
     };
   });

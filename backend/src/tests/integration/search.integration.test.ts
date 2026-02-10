@@ -109,6 +109,29 @@ describe('Search Integration', () => {
       
       expect(results.length).toBe(0);
     });
+
+    it('should find matches by filename even without content match', async () => {
+      const filePath = path.join(testDir, 'agenda_2026.md');
+      await fs.writeFile(filePath, '# Ohne Suchbegriff im Inhalt', 'utf-8');
+      await indexFile(testUserId, '/agenda_2026.md', 'private');
+
+      const results = await searchNotes(testUserId, 'agenda_2026');
+      expect(results.some((result) => result.path === '/agenda_2026.md')).toBe(true);
+    });
+
+    it('should search across private and shared by default', async () => {
+      const filePath = path.join(testDir, 'team-plan.md');
+      await fs.writeFile(filePath, '# Team Plan', 'utf-8');
+      await indexFile(testUserId, '/team-plan.md', 'shared');
+
+      const allResults = await searchNotes(testUserId, 'team-plan');
+      const privateOnlyResults = await searchNotes(testUserId, 'team-plan', 'private');
+      const sharedOnlyResults = await searchNotes(testUserId, 'team-plan', 'shared');
+
+      expect(allResults.some((result) => result.type === 'shared' && result.path === '/team-plan.md')).toBe(true);
+      expect(privateOnlyResults.some((result) => result.type === 'shared')).toBe(false);
+      expect(sharedOnlyResults.some((result) => result.type === 'shared' && result.path === '/team-plan.md')).toBe(true);
+    });
   });
 });
 

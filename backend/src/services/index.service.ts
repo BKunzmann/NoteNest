@@ -377,6 +377,7 @@ export function searchIndex(
     name: string;
     matches: Array<{ line: number; text: string; context: string }>;
     relevance: number;
+    lastModified?: string;
   }> = new Map();
   
   // Baue WHERE-Klausel für die Subquery (ohne Alias)
@@ -408,91 +409,142 @@ export function searchIndex(
       matchingTokens.push(token);
     } else {
       // Fuzzy Match
+      if (normalizedQuery.length < 3 || token.length < 3) {
+        continue;
+      }
       const distance = levenshteinDistance(normalizedQuery, token);
-      if (distance <= maxDistance && token.length >= 3) {
+      if (distance <= maxDistance) {
         matchingTokens.push(token);
       }
     }
   }
-  
-  if (matchingTokens.length === 0) {
-    return [];
+
+  // Hole alle Dateien mit Token-Matches
+  if (matchingTokens.length > 0) {
+    const placeholders = matchingTokens.map(() => '?').join(',');
+    const fileTypeClause = folderType ? 'AND si.file_type = ?' : '';
+    const fileResultParams = [
+      userId,
+      ...matchingTokens,
+      ...(folderType ? [folderType] : [])
+    ];
+
+    const fileResults = db.prepare(`
+      SELECT DISTINCT 
+        si.id,
+        si.file_path,
+        si.file_type,
+        si.file_name,
+        si.last_modified,
+        st.line_number,
+        st.context,
+        st.token
+      FROM search_index si
+      INNER JOIN search_tokens st ON si.id = st.file_id
+      WHERE si.user_id = ? 
+        AND st.token IN (${placeholders})
+        ${fileTypeClause}
+      ORDER BY si.id, st.line_number
+    `).all(...fileResultParams) as Array<{
+      id: number;
+      file_path: string;
+      file_type: 'private' | 'shared';
+      file_name: string;
+      last_modified: string;
+      line_number: number;
+      context: string;
+      token: string;
+    }>;
+
+    for (const row of fileResults) {
+      if (!results.has(row.id)) {
+        results.set(row.id, {
+          path: row.file_path,
+          type: row.file_type,
+          name: row.file_name,
+          matches: [],
+          relevance: 0,
+          lastModified: row.last_modified
+        });
+      }
+
+      const result = results.get(row.id)!;
+
+      const existingMatch = result.matches.find((m) => m.line === row.line_number && m.context === row.context);
+      if (!existingMatch) {
+        result.matches.push({
+          line: row.line_number,
+          text: row.context,
+          context: row.context
+        });
+      }
+
+      let relevance = 1;
+      if (row.token === normalizedQuery) {
+        relevance += 10;
+      } else if (row.token.includes(normalizedQuery)) {
+        relevance += 6;
+      }
+      if (row.file_name.toLowerCase().includes(normalizedQuery)) {
+        relevance += 5;
+      }
+      result.relevance += relevance;
+    }
   }
-  
-  // Hole alle Dateien mit diesen Tokens
-  const placeholders = matchingTokens.map(() => '?').join(',');
-  const fileTypeClause = folderType ? 'AND si.file_type = ?' : '';
-  const fileResultParams = [
+
+  // Ergänze Dateiname-Matches auch ohne Token-Matches.
+  const filenameTypeClause = folderType ? 'AND file_type = ?' : '';
+  const filenameParams = [
     userId,
-    ...matchingTokens,
+    `%${normalizedQuery}%`,
     ...(folderType ? [folderType] : [])
   ];
-
-  const fileResults = db.prepare(`
-    SELECT DISTINCT 
-      si.id,
-      si.file_path,
-      si.file_type,
-      si.file_name,
-      st.line_number,
-      st.context,
-      st.token
-    FROM search_index si
-    INNER JOIN search_tokens st ON si.id = st.file_id
-    WHERE si.user_id = ? 
-      AND st.token IN (${placeholders})
-      ${fileTypeClause}
-    ORDER BY si.id, st.line_number
-  `).all(...fileResultParams) as Array<{
+  const filenameRows = db.prepare(`
+    SELECT id, file_path, file_type, file_name, last_modified
+    FROM search_index
+    WHERE user_id = ?
+      AND lower(file_name) LIKE ?
+      ${filenameTypeClause}
+    ORDER BY datetime(last_modified) DESC
+    LIMIT 500
+  `).all(...filenameParams) as Array<{
     id: number;
     file_path: string;
     file_type: 'private' | 'shared';
     file_name: string;
-    line_number: number;
-    context: string;
-    token: string;
+    last_modified: string;
   }>;
-  
-  // Gruppiere nach Datei
-  for (const row of fileResults) {
-    if (!results.has(row.id)) {
+
+  for (const row of filenameRows) {
+    const existing = results.get(row.id);
+    if (!existing) {
       results.set(row.id, {
         path: row.file_path,
         type: row.file_type,
         name: row.file_name,
-        matches: [],
-        relevance: 0
+        matches: [{
+          line: 0,
+          text: row.file_name,
+          context: `Dateiname enthält "${searchTerm}"`
+        }],
+        relevance: 12,
+        lastModified: row.last_modified
+      });
+      continue;
+    }
+
+    existing.relevance += 8;
+    if (!existing.matches.some((m) => m.line === 0 && m.context.includes('Dateiname enthält'))) {
+      existing.matches.unshift({
+        line: 0,
+        text: row.file_name,
+        context: `Dateiname enthält "${searchTerm}"`
       });
     }
-    
-    const result = results.get(row.id)!;
-    
-    // Prüfe, ob diese Zeile bereits vorhanden ist
-    const existingMatch = result.matches.find(m => m.line === row.line_number);
-    if (!existingMatch) {
-      // Verwende Context aus Index (bereits 50 Zeichen vor/nach Token)
-      // Für vollständige Zeile müsste Datei gelesen werden, was zu langsam wäre
-      result.matches.push({
-        line: row.line_number,
-        text: row.context, // Context enthält bereits relevante Teile der Zeile
-        context: row.context
-      });
-    }
-    
-    // Berechne Relevanz
-    let relevance = 1;
-    
-    // Exakter Match = höhere Relevanz
-    if (row.token === normalizedQuery) {
-      relevance += 10;
-    }
-    
-    // Dateiname-Match = Bonus
-    if (row.file_name.toLowerCase().includes(normalizedQuery)) {
-      relevance += 5;
-    }
-    
-    result.relevance += relevance;
+  }
+
+  if (results.size === 0) {
+    return [];
   }
   
   // Konvertiere Map zu Array und sortiere nach Relevanz
@@ -501,9 +553,22 @@ export function searchIndex(
   // Filtere Ergebnisse aus ausgeblendeten Ordnern
   const filteredResults = resultArray.filter(result => !isPathInHiddenFolder(result.path));
   
-  filteredResults.sort((a, b) => b.relevance - a.relevance);
+  filteredResults.sort((a, b) => {
+    if (b.relevance !== a.relevance) {
+      return b.relevance - a.relevance;
+    }
+    const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
+    const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
+    return bTime - aTime;
+  });
   
-  return filteredResults;
+  return filteredResults.map((entry) => ({
+    path: entry.path,
+    type: entry.type,
+    name: entry.name,
+    matches: entry.matches,
+    relevance: entry.relevance
+  }));
 }
 
 /**

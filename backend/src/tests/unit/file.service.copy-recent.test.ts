@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import db, { initializeDatabase } from '../../config/database';
-import { copyFile, listDirectory, listRecentFiles, moveFile } from '../../services/file.service';
+import { copyFile, getFileStats, listDirectory, listRecentFiles, moveFile } from '../../services/file.service';
 
 describe('file.service copy/recent', () => {
   let userId: number;
@@ -125,5 +125,20 @@ describe('file.service copy/recent', () => {
     expect(items.map((item) => item.name)).toContain('root-note.txt');
     expect(items.map((item) => item.name)).not.toContain('only-docs');
     expect(items.map((item) => item.name)).not.toContain('root-image.png');
+  });
+
+  it('getFileStats should return total files and notes', async () => {
+    await fs.mkdir(path.join(privateDir, 'sub'), { recursive: true });
+    await fs.writeFile(path.join(privateDir, 'sub', 'a.md'), '# note');
+    await fs.writeFile(path.join(privateDir, 'b.txt'), 'note');
+    await fs.writeFile(path.join(privateDir, 'c.pdf'), 'pdf');
+
+    // Metadata wird beim Listen aufgebaut.
+    await listDirectory(userId, '/', 'private');
+    await listDirectory(userId, '/sub', 'private');
+
+    const stats = getFileStats(userId, 'private');
+    expect(stats.totalFiles).toBe(3);
+    expect(stats.totalNotes).toBe(2);
   });
 });

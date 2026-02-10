@@ -10,6 +10,7 @@ import {
   getChapter, 
   parseReference,
   getTranslations,
+  getDiagnostics,
   getFavorites,
   addFavorite,
   deleteFavorite,
@@ -24,6 +25,7 @@ router.get('/verse', getVerse);
 router.get('/chapter', getChapter);
 router.get('/translations', getTranslations);
 router.post('/parse', parseReference);
+router.get('/diagnostics', authenticateToken, getDiagnostics);
 
 // Geschützte Endpunkte für Bibelübersetzungs-Favoriten
 router.get('/favorites', authenticateToken, getFavorites);

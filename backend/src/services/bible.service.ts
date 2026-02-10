@@ -301,33 +301,33 @@ export async function getBibleVerse(
     // Lokaler Vers nicht gefunden - versuche API
     console.log(`Verse not found locally for ${finalTranslation}, trying API...`);
     
-    // Prüfe, ob es eine API-Übersetzung ist
-    // HINWEIS: Nur ELB ist aktuell über die API verfügbar (Elberfelder Translation)
-    // Moderne Übersetzungen (LUT 2017, BasisBibel, NGÜ, HFA) sind nicht verfügbar
+    // Prüfe, ob es eine API-/Fallback-Übersetzung ist.
+    // Wichtig: Bei generischen Codes (z. B. LUT) prüfen wir auch die normalisierte Variante (LUT1912).
     let isAPITranslation = false;
     try {
       const { isAPITranslation: checkAPITranslation } = await import('./bibleApi.service');
-      isAPITranslation = checkAPITranslation(translation);
+      isAPITranslation = checkAPITranslation(translation) || checkAPITranslation(finalTranslation);
     } catch (error) {
       console.warn('Could not check API translation:', error);
     }
     
-    // Fallback: Prüfe manuell für ELB
+    // Fallback: Prüfe manuell für gängige generische Codes
     if (!isAPITranslation) {
-      isAPITranslation = translation === 'ELB' || 
-        (translation !== finalTranslation && ['LUT', 'ELB'].includes(translation));
+      isAPITranslation = ['LUT', 'ELB', 'SCH'].includes(translation) ||
+        ['LUT1912', 'LUT1545', 'ELB1905', 'SCH1951'].includes(finalTranslation);
     }
     
     if (isAPITranslation) {
       try {
         const { getVerseFromAPI } = await import('./bibleApi.service');
-        const apiText = await getVerseFromAPI(parsed.book, parsed.chapter, parsed.verse, translation);
+        const apiTranslation = finalTranslation || translation;
+        const apiText = await getVerseFromAPI(parsed.book, parsed.chapter, parsed.verse, apiTranslation);
         
         if (apiText) {
           return {
             text: apiText,
             reference: parsed.originalText,
-            translation: translation // Verwende Original-Übersetzung, nicht normalisierte
+            translation: apiTranslation
           };
         }
       } catch (error) {

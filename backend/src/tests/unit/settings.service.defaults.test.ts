@@ -24,6 +24,7 @@ describe('settings.service new default note settings', () => {
     expect(created.default_note_type).toBe('private');
     expect(created.default_note_folder_path).toBe('/');
     expect(created.sidebar_view_mode).toBe('recent');
+    expect(created.non_editable_files_mode).toBe('gray');
   });
 
   it('updateUserSettings should persist note target and sidebar mode', () => {
@@ -32,16 +33,19 @@ describe('settings.service new default note settings', () => {
     const updated = updateUserSettings(userId, {
       default_note_type: 'shared',
       default_note_folder_path: '/team/notes',
-      sidebar_view_mode: 'folders'
+      sidebar_view_mode: 'folders',
+      non_editable_files_mode: 'hide'
     });
 
     expect(updated.default_note_type).toBe('shared');
     expect(updated.default_note_folder_path).toBe('/team/notes');
     expect(updated.sidebar_view_mode).toBe('folders');
+    expect(updated.non_editable_files_mode).toBe('hide');
 
     const loaded = getUserSettings(userId);
     expect(loaded?.default_note_type).toBe('shared');
     expect(loaded?.default_note_folder_path).toBe('/team/notes');
     expect(loaded?.sidebar_view_mode).toBe('folders');
+    expect(loaded?.non_editable_files_mode).toBe('hide');
   });
 });

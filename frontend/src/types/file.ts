@@ -28,6 +28,12 @@ export interface FileContentResponse {
   lastModified: string;
 }
 
+export interface FileStatsResponse {
+  type: 'private' | 'shared';
+  totalFiles: number;
+  totalNotes: number;
+}
+
 export interface CreateFileRequest {
   path: string;
   content: string;
