@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import SearchBar from '../Search/SearchBar';
+import { getVersionString } from '../../config/version';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -18,7 +19,9 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAdmin = Boolean(user?.is_admin);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isCompact, setIsCompact] = useState<boolean>(() => window.innerWidth < 700);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
@@ -51,6 +54,12 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showUserMenu]);
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 700);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <header style={{
@@ -89,22 +98,22 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
           style={{ 
             textDecoration: 'none', 
             color: '#007AFF',
-            fontSize: '1.25rem',
+            fontSize: isCompact ? '1rem' : '1.25rem',
             fontWeight: 'bold'
           }}
         >
-          NoteNest
+          {isCompact ? 'NN' : 'NoteNest'}
         </Link>
       </div>
 
       {/* Center: Search Bar */}
-      <div style={{ flex: 1, maxWidth: '600px', margin: '0 1rem' }}>
+      <div style={{ flex: 1, maxWidth: isCompact ? '100%' : '600px', margin: isCompact ? '0 0.4rem' : '0 1rem' }}>
         <SearchBar />
       </div>
 
       {/* Right: Settings + User Menu */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        {user?.is_admin && (
+        {isAdmin && (
           <button
             onClick={() => {
               if (location.pathname === '/admin') {
@@ -207,6 +216,14 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
               >
                 Abmelden
               </button>
+              <div style={{
+                padding: '0.55rem 1rem',
+                borderTop: '1px solid #e0e0e0',
+                fontSize: '0.72rem',
+                color: '#777'
+              }}>
+                {getVersionString()} · © C-Autor
+              </div>
             </div>
           )}
         </div>

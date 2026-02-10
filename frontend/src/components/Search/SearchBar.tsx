@@ -1,7 +1,7 @@
 /**
  * Search Bar Component
- * 
- * Suchleiste mit Dropdown für Suchergebnisse
+ *
+ * Suchleiste mit Verlauf, Ergebnisliste und Mobile-Optimierung.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -12,6 +12,43 @@ interface SearchBarProps {
   onClose?: () => void;
 }
 
+const SEARCH_HISTORY_KEY = 'notenest.search-history';
+const MAX_SEARCH_HISTORY = 12;
+const MOBILE_BREAKPOINT = 700;
+
+function loadSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((entry): entry is string => typeof entry === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function saveSearchHistory(history: string[]): void {
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_SEARCH_HISTORY)));
+  } catch {
+    // Verlauf ist optional
+  }
+}
+
+function updateHistory(currentHistory: string[], query: string): string[] {
+  const normalized = query.trim();
+  if (!normalized) {
+    return currentHistory;
+  }
+  const withoutCurrent = currentHistory.filter((entry) => entry.toLowerCase() !== normalized.toLowerCase());
+  return [normalized, ...withoutCurrent].slice(0, MAX_SEARCH_HISTORY);
+}
+
 export default function SearchBar({ onClose }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -19,27 +56,48 @@ export default function SearchBar({ onClose }: SearchBarProps) {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showResults, setShowResults] = useState(false);
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
+  const [history, setHistory] = useState<string[]>(() => loadSearchHistory());
+  const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < MOBILE_BREAKPOINT);
   const navigate = useNavigate();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = 'search-results-list';
 
   useEffect(() => {
-    // Fokussiere Input beim Öffnen
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, []);
 
   useEffect(() => {
-    // Debounce: Warte 300ms nach Eingabe, bevor gesucht wird
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     if (query.trim().length < 2) {
       setResults([]);
-      setShowResults(false);
+      setSelectedIndex(-1);
+      setIsSearching(false);
       return;
     }
 
@@ -65,21 +123,22 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     };
   }, [query]);
 
+  const commitQueryToHistory = (searchedQuery: string) => {
+    const nextHistory = updateHistory(history, searchedQuery);
+    setHistory(nextHistory);
+    saveSearchHistory(nextHistory);
+  };
+
   const handleSelectResult = (result: SearchResult) => {
-    // Navigiere zur Notiz (die NotesPage lädt die Datei dann aus der URL)
-    // Wichtig: Pfad muss korrekt encodiert werden
-    // Entferne führenden Slash für die URL (wird in NotesPage wieder hinzugefügt)
     let pathForUrl = result.path;
     if (pathForUrl.startsWith('/')) {
       pathForUrl = pathForUrl.substring(1);
     }
-    
-    // Encodiere den gesamten Pfad (React Router decodiert automatisch)
+
     const encodedPath = encodeURIComponent(pathForUrl);
-    
     navigate(`/notes/${result.type}/${encodedPath}`);
-    
-    // Schließe Suche
+
+    commitQueryToHistory(query);
     setQuery('');
     setShowResults(false);
     if (onClose) {
@@ -87,94 +146,242 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     }
   };
 
+  const clearQuery = () => {
+    setQuery('');
+    setResults([]);
+    setShowResults(true);
+    setSelectedIndex(-1);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  const removeHistoryEntry = (entry: string) => {
+    const nextHistory = history.filter((item) => item !== entry);
+    setHistory(nextHistory);
+    saveSearchHistory(nextHistory);
+  };
+
+  const clearAllHistory = () => {
+    setHistory([]);
+    saveSearchHistory([]);
+  };
+
+  const handleHistorySelect = (entry: string) => {
+    setQuery(entry);
+    setShowResults(true);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => 
+      setSelectedIndex((prev) => (
         prev < results.length - 1 ? prev + 1 : prev
-      );
+      ));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
-    } else if (e.key === 'Enter' && selectedIndex >= 0 && results[selectedIndex]) {
-      e.preventDefault();
-      handleSelectResult(results[selectedIndex]);
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && results[selectedIndex]) {
+        e.preventDefault();
+        handleSelectResult(results[selectedIndex]);
+      } else if (results[0]) {
+        e.preventDefault();
+        handleSelectResult(results[0]);
+      }
     } else if (e.key === 'Escape') {
-      setQuery('');
       setShowResults(false);
-      if (onClose) {
-        onClose();
+      if (!query) {
+        onClose?.();
+      } else {
+        clearQuery();
       }
     }
   };
 
+  const hasHistoryView = showResults && query.trim().length < 2 && history.length > 0;
+  const hasResultView = showResults && query.trim().length >= 2;
+
+  const resultContainerStyle: React.CSSProperties = isMobile
+    ? {
+      position: 'fixed',
+      top: '56px',
+      left: 0,
+      right: 0,
+      bottom: '56px',
+      marginTop: 0,
+      backgroundColor: 'var(--bg-primary, #fff)',
+      borderTop: '1px solid var(--border-color, #ddd)',
+      borderBottom: '1px solid var(--border-color, #ddd)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+      overflowY: 'auto',
+      zIndex: 2500
+    }
+    : {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      marginTop: '0.25rem',
+      backgroundColor: 'var(--bg-primary, #fff)',
+      border: '1px solid var(--border-color, #ddd)',
+      borderRadius: '8px',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+      maxHeight: '420px',
+      overflowY: 'auto',
+      zIndex: 2500
+    };
+
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: '600px' }}>
+    <div
+      ref={containerRef}
+      style={{ position: 'relative', width: '100%', maxWidth: isMobile ? '100%' : '600px' }}
+    >
       <div style={{ position: 'relative' }}>
         <input
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowResults(true);
+          }}
           onKeyDown={handleKeyDown}
           aria-expanded={showResults}
           aria-controls={listboxId}
           aria-autocomplete="list"
           aria-label="Notizen durchsuchen"
           onFocus={() => {
-            if (results.length > 0) {
-              setShowResults(true);
-            }
+            setShowResults(true);
           }}
           placeholder="Notizen durchsuchen..."
           style={{
             width: '100%',
-            padding: '0.75rem 2.5rem 0.75rem 1rem',
+            padding: '0.65rem 4.5rem 0.65rem 0.9rem',
             borderRadius: '8px',
             border: '1px solid var(--border-color, #ddd)',
-            fontSize: '1rem',
+            fontSize: isMobile ? '0.95rem' : '1rem',
             backgroundColor: 'var(--bg-primary, #fff)',
             color: 'var(--text-primary, #333)',
             outline: 'none',
             minHeight: '44px'
           }}
         />
-        {isSearching && (
-          <span
+
+        {query && (
+          <button
+            type="button"
+            onClick={clearQuery}
+            aria-label="Suchfeld leeren"
             style={{
               position: 'absolute',
-              right: '1rem',
+              right: isSearching ? '2.4rem' : '1.9rem',
               top: '50%',
               transform: 'translateY(-50%)',
-              fontSize: '0.875rem',
-              color: 'var(--text-secondary, #666)'
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              lineHeight: 1
             }}
           >
-            🔍
-          </span>
+            ×
+          </button>
         )}
-      </div>
 
-      {showResults && results.length > 0 && (
-        <div
-          id={listboxId}
-          role="listbox"
+        <span
           style={{
             position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            marginTop: '0.25rem',
-            backgroundColor: 'var(--bg-primary, #fff)',
-            border: '1px solid var(--border-color, #ddd)',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            maxHeight: '400px',
-            overflowY: 'auto',
-            zIndex: 1000
+            right: '0.9rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary, #666)'
           }}
         >
-          {results.map((result, index) => (
+          {isSearching ? '…' : '🔍'}
+        </span>
+      </div>
+
+      {(hasHistoryView || hasResultView) && (
+        <div id={listboxId} role="listbox" style={resultContainerStyle}>
+          {hasHistoryView && (
+            <div style={{ padding: isMobile ? '0.85rem' : '0.75rem' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.5rem'
+              }}>
+                <strong style={{ fontSize: isMobile ? '0.95rem' : '0.85rem' }}>Letzte Suchen</strong>
+                <button
+                  type="button"
+                  onClick={clearAllHistory}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: 'var(--accent-color)',
+                    cursor: 'pointer',
+                    fontSize: isMobile ? '0.85rem' : '0.75rem'
+                  }}
+                >
+                  Alle löschen
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {history.map((entry) => (
+                  <div
+                    key={`history-${entry}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '0.5rem 0.65rem'
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHistorySelect(entry)}
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)',
+                        fontSize: isMobile ? '0.95rem' : '0.85rem'
+                      }}
+                    >
+                      {entry}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeHistoryEntry(entry)}
+                      aria-label={`Suche "${entry}" löschen`}
+                      style={{
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        fontSize: '0.95rem'
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hasResultView && results.map((result, index) => (
             <div
               key={`${result.path}-${result.type}`}
               role="option"
@@ -182,74 +389,86 @@ export default function SearchBar({ onClose }: SearchBarProps) {
               onClick={() => handleSelectResult(result)}
               onMouseEnter={() => setSelectedIndex(index)}
               style={{
-                padding: '1rem',
+                padding: isMobile ? '0.85rem' : '1rem',
                 cursor: 'pointer',
-                backgroundColor: selectedIndex === index 
-                  ? 'var(--accent-bg, #e3f2fd)' 
+                backgroundColor: selectedIndex === index
+                  ? 'var(--accent-bg, #e3f2fd)'
                   : 'transparent',
-                borderBottom: index < results.length - 1 
-                  ? '1px solid var(--border-color, #eee)' 
+                borderBottom: index < results.length - 1
+                  ? '1px solid var(--border-color, #eee)'
                   : 'none'
               }}
             >
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '0.5rem'
+                marginBottom: '0.4rem',
+                gap: '0.5rem'
               }}>
-                <div style={{ fontWeight: 'bold', color: 'var(--text-primary, #333)' }}>
+                <div style={{
+                  fontWeight: 700,
+                  color: 'var(--text-primary, #333)',
+                  fontSize: isMobile ? '0.98rem' : '0.92rem',
+                  wordBreak: 'break-word'
+                }}>
                   {result.name}
                 </div>
-                <div style={{ 
-                  fontSize: '0.75rem', 
+                <div style={{
+                  fontSize: isMobile ? '0.8rem' : '0.75rem',
                   color: 'var(--text-secondary, #666)',
                   display: 'flex',
-                  gap: '0.5rem',
-                  alignItems: 'center'
+                  gap: '0.4rem',
+                  alignItems: 'center',
+                  whiteSpace: 'nowrap'
                 }}>
                   <span>{result.type === 'private' ? '📁' : '👥'}</span>
-                  <span>{result.matches.length} Treffer</span>
+                  <span>{result.matches.length}</span>
                 </div>
               </div>
-              <div style={{ 
-                fontSize: '0.875rem', 
+
+              <div style={{
+                fontSize: isMobile ? '0.82rem' : '0.8rem',
                 color: 'var(--text-secondary, #666)',
-                marginBottom: '0.25rem'
+                marginBottom: '0.2rem',
+                wordBreak: 'break-word'
               }}>
                 {result.path}
               </div>
-              {(expandedResults.has(`${result.path}-${result.type}`) 
-                ? result.matches 
+
+              {(expandedResults.has(`${result.path}-${result.type}`)
+                ? result.matches
                 : result.matches.slice(0, 2)
               ).map((match, matchIndex) => (
                 <div
                   key={matchIndex}
                   style={{
-                    fontSize: '0.75rem',
+                    fontSize: isMobile ? '0.78rem' : '0.74rem',
                     color: 'var(--text-secondary, #666)',
-                    marginTop: '0.5rem',
-                    padding: '0.5rem',
+                    marginTop: '0.45rem',
+                    padding: '0.45rem',
                     backgroundColor: 'var(--bg-secondary, #f9f9f9)',
                     borderRadius: '4px',
-                    fontFamily: 'monospace'
+                    fontFamily: 'monospace',
+                    wordBreak: 'break-word'
                   }}
                 >
                   Zeile {match.line}: {match.context}
                 </div>
               ))}
+
               {result.matches.length > 2 && !expandedResults.has(`${result.path}-${result.type}`) && (
-                <div 
+                <div
                   onClick={(e) => {
                     e.stopPropagation();
-                    setExpandedResults(prev => {
-                      const newSet = new Set(prev);
-                      newSet.add(`${result.path}-${result.type}`);
-                      return newSet;
+                    setExpandedResults((prev) => {
+                      const next = new Set(prev);
+                      next.add(`${result.path}-${result.type}`);
+                      return next;
                     });
                   }}
-                  style={{ 
-                    fontSize: '0.75rem', 
+                  style={{
+                    fontSize: isMobile ? '0.78rem' : '0.75rem',
                     color: 'var(--accent-color, #1976d2)',
                     marginTop: '0.25rem',
                     fontStyle: 'italic',
@@ -260,18 +479,19 @@ export default function SearchBar({ onClose }: SearchBarProps) {
                   + {result.matches.length - 2} weitere Treffer
                 </div>
               )}
+
               {expandedResults.has(`${result.path}-${result.type}`) && result.matches.length > 2 && (
-                <div 
+                <div
                   onClick={(e) => {
                     e.stopPropagation();
-                    setExpandedResults(prev => {
-                      const newSet = new Set(prev);
-                      newSet.delete(`${result.path}-${result.type}`);
-                      return newSet;
+                    setExpandedResults((prev) => {
+                      const next = new Set(prev);
+                      next.delete(`${result.path}-${result.type}`);
+                      return next;
                     });
                   }}
-                  style={{ 
-                    fontSize: '0.75rem', 
+                  style={{
+                    fontSize: isMobile ? '0.78rem' : '0.75rem',
                     color: 'var(--accent-color, #1976d2)',
                     marginTop: '0.25rem',
                     fontStyle: 'italic',
@@ -284,28 +504,17 @@ export default function SearchBar({ onClose }: SearchBarProps) {
               )}
             </div>
           ))}
-        </div>
-      )}
 
-      {showResults && query.trim().length >= 2 && results.length === 0 && !isSearching && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            marginTop: '0.25rem',
-            padding: '1rem',
-            backgroundColor: 'var(--bg-primary, #fff)',
-            border: '1px solid var(--border-color, #ddd)',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            zIndex: 1000,
-            textAlign: 'center',
-            color: 'var(--text-secondary, #666)'
-          }}
-        >
-          Keine Ergebnisse gefunden
+          {hasResultView && query.trim().length >= 2 && results.length === 0 && !isSearching && (
+            <div style={{
+              padding: '1rem',
+              textAlign: 'center',
+              color: 'var(--text-secondary, #666)',
+              fontSize: isMobile ? '0.92rem' : '0.85rem'
+            }}>
+              Keine Ergebnisse gefunden
+            </div>
+          )}
         </div>
       )}
     </div>

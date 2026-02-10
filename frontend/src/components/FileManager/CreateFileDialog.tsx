@@ -44,6 +44,11 @@ function buildTargetPath(folderPath: string, name: string): string {
     : `${normalizedFolderPath}/${cleanedName}`;
 }
 
+function getSuggestedName(kind: 'file' | 'folder'): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return kind === 'file' ? `${today} Neu` : `${today} Neuer Ordner`;
+}
+
 export default function CreateFileDialog({
   isOpen,
   onClose,
@@ -71,6 +76,7 @@ export default function CreateFileDialog({
     setError(null);
     setFolderType(initialFolderType);
     setTargetPath(normalizeFolderPath(initialPath));
+    setName(getSuggestedName(type));
   }, [initialFolderType, initialPath, isOpen, type]);
 
   if (!isOpen) {

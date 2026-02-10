@@ -45,7 +45,12 @@ export default function WysiwygEditor({
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [tooltipVerse, setTooltipVerse] = useState<any>(null);
   const [isLoadingTooltip, setIsLoadingTooltip] = useState(false);
-  const [popupReference, setPopupReference] = useState<{ reference: string; translation: string; text: string } | null>(null);
+  const [popupReference, setPopupReference] = useState<{
+    reference: string;
+    translation: string;
+    text: string;
+    instanceId: number;
+  } | null>(null);
   // popupContainerRef - für zukünftige Verwendung reserviert
 
   // Lade Bibel-Übersetzung aus Settings
@@ -416,7 +421,8 @@ export default function WysiwygEditor({
         setPopupReference({
           reference,
           translation,
-          text: target.textContent || ''
+          text: target.textContent || '',
+          instanceId: Date.now()
         });
       }
     };
@@ -508,6 +514,7 @@ export default function WysiwygEditor({
       {popupReference && (
         <div style={{ display: 'none' }}>
             <BibleReference
+              key={`${popupReference.reference}-${popupReference.translation}-${popupReference.instanceId}`}
               reference={popupReference.reference}
               translation={popupReference.translation}
               onInsertText={onInsertText ? (before: string) => insertTextInWysiwyg(before) : undefined}

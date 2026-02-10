@@ -487,6 +487,7 @@ export default function NotesPage() {
           sourcePath={selectedPath}
           sourceType={selectedType}
           sourceName={selectedFile.name}
+          sourceItemType={selectedFile.type}
           onClose={() => setShowMoveDialog(false)}
         />
       )}
@@ -498,6 +499,7 @@ export default function NotesPage() {
           sourcePath={selectedPath}
           sourceType={selectedType}
           sourceName={selectedFile.name}
+          sourceItemType={selectedFile.type}
           onClose={() => setShowCopyDialog(false)}
         />
       )}

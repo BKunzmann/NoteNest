@@ -189,9 +189,13 @@ export const fileAPI = {
   /**
    * Listet Verzeichnis-Inhalt auf
    */
-  async listFiles(path: string = '/', type: 'private' | 'shared' = 'private'): Promise<FileListResponse> {
+  async listFiles(
+    path: string = '/',
+    type: 'private' | 'shared' = 'private',
+    notesOnly: boolean = false
+  ): Promise<FileListResponse> {
     const response = await api.get<FileListResponse>('/files/list', {
-      params: { path, type }
+      params: { path, type, notesOnly }
     });
     return response.data;
   },

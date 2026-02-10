@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import db, { initializeDatabase } from '../../config/database';
-import { copyFile, listDirectory, listRecentFiles } from '../../services/file.service';
+import { copyFile, listDirectory, listRecentFiles, moveFile } from '../../services/file.service';
 
 describe('file.service copy/recent', () => {
   let userId: number;
@@ -90,5 +90,40 @@ describe('file.service copy/recent', () => {
 
     expect(copiedFileContent).toContain('source');
     expect(copiedNestedContent).toBe('inside');
+  });
+
+  it('copyFile and moveFile should resolve name conflicts automatically', async () => {
+    await fs.writeFile(path.join(privateDir, 'source.md'), '# source');
+    await fs.writeFile(path.join(privateDir, 'target.md'), '# target');
+    await fs.writeFile(path.join(privateDir, 'move-source.pdf'), 'move source');
+    await fs.writeFile(path.join(privateDir, 'move-target.pdf'), 'move target');
+
+    const copiedTo = await copyFile(userId, '/source.md', '/target.md', 'private', 'private');
+    const movedTo = await moveFile(userId, '/move-source.pdf', '/move-target.pdf', 'private', 'private');
+
+    expect(copiedTo).toBe('/target (1).md');
+    expect(movedTo).toBe('/move-target (1).pdf');
+
+    const copiedContent = await fs.readFile(path.join(privateDir, 'target (1).md'), 'utf-8');
+    const movedContent = await fs.readFile(path.join(privateDir, 'move-target (1).pdf'), 'utf-8');
+    expect(copiedContent).toContain('source');
+    expect(movedContent).toContain('move source');
+  });
+
+  it('listDirectory notesOnly should hide folders without notes', async () => {
+    await fs.mkdir(path.join(privateDir, 'has-notes', 'nested'), { recursive: true });
+    await fs.mkdir(path.join(privateDir, 'only-docs'), { recursive: true });
+
+    await fs.writeFile(path.join(privateDir, 'has-notes', 'nested', 'note.md'), '# note');
+    await fs.writeFile(path.join(privateDir, 'only-docs', 'manual.pdf'), 'pdf');
+    await fs.writeFile(path.join(privateDir, 'root-note.txt'), 'note');
+    await fs.writeFile(path.join(privateDir, 'root-image.png'), 'img');
+
+    const items = await listDirectory(userId, '/', 'private', { notesOnly: true });
+
+    expect(items.map((item) => item.name)).toContain('has-notes');
+    expect(items.map((item) => item.name)).toContain('root-note.txt');
+    expect(items.map((item) => item.name)).not.toContain('only-docs');
+    expect(items.map((item) => item.name)).not.toContain('root-image.png');
   });
 });

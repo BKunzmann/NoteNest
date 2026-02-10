@@ -9,6 +9,41 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### 🛠️ UX/Index-Optimierungen (2026-02-10 – Iteration 2)
+- **Header-Fix**: Bei Nicht-Admins wird kein `0`-Artefakt mehr statt der Krone angezeigt.
+- **Version & Autor in GUI**: Im Benutzer-Menü wird jetzt ein Hinweis `vX.Y.Z · © C-Autor` angezeigt.
+- **Editor verbessert**:
+  - Auto-Save speichert nun verlässlich im Hintergrund inkl. Flush beim Verlassen.
+  - Undo/Redo bleibt verfügbar, während der gespeicherte Stand korrekt nachgeführt wird.
+  - Toolbar ist auf kleinen Bildschirmen kompakter (einzeilig scrollbar statt mehrzeilig blockierend).
+- **„Zuletzt“-Ansicht stabilisiert**:
+  - Gruppierung auf **„Letzte 7 Tage“**, **„Letzte 30 Tage“**, **„Jahre“** umgestellt.
+  - Candidate-Merging aus `file_metadata` + `search_index`, inkl. Existenzprüfung gegen das Dateisystem.
+  - Schnellere Bereinigung veralteter Indexeinträge bei extern gelöschten Dateien.
+  - Optionaler asynchroner Metadata-Refresh zur Vervollständigung bei großen Datenbeständen.
+- **Nur-Notizen-Filter erweitert**:
+  - In der Ordneransicht werden bei aktivem Filter nur noch Dateien **und Ordner mit enthaltenen Notizen** angezeigt.
+- **Ordnernavigation verbessert**:
+  - Stufenweise Rücknavigation (Breadcrumb + „Zurück“) in der Sidebar-Ordneransicht.
+- **Copy/Move robust gemacht**:
+  - Zielordnerauswahl jetzt über **FolderNavigator** (kein Freitext).
+  - Konflikt-Fallback für gleiche Namen (` (1)`, ` (2)`, …) in Frontend und Backend.
+- **Neue Datei/Notiz**:
+  - Vorgeschlagener Name beim Erstellen: `YYYY-MM-DD Neu`.
+- **Suche deutlich verbessert**:
+  - Suchverlauf (anzeigen, einzelne Einträge löschen, alle löschen).
+  - Klick/Tipp auf `×` leert das Suchfeld.
+  - Mobile Darstellung verbessert (lesbares Vollflächen-Overlay statt schmaler Ergebnisliste).
+- **Bibelstellen stabilisiert**:
+  - API respektiert jetzt explizit übergebene Übersetzungen (User-Default nur als Fallback).
+  - WYSIWYG-Popup wird bei wiederholten Klicks auf dieselbe Stelle korrekt neu geöffnet.
+
+### ✅ Tests
+- Backend: Jest vollständig erfolgreich (`12/12` Suites, `75/75` Tests).
+- Backend: TypeScript-Build erfolgreich.
+- Frontend: Vitest erfolgreich (`1/1` Datei, `2/2` Tests).
+- Frontend: TypeScript + Vite Build erfolgreich.
+
 ### 🛠️ Stabilisierung & UX-Verbesserungen (2026-02-10)
 - **Admin-Navigation**: Die Admin-Krone im Header ist wieder sichtbar und führt erneut ins Adminpanel.
 - **Suche repariert**: Die Notizsuche funktioniert wieder zuverlässig (SQL-Fehler in der Indexabfrage behoben).

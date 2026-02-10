@@ -54,7 +54,7 @@ interface FileState {
   sharedError: string | null;
   
   // Actions
-  loadFiles: (path?: string, type?: 'private' | 'shared') => Promise<void>;
+  loadFiles: (path?: string, type?: 'private' | 'shared', notesOnly?: boolean) => Promise<void>;
   loadFileContent: (path: string, type: 'private' | 'shared') => Promise<void>;
   selectFile: (file: FileItem | null, path: string | null, type: 'private' | 'shared' | null) => void;
   clearSelection: () => void;
@@ -81,7 +81,11 @@ export const useFileStore = create<FileState>((set, get) => ({
   /**
    * Lädt Dateien aus einem Verzeichnis
    */
-  loadFiles: async (path: string = '/', type: 'private' | 'shared' = 'private') => {
+  loadFiles: async (
+    path: string = '/',
+    type: 'private' | 'shared' = 'private',
+    notesOnly: boolean = false
+  ) => {
     set({ isLoading: true });
     
     // Setze Fehler für den entsprechenden Typ zurück
@@ -92,7 +96,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     }
     
     try {
-      const response: FileListResponse = await fileAPI.listFiles(path, type);
+      const response: FileListResponse = await fileAPI.listFiles(path, type, notesOnly);
       
       if (type === 'private') {
         set({
@@ -278,29 +282,30 @@ export const useFileStore = create<FileState>((set, get) => ({
       const normalizedFrom = normalizeStorePath(from);
       const normalizedTo = normalizeStorePath(to);
 
-      await fileAPI.moveFile({
+      const response = await fileAPI.moveFile({
         from: normalizedFrom,
         to: normalizedTo,
         fromType,
         toType
       });
+      const resolvedTo = normalizeStorePath(response.to || normalizedTo);
 
       const state = get();
       if (state.selectedPath === normalizedFrom && state.selectedType === fromType && state.selectedFile) {
-        const newName = normalizedTo.split('/').filter(Boolean).pop() || state.selectedFile.name;
+        const newName = resolvedTo.split('/').filter(Boolean).pop() || state.selectedFile.name;
         set({
-          selectedPath: normalizedTo,
+          selectedPath: resolvedTo,
           selectedType: toType,
           selectedFile: {
             ...state.selectedFile,
             name: newName,
-            path: normalizedTo
+            path: resolvedTo
           }
         });
       }
 
       const sourceDir = getParentFolderPath(normalizedFrom);
-      const targetDir = getParentFolderPath(normalizedTo);
+      const targetDir = getParentFolderPath(resolvedTo);
 
       if (fromType === 'private') {
         if (state.privatePath === sourceDir) {
@@ -336,14 +341,15 @@ export const useFileStore = create<FileState>((set, get) => ({
       const normalizedFrom = normalizeStorePath(from);
       const normalizedTo = normalizeStorePath(to);
 
-      await fileAPI.copyFile({
+      const response = await fileAPI.copyFile({
         from: normalizedFrom,
         to: normalizedTo,
         fromType,
         toType
       });
+      const resolvedTo = normalizeStorePath(response.to || normalizedTo);
 
-      const targetDir = getParentFolderPath(normalizedTo);
+      const targetDir = getParentFolderPath(resolvedTo);
       if (toType === 'private') {
         if (get().privatePath === targetDir) {
           await get().loadFiles(get().privatePath, 'private');

@@ -96,7 +96,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     setRecentError(null);
     try {
       const effectiveNotesOnly = notesOnlyOverride ?? showOnlyNotes;
-      const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 300);
+      const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 1000);
       setRecentFiles(response.items);
     } catch (apiError: any) {
       setRecentError(apiError?.response?.data?.error || 'Fehler beim Laden der zuletzt bearbeiteten Notizen');
@@ -106,27 +106,18 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     }
   }, [showOnlyNotes, type]);
 
-  // Filtere Dateien basierend auf showOnlyNotes
-  const files = useMemo(() => (
-    showOnlyNotes
-      ? allFiles.filter(file => {
-        // Ordner immer anzeigen
-        if (file.type === 'folder') {
-          return true;
-        }
-        // Nur Markdown und TXT Dateien anzeigen
-        return file.fileType === 'md' || file.fileType === 'txt';
-      })
-      : allFiles
-  ), [allFiles, showOnlyNotes]);
+  const files = allFiles;
 
   const recentGroups = useMemo(() => groupFilesByRecent(recentFiles), [recentFiles]);
 
   useEffect(() => {
-    // Lade Dateien beim Mount
-    void loadFiles('/', type);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+    if (isLoadingSettings) {
+      return;
+    }
+    const state = useFileStore.getState();
+    const pathToLoad = type === 'private' ? state.privatePath : state.sharedPath;
+    void loadFiles(pathToLoad || '/', type, showOnlyNotes);
+  }, [isLoadingSettings, loadFiles, showOnlyNotes, type]);
 
   useEffect(() => {
     if (isLoadingSettings || sidebarViewMode !== 'recent') {
@@ -136,7 +127,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   }, [isLoadingSettings, refreshRecentFiles, sidebarViewMode]);
 
   const handleFolderClick = (folderPath: string) => {
-    void loadFiles(folderPath, type);
+    void loadFiles(folderPath, type, showOnlyNotes);
   };
 
   const handleTitleClick = () => {
@@ -145,7 +136,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       navigate('/notes');
     }
     // Zurück zum Root
-    void loadFiles('/', type);
+    void loadFiles('/', type, showOnlyNotes);
   };
 
   const openFile = useCallback((file: FileItemType, filePath: string) => {
@@ -236,6 +227,8 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       }));
       if (sidebarViewMode === 'recent') {
         await refreshRecentFiles(newValue);
+      } else {
+        await loadFiles(currentPath, type, newValue);
       }
     } catch (error) {
       console.error('Fehler beim Speichern der Einstellung:', error);
@@ -253,7 +246,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       if (sidebarViewMode === 'recent') {
         await refreshRecentFiles();
       } else {
-        await loadFiles(currentPath, type);
+        await loadFiles(currentPath, type, showOnlyNotes);
       }
     } catch (apiError) {
       console.error('Löschen fehlgeschlagen:', apiError);
@@ -426,19 +419,75 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
         )}
       </div>
       
-      {/* Breadcrumb */}
-      {currentPath !== '/' && (
+      {/* Pfad-Navigation (Ordneransicht) */}
+      {sidebarViewMode === 'folders' && (
         <div style={{
           fontSize: '0.75rem',
           color: '#999',
           marginBottom: '0.5rem',
           padding: '0.25rem 0.5rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.25rem'
+          border: '1px solid var(--border-color)',
+          borderRadius: '8px',
+          backgroundColor: 'var(--bg-tertiary)'
         }}>
-          <span>📂</span>
-          <span>{currentPath}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => void loadFiles('/', type, showOnlyNotes)}
+              style={{
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                padding: '0.2rem 0.45rem',
+                backgroundColor: currentPath === '/' ? 'var(--accent-color)' : 'var(--bg-primary)',
+                color: currentPath === '/' ? '#fff' : 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '0.72rem'
+              }}
+            >
+              Start
+            </button>
+
+            {currentPath !== '/' && (
+              <button
+                type="button"
+                onClick={() => void loadFiles(getParentPath(currentPath), type, showOnlyNotes)}
+                style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  padding: '0.2rem 0.45rem',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem'
+                }}
+              >
+                ↑ Zurück
+              </button>
+            )}
+
+            {currentPath.split('/').filter(Boolean).map((segment, index, allSegments) => {
+              const segmentPath = `/${allSegments.slice(0, index + 1).join('/')}`;
+              const isActive = segmentPath === currentPath;
+              return (
+                <button
+                  key={segmentPath}
+                  type="button"
+                  onClick={() => void loadFiles(segmentPath, type, showOnlyNotes)}
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    padding: '0.2rem 0.45rem',
+                    backgroundColor: isActive ? 'var(--accent-color)' : 'var(--bg-primary)',
+                    color: isActive ? '#fff' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '0.72rem'
+                  }}
+                >
+                  {segment}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -596,9 +645,10 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           sourcePath={moveTarget.path}
           sourceType={type}
           sourceName={moveTarget.file.name}
+          sourceItemType={moveTarget.file.type}
           onClose={() => setMoveTarget(null)}
           onSuccess={() => {
-            void loadFiles(currentPath, type);
+            void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
           }}
         />
@@ -611,9 +661,10 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           sourcePath={copyTarget.path}
           sourceType={type}
           sourceName={copyTarget.file.name}
+          sourceItemType={copyTarget.file.type}
           onClose={() => setCopyTarget(null)}
           onSuccess={() => {
-            void loadFiles(currentPath, type);
+            void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
           }}
         />

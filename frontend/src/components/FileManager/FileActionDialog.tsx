@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useFileStore } from '../../store/fileStore';
+import { fileAPI } from '../../services/api';
+import FolderNavigator from './FolderNavigator';
 
 type FileStorageType = 'private' | 'shared';
 
@@ -9,6 +11,7 @@ interface FileActionDialogProps {
   sourcePath: string;
   sourceType: FileStorageType;
   sourceName: string;
+  sourceItemType?: 'file' | 'folder';
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -56,12 +59,27 @@ function makeCopyName(originalName: string): string {
   return `${originalName} - Kopie`;
 }
 
+function withConflictSuffix(fileName: string, attempt: number, itemType: 'file' | 'folder'): string {
+  if (itemType === 'folder') {
+    return `${fileName} (${attempt})`;
+  }
+
+  const extensionIndex = fileName.lastIndexOf('.');
+  if (extensionIndex > 0) {
+    const base = fileName.slice(0, extensionIndex);
+    const extension = fileName.slice(extensionIndex);
+    return `${base} (${attempt})${extension}`;
+  }
+  return `${fileName} (${attempt})`;
+}
+
 export default function FileActionDialog({
   isOpen,
   mode,
   sourcePath,
   sourceType,
   sourceName,
+  sourceItemType = 'file',
   onClose,
   onSuccess
 }: FileActionDialogProps) {
@@ -107,14 +125,35 @@ export default function FileActionDialog({
       return;
     }
 
-    const destinationPath = buildTargetPath(targetFolder, cleanTargetName);
-    if (mode === 'move' && sourceType === targetType && sourcePath === destinationPath) {
+    const normalizedFolder = normalizeFolderPath(targetFolder);
+    const preliminaryPath = buildTargetPath(normalizedFolder, cleanTargetName);
+    if (mode === 'move' && sourceType === targetType && sourcePath === preliminaryPath) {
       setError('Quelle und Ziel sind identisch');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const listing = await fileAPI.listFiles(normalizedFolder, targetType);
+      const existingNames = new Set(
+        listing.items
+          .filter((item) => item.type === sourceItemType)
+          .map((item) => item.name.toLowerCase())
+      );
+
+      let resolvedName = cleanTargetName;
+      let attempt = 1;
+      while (existingNames.has(resolvedName.toLowerCase())) {
+        resolvedName = withConflictSuffix(cleanTargetName, attempt, sourceItemType);
+        attempt += 1;
+      }
+
+      if (resolvedName !== cleanTargetName) {
+        setTargetName(resolvedName);
+      }
+
+      const destinationPath = buildTargetPath(normalizedFolder, resolvedName);
+
       if (mode === 'move') {
         await moveItem(sourcePath, sourceType, destinationPath, targetType);
       } else {
@@ -122,8 +161,17 @@ export default function FileActionDialog({
       }
       onSuccess?.();
       onClose();
-    } catch (apiError: any) {
-      setError(apiError?.response?.data?.error || apiError?.message || 'Aktion fehlgeschlagen');
+    } catch (apiError: unknown) {
+      let errorMessage = 'Aktion fehlgeschlagen';
+      if (apiError instanceof Error) {
+        errorMessage = apiError.message;
+      } else if (typeof apiError === 'object' && apiError !== null && 'response' in apiError) {
+        const maybeResponse = (apiError as { response?: { data?: { error?: string } } }).response;
+        if (maybeResponse?.data?.error) {
+          errorMessage = maybeResponse.data.error;
+        }
+      }
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -182,7 +230,11 @@ export default function FileActionDialog({
             <select
               id="targetType"
               value={targetType}
-              onChange={(event) => setTargetType(event.target.value as FileStorageType)}
+              onChange={(event) => {
+                const nextType = event.target.value as FileStorageType;
+                setTargetType(nextType);
+                setTargetFolder('/');
+              }}
               disabled={isSubmitting}
               style={{
                 width: '100%',
@@ -196,25 +248,14 @@ export default function FileActionDialog({
             </select>
           </div>
 
-          <div style={{ marginBottom: '0.85rem' }}>
-            <label htmlFor="targetFolder" style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>
-              Zielordner
-            </label>
-            <input
-              id="targetFolder"
-              type="text"
-              value={targetFolder}
-              onChange={(event) => setTargetFolder(event.target.value)}
-              disabled={isSubmitting}
-              placeholder="/"
-              style={{
-                width: '100%',
-                padding: '0.6rem',
-                borderRadius: '6px',
-                border: '1px solid var(--border-color)'
-              }}
-            />
-          </div>
+          <FolderNavigator
+            storageType={targetType}
+            value={targetFolder}
+            onChange={setTargetFolder}
+            disabled={isSubmitting}
+            label="Zielordner"
+            helperText="Ordnerauswahl erfolgt per Navigator statt Freitext."
+          />
 
           <div style={{ marginBottom: '0.85rem' }}>
             <label htmlFor="targetName" style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>

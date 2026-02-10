@@ -17,6 +17,7 @@ export interface FileItem {
 export interface FileListResponse {
   path: string;
   type: 'private' | 'shared';
+  notesOnly?: boolean;
   items: FileItem[];
 }
 
