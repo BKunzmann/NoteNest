@@ -95,17 +95,17 @@ describe('file.service copy/recent', () => {
   it('copyFile and moveFile should resolve name conflicts automatically', async () => {
     await fs.writeFile(path.join(privateDir, 'source.md'), '# source');
     await fs.writeFile(path.join(privateDir, 'target.md'), '# target');
-    await fs.writeFile(path.join(privateDir, 'move-source.md'), '# move source');
-    await fs.writeFile(path.join(privateDir, 'move-target.md'), '# move target');
+    await fs.writeFile(path.join(privateDir, 'move-source.pdf'), 'move source');
+    await fs.writeFile(path.join(privateDir, 'move-target.pdf'), 'move target');
 
     const copiedTo = await copyFile(userId, '/source.md', '/target.md', 'private', 'private');
-    const movedTo = await moveFile(userId, '/move-source.md', '/move-target.md', 'private', 'private');
+    const movedTo = await moveFile(userId, '/move-source.pdf', '/move-target.pdf', 'private', 'private');
 
     expect(copiedTo).toBe('/target (1).md');
-    expect(movedTo).toBe('/move-target (1).md');
+    expect(movedTo).toBe('/move-target (1).pdf');
 
     const copiedContent = await fs.readFile(path.join(privateDir, 'target (1).md'), 'utf-8');
-    const movedContent = await fs.readFile(path.join(privateDir, 'move-target (1).md'), 'utf-8');
+    const movedContent = await fs.readFile(path.join(privateDir, 'move-target (1).pdf'), 'utf-8');
     expect(copiedContent).toContain('source');
     expect(movedContent).toContain('move source');
   });

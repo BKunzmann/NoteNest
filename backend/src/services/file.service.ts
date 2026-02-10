@@ -1309,14 +1309,19 @@ export async function moveFile(
     const toStats = await fs.stat(finalToPath);
     if (!toStats.isDirectory() && isIndexable(finalToRelativePath)) {
       // Entferne alten Eintrag
-      import('./index.service').then(({ removeFromIndex, indexFile }) => {
-        removeFromIndex(userId, from, fromType).catch((error) => {
+      import('./index.service').then(async ({ removeFromIndex, indexFile }) => {
+        try {
+          await removeFromIndex(userId, from, fromType);
+        } catch (error) {
           console.warn(`Failed to remove old index entry after move: ${from}`, error);
-        });
-        // Füge neuen Eintrag hinzu
-        indexFile(userId, finalToRelativePath, toType).catch((error) => {
+        }
+
+        // Füge neuen Eintrag erst nach dem Entfernen hinzu, um FK-Rennen zu vermeiden.
+        try {
+          await indexFile(userId, finalToRelativePath, toType);
+        } catch (error) {
           console.warn(`Failed to index file after move: ${finalToRelativePath}`, error);
-        });
+        }
       });
     }
   } catch (error) {
