@@ -5,7 +5,7 @@
  */
 
 // Versionsnummer (wird automatisch aus package.json gelesen)
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 // Build-Datum (wird beim Build gesetzt)
 export const BUILD_DATE = process.env.BUILD_DATE || new Date().toISOString();

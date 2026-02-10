@@ -55,6 +55,7 @@ export default function BottomToolbar() {
   const [createPath, setCreatePath] = useState<string>('/');
   const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
   const [defaultNotePath, setDefaultNotePath] = useState<string>('/');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +67,7 @@ export default function BottomToolbar() {
         }
         setDefaultNoteType(settings.default_note_type || 'private');
         setDefaultNotePath(normalizeFolderPath(settings.default_note_folder_path || '/'));
+        setSidebarViewMode(settings.sidebar_view_mode || 'recent');
       })
       .catch((error) => {
         console.error('Fehler beim Laden der Standardablage:', error);
@@ -76,7 +78,57 @@ export default function BottomToolbar() {
     };
   }, []);
 
-  const determineContext = (): { type: 'private' | 'shared'; path: string } => {
+  useEffect(() => {
+    const handleSettingsChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        default_note_type?: 'private' | 'shared';
+        default_note_folder_path?: string;
+        sidebar_view_mode?: 'recent' | 'folders';
+      }>;
+      const detail = customEvent.detail;
+      if (!detail) {
+        return;
+      }
+      if (detail.default_note_type) {
+        setDefaultNoteType(detail.default_note_type);
+      }
+      if (detail.default_note_folder_path) {
+        setDefaultNotePath(normalizeFolderPath(detail.default_note_folder_path));
+      }
+      if (detail.sidebar_view_mode) {
+        setSidebarViewMode(detail.sidebar_view_mode);
+      }
+    };
+
+    window.addEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
+    return () => {
+      window.removeEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
+    };
+  }, []);
+
+  const resolveCreateContext = async (): Promise<{ type: 'private' | 'shared'; path: string }> => {
+    try {
+      const freshSettings = await settingsAPI.getSettings();
+      const effectiveSidebarMode = freshSettings.sidebar_view_mode || sidebarViewMode;
+      const effectiveDefaultType = freshSettings.default_note_type || defaultNoteType;
+      const effectiveDefaultPath = normalizeFolderPath(freshSettings.default_note_folder_path || defaultNotePath);
+
+      setDefaultNoteType(effectiveDefaultType);
+      setDefaultNotePath(effectiveDefaultPath);
+      setSidebarViewMode(effectiveSidebarMode);
+
+      if (effectiveSidebarMode === 'recent') {
+        return { type: effectiveDefaultType, path: effectiveDefaultPath };
+      }
+    } catch (error) {
+      // Fallback auf lokal bekannten Zustand
+      console.warn('Konnte aktuelle Einstellungen nicht laden, nutze lokalen Zustand', error);
+      if (sidebarViewMode === 'recent') {
+        return { type: defaultNoteType, path: defaultNotePath };
+      }
+    }
+
+    // Ordner-Ansicht: nutze den aktuell geöffneten Ordner
     if (selectedType && selectedPath) {
       if (selectedFile?.type === 'folder') {
         return { type: selectedType, path: normalizeFolderPath(selectedPath) };
@@ -84,26 +136,20 @@ export default function BottomToolbar() {
       return { type: selectedType, path: getParentPath(selectedPath) };
     }
 
-    if (selectedType === 'private') {
-      return { type: 'private', path: normalizeFolderPath(privatePath) };
-    }
-
-    if (selectedType === 'shared') {
-      return { type: 'shared', path: normalizeFolderPath(sharedPath) };
-    }
-
-    return { type: defaultNoteType, path: defaultNotePath };
+    const fallbackType = selectedType || defaultNoteType;
+    const fallbackPath = fallbackType === 'private' ? privatePath : sharedPath;
+    return { type: fallbackType, path: normalizeFolderPath(fallbackPath || '/') };
   };
 
-  const handleCreateFile = () => {
-    const context = determineContext();
+  const handleCreateFile = async () => {
+    const context = await resolveCreateContext();
     setCreateType(context.type);
     setCreatePath(context.path);
     setShowCreateFile(true);
   };
 
-  const handleCreateFolder = () => {
-    const context = determineContext();
+  const handleCreateFolder = async () => {
+    const context = await resolveCreateContext();
     setCreateType(context.type);
     setCreatePath(context.path);
     setShowCreateFolder(true);
@@ -327,7 +373,7 @@ export default function BottomToolbar() {
         boxShadow: '0 -1px 3px rgba(0,0,0,0.1)'
       }}>
         <button
-          onClick={handleCreateFolder}
+          onClick={() => void handleCreateFolder()}
           style={{
             background: 'none',
             border: 'none',
@@ -350,7 +396,7 @@ export default function BottomToolbar() {
         </button>
 
         <button
-          onClick={handleCreateFile}
+          onClick={() => void handleCreateFile()}
           style={{
             background: 'none',
             border: 'none',

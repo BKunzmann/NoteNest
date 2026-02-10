@@ -136,6 +136,51 @@ function normalizeRelativeFolderPath(inputPath: string): string {
   return normalized;
 }
 
+function normalizeAbsolutePath(inputPath: string): string {
+  return path.resolve(inputPath).replace(/\\/g, '/');
+}
+
+function getPrivatePathCandidates(userId: number, username: string): Array<{ path: string; label: string }> {
+  const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
+  const defaultUsersPath = process.env.NODE_ENV === 'production'
+    ? '/data/users'
+    : '/app/data/users';
+
+  return [
+    { path: path.join(nasHomesPath, username), label: 'NAS Home-Verzeichnis' },
+    { path: path.join(defaultUsersPath, username), label: 'Standard-Benutzerordner (Username)' },
+    { path: path.join(defaultUsersPath, String(userId)), label: 'Standard-Benutzerordner (User-ID)' }
+  ].map((option) => ({
+    path: normalizeAbsolutePath(option.path),
+    label: option.label
+  }));
+}
+
+function getSharedPathCandidates(userId: number): Array<{ path: string; label: string }> {
+  const sharedBase = process.env.NAS_SHARED_PATH || (
+    process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
+  );
+
+  const options: Array<{ path: string; label: string }> = [
+    { path: normalizeAbsolutePath(sharedBase), label: 'Shared-Basisordner' }
+  ];
+
+  if (IS_NAS_MODE) {
+    const userSharedFolders = db.prepare(`
+      SELECT folder_path FROM user_shared_folders WHERE user_id = ?
+    `).all(userId) as { folder_path: string }[];
+
+    for (const folder of userSharedFolders) {
+      options.push({
+        path: normalizeAbsolutePath(path.join(sharedBase, folder.folder_path)),
+        label: `Freigegebener NAS-Ordner (${folder.folder_path})`
+      });
+    }
+  }
+
+  return options;
+}
+
 /**
  * GET /api/settings
  * Gibt aktuelle Benutzer-Einstellungen zurück
@@ -158,6 +203,52 @@ export async function getSettings(req: Request, res: Response): Promise<void> {
   } catch (error: any) {
     console.error('Get settings error:', error);
     res.status(500).json({ error: 'Failed to get settings' });
+  }
+}
+
+/**
+ * GET /api/settings/path-options
+ * Liefert sichere Pfadoptionen für Dropdown-Auswahl in den Einstellungen.
+ */
+export async function getSettingsPathOptions(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const settings = getUserSettings(req.user.id);
+    const privateCandidates = getPrivatePathCandidates(req.user.id, req.user.username);
+    const sharedCandidates = getSharedPathCandidates(req.user.id);
+
+    const dedupe = (items: Array<{ path: string; label: string }>) => {
+      const unique = new Map<string, { path: string; label: string }>();
+      for (const item of items) {
+        if (!unique.has(item.path)) {
+          unique.set(item.path, item);
+        }
+      }
+      return Array.from(unique.values());
+    };
+
+    const privatePaths = dedupe([
+      ...(settings?.private_folder_path
+        ? [{ path: normalizeAbsolutePath(settings.private_folder_path), label: 'Aktuell konfiguriert' }]
+        : []),
+      ...privateCandidates
+    ]);
+
+    const sharedPaths = dedupe([
+      ...(settings?.shared_folder_path
+        ? [{ path: normalizeAbsolutePath(settings.shared_folder_path), label: 'Aktuell konfiguriert' }]
+        : []),
+      ...sharedCandidates
+    ]);
+
+    res.json({ privatePaths, sharedPaths });
+  } catch (error: any) {
+    console.error('Get settings path options error:', error);
+    res.status(500).json({ error: error.message || 'Failed to get settings path options' });
   }
 }
 

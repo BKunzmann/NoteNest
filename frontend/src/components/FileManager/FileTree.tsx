@@ -50,7 +50,9 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     deleteItem,
     isLoading,
     privateError,
-    sharedError
+    sharedError,
+    selectedPath,
+    selectedType
   } = useFileStore();
   
   const [showOnlyNotes, setShowOnlyNotes] = useState(false);
@@ -89,11 +91,12 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     loadSettings();
   }, []);
 
-  const refreshRecentFiles = useCallback(async () => {
+  const refreshRecentFiles = useCallback(async (notesOnlyOverride?: boolean) => {
     setIsLoadingRecent(true);
     setRecentError(null);
     try {
-      const response = await fileAPI.listRecentFiles(type, showOnlyNotes, 300);
+      const effectiveNotesOnly = notesOnlyOverride ?? showOnlyNotes;
+      const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 300);
       setRecentFiles(response.items);
     } catch (apiError: any) {
       setRecentError(apiError?.response?.data?.error || 'Fehler beim Laden der zuletzt bearbeiteten Notizen');
@@ -209,6 +212,9 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     setSidebarViewMode(newMode);
     try {
       await settingsAPI.updateSettings({ sidebar_view_mode: newMode });
+      window.dispatchEvent(new CustomEvent('notenest:settings-changed', {
+        detail: { sidebar_view_mode: newMode }
+      }));
       if (newMode === 'recent') {
         await refreshRecentFiles();
       }
@@ -225,8 +231,11 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     
     try {
       await settingsAPI.updateSettings({ show_only_notes: newValue });
+      window.dispatchEvent(new CustomEvent('notenest:settings-changed', {
+        detail: { show_only_notes: newValue }
+      }));
       if (sidebarViewMode === 'recent') {
-        await refreshRecentFiles();
+        await refreshRecentFiles(newValue);
       }
     } catch (error) {
       console.error('Fehler beim Speichern der Einstellung:', error);
@@ -487,45 +496,49 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
                     border: '1px solid var(--border-color)',
                     backgroundColor: 'var(--bg-tertiary)'
                   }}>
-                    {group.items.map((file, index) => (
-                      <div
-                        key={`${file.path}-${group.key}`}
-                        onClick={() => handleRecentClick(file)}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          openContextMenu(file, file.path, event.clientX, event.clientY);
-                        }}
-                        onTouchStart={(event) => handleRecentTouchStart(event, file)}
-                        onTouchEnd={clearRecentLongPress}
-                        onTouchMove={clearRecentLongPress}
-                        onTouchCancel={clearRecentLongPress}
-                        style={{
-                          padding: '0.65rem 0.8rem',
-                          borderBottom: index < group.items.length - 1 ? '1px solid var(--border-color)' : 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <div style={{
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          marginBottom: '0.15rem',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {file.name}
+                    {group.items.map((file, index) => {
+                      const isSelected = selectedType === type && selectedPath === file.path;
+                      return (
+                        <div
+                          key={`${file.path}-${group.key}`}
+                          onClick={() => handleRecentClick(file)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            openContextMenu(file, file.path, event.clientX, event.clientY);
+                          }}
+                          onTouchStart={(event) => handleRecentTouchStart(event, file)}
+                          onTouchEnd={clearRecentLongPress}
+                          onTouchMove={clearRecentLongPress}
+                          onTouchCancel={clearRecentLongPress}
+                          style={{
+                            padding: '0.65rem 0.8rem',
+                            borderBottom: index < group.items.length - 1 ? '1px solid var(--border-color)' : 'none',
+                            cursor: 'pointer',
+                            backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent'
+                          }}
+                        >
+                          <div style={{
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            marginBottom: '0.15rem',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {file.name}
+                          </div>
+                          <div style={{
+                            fontSize: '0.78rem',
+                            color: 'var(--text-secondary)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {formatRecentDate(file.lastModified)} · {getParentPath(file.path)}
+                          </div>
                         </div>
-                        <div style={{
-                          fontSize: '0.78rem',
-                          color: 'var(--text-secondary)',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {formatRecentDate(file.lastModified)} · {getParentPath(file.path)}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               ))}

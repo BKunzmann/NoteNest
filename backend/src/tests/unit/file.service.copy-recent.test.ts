@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import db, { initializeDatabase } from '../../config/database';
-import { copyFile, listRecentFiles } from '../../services/file.service';
+import { copyFile, listDirectory, listRecentFiles } from '../../services/file.service';
 
 describe('file.service copy/recent', () => {
   let userId: number;
@@ -64,6 +64,10 @@ describe('file.service copy/recent', () => {
     await fs.utimes(oldFile, twoDaysAgo, twoDaysAgo);
     await fs.utimes(newFile, now, now);
     await fs.utimes(pdfFile, yesterday, yesterday);
+
+    // Befülle file_metadata über reguläre List-Operationen
+    await listDirectory(userId, '/', 'private');
+    await listDirectory(userId, '/sermons', 'private');
 
     const notesOnly = await listRecentFiles(userId, 'private', { notesOnly: true, limit: 10 });
     const allFiles = await listRecentFiles(userId, 'private', { notesOnly: false, limit: 10 });
