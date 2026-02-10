@@ -193,8 +193,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   /**
    * Automatisches Speichern (im Hintergrund)
-   * Speichert die Datei, aktualisiert aber originalContent NICHT
-   * Dadurch funktioniert Undo/Redo weiterhin korrekt
+   * Speichert die Datei im Hintergrund und aktualisiert originalContent,
+   * damit der gespeicherte Stand als neuer Referenzpunkt gilt.
    */
   autoSaveFile: async (filePath: string, type: 'private' | 'shared') => {
     // Setze isSaving nicht, damit kein visuelles Feedback erscheint
@@ -210,12 +210,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             type
           });
           
-          // Cache aktualisieren, aber originalContent NICHT ändern
+          // Cache aktualisieren
           if (isIndexedDBAvailable()) {
             await cacheNote(filePath, type, content);
           }
-          
-          // Keine State-Änderung, damit Undo/Redo weiterhin funktioniert
+
+          // Setze gespeicherten Stand als neue Referenz
+          set({
+            originalContent: content,
+            isDirty: false
+          });
           return;
         } catch (error: any) {
           // API-Fehler: Speichere lokal und füge zur Sync-Queue hinzu
@@ -231,7 +235,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         // Zur Sync-Queue hinzufügen
         await addPendingChange(filePath, type, 'update', content);
         
-        // originalContent NICHT aktualisieren, damit Undo/Redo weiterhin funktioniert
+        set({
+          originalContent: content,
+          isDirty: false
+        });
         return;
       }
       

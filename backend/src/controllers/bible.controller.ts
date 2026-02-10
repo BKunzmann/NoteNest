@@ -29,11 +29,9 @@ export async function getVerse(req: Request, res: Response): Promise<void> {
     const decodedReference = decodeURIComponent(reference);
     console.log('Decoded reference:', decodedReference);
     
-    // Verwende Standard-Übersetzung, falls nicht angegeben
+    // Verwende angegebene Übersetzung, ansonsten User-Default oder Fallback
     let finalTranslation = (translation as string) || 'LUT';
-    
-    // Falls User eingeloggt ist, verwende seine Standard-Übersetzung
-    if (req.user) {
+    if (!translation && req.user) {
       try {
         const settings = getUserSettings(req.user.id);
         if (settings?.default_bible_translation) {
@@ -97,11 +95,9 @@ export async function getChapter(req: Request, res: Response): Promise<void> {
       return;
     }
     
-    // Verwende Standard-Übersetzung, falls nicht angegeben
+    // Verwende angegebene Übersetzung, ansonsten User-Default oder Fallback
     let finalTranslation = (translation as string) || 'LUT';
-    
-    // Falls User eingeloggt ist, verwende seine Standard-Übersetzung
-    if (req.user) {
+    if (!translation && req.user) {
       try {
         const settings = getUserSettings(req.user.id);
         if (settings?.default_bible_translation) {

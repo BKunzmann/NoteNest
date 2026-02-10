@@ -1,3 +1,5 @@
+import { useEffect, useState, type CSSProperties } from 'react';
+
 /**
  * Editor Toolbar Komponente
  * 
@@ -29,20 +31,29 @@ export default function EditorToolbar({
   canUndo,
   canRedo
 }: EditorToolbarProps) {
-  const buttonStyle: React.CSSProperties = {
-    padding: '0.5rem 1rem',
+  const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const buttonStyle: CSSProperties = {
+    padding: isMobile ? '0.4rem 0.5rem' : '0.5rem 1rem',
     border: '1px solid var(--border-color)',
     borderRadius: '4px',
     backgroundColor: 'var(--bg-secondary)',
     color: 'var(--text-primary)',
     cursor: 'pointer',
-    fontSize: '0.875rem',
-    marginRight: '0.5rem',
+    fontSize: isMobile ? '0.78rem' : '0.875rem',
+    marginRight: isMobile ? '0.25rem' : '0.5rem',
     minHeight: '44px',
-    minWidth: '44px'
+    minWidth: isMobile ? '40px' : '44px',
+    flexShrink: 0
   };
 
-  const activeButtonStyle: React.CSSProperties = {
+  const activeButtonStyle: CSSProperties = {
     ...buttonStyle,
     backgroundColor: 'var(--accent-color)',
     color: 'white',
@@ -51,48 +62,49 @@ export default function EditorToolbar({
 
   return (
     <div style={{
-      padding: '0.75rem 1rem',
+      padding: isMobile ? '0.45rem 0.55rem' : '0.75rem 1rem',
       borderBottom: '1px solid var(--border-color)',
       backgroundColor: 'var(--bg-secondary)',
       display: 'flex',
       alignItems: 'center',
       gap: '0.5rem',
-      flexWrap: 'wrap'
+      flexWrap: isMobile ? 'nowrap' : 'wrap',
+      overflowX: isMobile ? 'auto' : 'visible'
     }}>
       {/* View Mode Buttons */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginRight: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0 }}>
         <button
           onClick={() => onViewModeChange('edit')}
           style={viewMode === 'edit' ? activeButtonStyle : buttonStyle}
           title="Nur Editor"
         >
-          ✏️ Editor
+          {isMobile ? '✏️' : '✏️ Editor'}
         </button>
         <button
           onClick={() => onViewModeChange('split')}
           style={viewMode === 'split' ? activeButtonStyle : buttonStyle}
           title="Editor + Vorschau"
         >
-          ⚡ Split
+          {isMobile ? '⚡' : '⚡ Split'}
         </button>
         <button
           onClick={() => onViewModeChange('preview')}
           style={viewMode === 'preview' ? activeButtonStyle : buttonStyle}
           title="Nur Vorschau"
         >
-          👁️ Vorschau
+          {isMobile ? '👁️' : '👁️ Vorschau'}
         </button>
         <button
           onClick={() => onViewModeChange('wysiwyg')}
           style={viewMode === 'wysiwyg' ? activeButtonStyle : buttonStyle}
           title="Bearbeitbare Vorschau (WYSIWYG)"
         >
-          ✍️ WYSIWYG
+          {isMobile ? '✍️' : '✍️ WYSIWYG'}
         </button>
       </div>
 
       {/* Undo/Redo Buttons */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginRight: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0 }}>
         <button
           onClick={onUndo}
           disabled={!canUndo}
@@ -164,7 +176,7 @@ export default function EditorToolbar({
       </div>
 
       {/* Format Buttons */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginRight: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0 }}>
         {viewMode === 'wysiwyg' ? (
           <>
             <button
@@ -249,7 +261,7 @@ export default function EditorToolbar({
               style={buttonStyle}
               title="Zitat"
             >
-              "
+              &quot;
             </button>
           </>
         ) : (
@@ -294,14 +306,14 @@ export default function EditorToolbar({
               style={buttonStyle}
               title="Zitat"
             >
-              "
+              &quot;
             </button>
           </>
         )}
       </div>
 
       {/* Save Button */}
-      <div style={{ marginLeft: 'auto' }}>
+      <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
         <button
           onClick={onSave}
           disabled={!isDirty || isSaving}
@@ -314,7 +326,9 @@ export default function EditorToolbar({
           }}
           title={isDirty ? 'Speichern (Ctrl+S)' : 'Keine Änderungen'}
         >
-          {isDirty ? '💾 Speichern' : '✓ Gespeichert'}
+          {isMobile
+            ? (isDirty ? '💾' : '✓')
+            : (isDirty ? '💾 Speichern' : '✓ Gespeichert')}
         </button>
       </div>
     </div>

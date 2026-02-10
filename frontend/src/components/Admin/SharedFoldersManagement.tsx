@@ -195,7 +195,7 @@ export default function SharedFoldersManagement() {
                   }}
                 >
                   <div style={{ fontWeight: '500' }}>{user.username}</div>
-                  {user.is_admin && (
+                  {Boolean(user.is_admin) && (
                     <span style={{
                       fontSize: '0.75rem',
                       padding: '0.125rem 0.5rem',

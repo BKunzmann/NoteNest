@@ -5,7 +5,9 @@
  * Verwendet den Index für schnelle Suchen
  */
 
-import { searchIndex } from './index.service';
+import fs from 'fs/promises';
+import { removeFromIndex, searchIndex } from './index.service';
+import { resolveUserPath } from './file.service';
 
 export interface SearchResult {
   path: string;
@@ -47,8 +49,26 @@ export async function searchNotes(
     // Suche im Index (synchron, sehr schnell)
     const indexResults = searchIndex(userId, trimmedTerm, folderType, 2);
     
+    const validResults: typeof indexResults = [];
+    for (const result of indexResults) {
+      try {
+        const absolutePath = resolveUserPath(userId, result.path, result.type);
+        const stats = await fs.stat(absolutePath);
+        if (!stats.isFile()) {
+          await removeFromIndex(userId, result.path, result.type);
+          continue;
+        }
+        validResults.push(result);
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          await removeFromIndex(userId, result.path, result.type);
+          continue;
+        }
+      }
+    }
+
     // Konvertiere Index-Ergebnisse zu SearchResult-Format
-    const results: SearchResult[] = indexResults.map(result => ({
+    const results: SearchResult[] = validResults.map(result => ({
       path: result.path,
       type: result.type,
       name: result.name,

@@ -28,6 +28,13 @@ const INDEXABLE_EXTENSIONS = [
   '.txt'
 ];
 
+const NOTE_FILE_TYPES = new Set(['md', 'txt']);
+const METADATA_REFRESH_INTERVAL_MS = 2 * 60 * 1000; // 2 Minuten
+const METADATA_REFRESH_MAX_DURATION_MS = 15 * 1000; // 15 Sekunden
+const METADATA_REFRESH_MAX_FILES = 20000;
+const metadataRefreshInFlight = new Set<string>();
+const metadataLastRefresh = new Map<string, number>();
+
 /**
  * Prüft, ob eine Datei indexierbar ist
  */
@@ -105,6 +112,88 @@ function normalizeRelativePath(relativePath: string): string {
   }
   normalized = normalized.replace(/\/+/g, '/');
   return normalized;
+}
+
+function isNoteFileByName(fileName: string): boolean {
+  const fileType = getFileType(fileName);
+  return fileType.isEditable && NOTE_FILE_TYPES.has(fileType.type);
+}
+
+function splitFileNameForConflict(fileName: string, isDirectory: boolean): { base: string; extension: string } {
+  if (isDirectory) {
+    return { base: fileName, extension: '' };
+  }
+
+  const ext = path.extname(fileName);
+  if (!ext) {
+    return { base: fileName, extension: '' };
+  }
+
+  return {
+    base: fileName.slice(0, -ext.length),
+    extension: ext
+  };
+}
+
+function buildConflictName(fileName: string, isDirectory: boolean, attempt: number): string {
+  const { base, extension } = splitFileNameForConflict(fileName, isDirectory);
+  return `${base} (${attempt})${extension}`;
+}
+
+async function findAvailableDestinationPath(
+  destinationPath: string,
+  isDirectory: boolean
+): Promise<string> {
+  try {
+    await fs.access(destinationPath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      return destinationPath;
+    }
+    throw error;
+  }
+
+  const destinationDir = path.dirname(destinationPath);
+  const destinationName = path.basename(destinationPath);
+
+  for (let attempt = 1; attempt <= 9999; attempt++) {
+    const candidateName = buildConflictName(destinationName, isDirectory, attempt);
+    const candidatePath = path.join(destinationDir, candidateName);
+    try {
+      await fs.access(candidatePath);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return candidatePath;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error('Could not resolve destination name conflict');
+}
+
+function toRelativePathFromAbsolute(
+  userId: number,
+  absolutePath: string,
+  type: 'private' | 'shared'
+): string {
+  const rootPath = resolveUserPath(userId, '/', type);
+  const relative = path.relative(rootPath, absolutePath);
+  return normalizeRelativePath(relative);
+}
+
+function removeStaleEntriesFromIndexes(
+  userId: number,
+  relativePath: string,
+  type: 'private' | 'shared'
+): void {
+  removeFileMetadata(userId, relativePath, type);
+  db.prepare(`
+    DELETE FROM search_index
+    WHERE user_id = ?
+      AND file_path = ?
+      AND file_type = ?
+  `).run(userId, normalizeRelativePath(relativePath), type);
 }
 
 function getMetadataPathKey(type: 'private' | 'shared', relativePath: string): string {
@@ -487,14 +576,146 @@ export function isPathInHiddenFolder(filePath: string): boolean {
   return false;
 }
 
+async function directoryContainsNotes(absoluteDir: string, depth: number = 0): Promise<boolean> {
+  if (depth > 20) {
+    return false;
+  }
+
+  let entries: fsSync.Dirent[];
+  try {
+    entries = await fs.readdir(absoluteDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  for (const entry of entries) {
+    const absoluteEntryPath = path.join(absoluteDir, entry.name);
+    if (entry.isDirectory()) {
+      if (shouldHideFolder(entry.name)) {
+        continue;
+      }
+      const containsNotes = await directoryContainsNotes(absoluteEntryPath, depth + 1);
+      if (containsNotes) {
+        return true;
+      }
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    if (isNoteFileByName(entry.name)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function refreshFileMetadataIndex(
+  userId: number,
+  type: 'private' | 'shared'
+): Promise<void> {
+  const refreshStart = Date.now();
+  let scannedFiles = 0;
+  const rootPath = resolveUserPath(userId, '/', type);
+
+  const walk = async (absoluteDir: string, depth: number = 0): Promise<void> => {
+    if (depth > 20) {
+      return;
+    }
+    if (Date.now() - refreshStart > METADATA_REFRESH_MAX_DURATION_MS) {
+      return;
+    }
+    if (scannedFiles >= METADATA_REFRESH_MAX_FILES) {
+      return;
+    }
+
+    let entries: fsSync.Dirent[];
+    try {
+      entries = await fs.readdir(absoluteDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (Date.now() - refreshStart > METADATA_REFRESH_MAX_DURATION_MS) {
+        return;
+      }
+      if (scannedFiles >= METADATA_REFRESH_MAX_FILES) {
+        return;
+      }
+
+      const absoluteEntryPath = path.join(absoluteDir, entry.name);
+      const relativeEntryPath = normalizeRelativePath(path.relative(rootPath, absoluteEntryPath));
+
+      if (entry.isDirectory()) {
+        if (shouldHideFolder(entry.name) || isPathInHiddenFolder(relativeEntryPath)) {
+          continue;
+        }
+        await walk(absoluteEntryPath, depth + 1);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+      if (isPathInHiddenFolder(relativeEntryPath)) {
+        continue;
+      }
+
+      scannedFiles++;
+      try {
+        const stats = await fs.stat(absoluteEntryPath);
+        upsertFileMetadata(userId, relativeEntryPath, type, stats.size, stats.mtime.toISOString());
+      } catch {
+        continue;
+      }
+    }
+  };
+
+  await walk(rootPath, 0);
+}
+
+function scheduleFileMetadataRefresh(
+  userId: number,
+  type: 'private' | 'shared',
+  force: boolean = false
+): void {
+  const key = `${userId}:${type}`;
+  if (metadataRefreshInFlight.has(key)) {
+    return;
+  }
+
+  const now = Date.now();
+  const lastRefresh = metadataLastRefresh.get(key) ?? 0;
+  if (!force && now - lastRefresh < METADATA_REFRESH_INTERVAL_MS) {
+    return;
+  }
+
+  metadataRefreshInFlight.add(key);
+  metadataLastRefresh.set(key, now);
+
+  refreshFileMetadataIndex(userId, type)
+    .catch((error) => {
+      console.warn(`Metadata refresh failed for ${key}:`, error);
+    })
+    .finally(() => {
+      metadataRefreshInFlight.delete(key);
+    });
+}
+
 /**
  * Listet Verzeichnis-Inhalt auf
  */
 export async function listDirectory(
   userId: number,
   dirPath: string,
-  type: 'private' | 'shared'
+  type: 'private' | 'shared',
+  options?: { notesOnly?: boolean }
 ): Promise<FileItem[]> {
+  const notesOnly = options?.notesOnly ?? false;
   const fullPath = resolveUserPath(userId, dirPath, type);
   
   // Prüfe, ob Verzeichnis existiert
@@ -547,6 +768,20 @@ export async function listDirectory(
       }
       // Entferne doppelte Slashes
       normalizedRelativePath = normalizedRelativePath.replace(/\/+/g, '/');
+
+      if (notesOnly) {
+        if (entry.isFile()) {
+          const isNote = fileType?.isEditable && NOTE_FILE_TYPES.has(fileType.type);
+          if (!isNote) {
+            continue;
+          }
+        } else if (entry.isDirectory()) {
+          const hasNotes = await directoryContainsNotes(entryPath);
+          if (!hasNotes) {
+            continue;
+          }
+        }
+      }
       
       items.push({
         name: entry.name,
@@ -599,120 +834,164 @@ export async function listRecentFiles(
   const limit = Math.max(1, Math.min(options?.limit ?? 200, 1000));
   const metadataLikePattern = `${type}:%`;
 
+  const candidateLimit = Math.max(limit * 5, 500);
   const metadataRows = db.prepare(`
     SELECT file_path, file_name, file_size, last_modified
     FROM file_metadata
     WHERE user_id = ?
-      AND file_path LIKE ?
+      AND (file_path LIKE ? OR file_path LIKE '/%')
       AND last_modified IS NOT NULL
     ORDER BY datetime(last_modified) DESC
     LIMIT ?
-  `).all(userId, metadataLikePattern, Math.max(limit * 3, 300)) as Array<{
+  `).all(userId, metadataLikePattern, candidateLimit) as Array<{
     file_path: string;
     file_name: string;
     file_size: number | null;
     last_modified: string;
   }>;
 
-  const mergedByPath = new Map<string, FileItem>();
+  const searchIndexRows = db.prepare(`
+    SELECT file_path, file_name, file_size, last_modified
+    FROM search_index
+    WHERE user_id = ?
+      AND file_type = ?
+      AND last_modified IS NOT NULL
+    ORDER BY datetime(last_modified) DESC
+    LIMIT ?
+  `).all(userId, type, candidateLimit) as Array<{
+    file_path: string;
+    file_name: string;
+    file_size: number;
+    last_modified: string;
+  }>;
+
+  interface RecentCandidate {
+    path: string;
+    name: string;
+    size?: number;
+    lastModified: string;
+  }
+
+  const candidatesByPath = new Map<string, RecentCandidate>();
 
   for (const row of metadataRows) {
     const parsed = parseMetadataPathKey(row.file_path);
     if (parsed.type !== null && parsed.type !== type) {
       continue;
     }
-
     const relativePath = parsed.path;
     if (isPathInHiddenFolder(relativePath)) {
       continue;
     }
+    candidatesByPath.set(relativePath, {
+      path: relativePath,
+      name: row.file_name || path.basename(relativePath),
+      size: row.file_size ?? undefined,
+      lastModified: row.last_modified
+    });
+  }
 
-    const fileType = getFileType(row.file_name);
-    const isNote = fileType.isEditable && (fileType.type === 'md' || fileType.type === 'txt');
+  for (const row of searchIndexRows) {
+    const normalizedPath = normalizeRelativePath(row.file_path);
+    if (isPathInHiddenFolder(normalizedPath)) {
+      continue;
+    }
+
+    const existing = candidatesByPath.get(normalizedPath);
+    const rowTime = Date.parse(row.last_modified);
+    const existingTime = existing?.lastModified ? Date.parse(existing.lastModified) : 0;
+    if (!existing || rowTime > existingTime) {
+      candidatesByPath.set(normalizedPath, {
+        path: normalizedPath,
+        name: row.file_name || path.basename(normalizedPath),
+        size: row.file_size,
+        lastModified: row.last_modified
+      });
+    }
+  }
+
+  const sortedCandidates = Array.from(candidatesByPath.values()).sort((a, b) => {
+    const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
+    const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
+    return bTime - aTime;
+  });
+
+  const files: FileItem[] = [];
+  const stalePaths: string[] = [];
+
+  for (const candidate of sortedCandidates) {
+    if (files.length >= limit) {
+      break;
+    }
+
+    const fileType = getFileType(candidate.name || path.basename(candidate.path));
+    const isNote = fileType.isEditable && NOTE_FILE_TYPES.has(fileType.type);
     if (notesOnly && !isNote) {
       continue;
     }
 
-    mergedByPath.set(relativePath, {
-      name: row.file_name,
-      path: relativePath,
-      type: 'file',
-      size: row.file_size ?? undefined,
-      lastModified: row.last_modified,
-      fileType: fileType.type,
-      isEditable: fileType.isEditable
-    });
-
-    if (mergedByPath.size >= limit) {
-      break;
+    if (isPathInHiddenFolder(candidate.path)) {
+      continue;
     }
-  }
 
-  // Fallback: ergänze aus search_index, falls noch zu wenig Treffer vorhanden sind
-  if (mergedByPath.size < limit) {
-    const searchIndexRows = db.prepare(`
-      SELECT file_path, file_name, file_extension, file_size, last_modified
-      FROM search_index
-      WHERE user_id = ?
-        AND file_type = ?
-      ORDER BY datetime(last_modified) DESC
-      LIMIT ?
-    `).all(userId, type, Math.max(limit * 3, 300)) as Array<{
-      file_path: string;
-      file_name: string;
-      file_extension: string;
-      file_size: number;
-      last_modified: string;
-    }>;
-
-    for (const row of searchIndexRows) {
-      const normalizedPath = normalizeRelativePath(row.file_path);
-      if (isPathInHiddenFolder(normalizedPath)) {
-        continue;
-      }
-      if (mergedByPath.has(normalizedPath)) {
+    try {
+      const absolutePath = resolveUserPath(userId, candidate.path, type);
+      const stats = await fs.stat(absolutePath);
+      if (!stats.isFile()) {
+        stalePaths.push(candidate.path);
         continue;
       }
 
-      const fileType = getFileType(row.file_name);
-      const isNote = fileType.isEditable && (fileType.type === 'md' || fileType.type === 'txt');
-      if (notesOnly && !isNote) {
+      const normalizedPath = normalizeRelativePath(candidate.path);
+      const finalName = path.basename(normalizedPath);
+      const finalType = getFileType(finalName);
+      const finalIsNote = finalType.isEditable && NOTE_FILE_TYPES.has(finalType.type);
+      if (notesOnly && !finalIsNote) {
         continue;
       }
 
-      mergedByPath.set(normalizedPath, {
-        name: row.file_name,
+      const lastModifiedIso = stats.mtime.toISOString();
+      upsertFileMetadata(userId, normalizedPath, type, stats.size, lastModifiedIso);
+
+      files.push({
+        name: finalName,
         path: normalizedPath,
         type: 'file',
-        size: row.file_size,
-        lastModified: row.last_modified,
-        fileType: fileType.type,
-        isEditable: fileType.isEditable
+        size: stats.size,
+        lastModified: lastModifiedIso,
+        fileType: finalType.type,
+        isEditable: finalType.isEditable
       });
-
-      // Backfill file_metadata für künftige schnelle Aufrufe
-      upsertFileMetadata(
-        userId,
-        normalizedPath,
-        type,
-        row.file_size,
-        row.last_modified
-      );
-
-      if (mergedByPath.size >= limit) {
-        break;
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        stalePaths.push(candidate.path);
+        continue;
       }
+      continue;
     }
   }
 
-  const files = Array.from(mergedByPath.values());
+  if (stalePaths.length > 0) {
+    for (const stalePath of stalePaths) {
+      removeStaleEntriesFromIndexes(userId, stalePath, type);
+    }
+  }
+
+  // Triggere bei Bedarf einen asynchronen Metadata-Refresh:
+  // - wenn nicht genug Treffer gefunden wurden
+  // - oder wenn noch keine/kaum Metadata-Einträge vorhanden sind
+  const shouldRefreshMetadata = files.length < limit || metadataRows.length < Math.min(limit, 50);
+  if (!notesOnly && shouldRefreshMetadata) {
+    scheduleFileMetadataRefresh(userId, type, metadataRows.length === 0);
+  }
+
   files.sort((a, b) => {
     const aTime = a.lastModified ? Date.parse(a.lastModified) : 0;
     const bTime = b.lastModified ? Date.parse(b.lastModified) : 0;
     return bTime - aTime;
   });
 
-  return files.slice(0, limit);
+  return files;
 }
 
 /**
@@ -978,33 +1257,27 @@ export async function moveFile(
   to: string,
   fromType: 'private' | 'shared',
   toType: 'private' | 'shared'
-): Promise<void> {
+): Promise<string> {
   const fromPath = resolveUserPath(userId, from, fromType);
-  const toPath = resolveUserPath(userId, to, toType);
+  const requestedToPath = resolveUserPath(userId, to, toType);
   
   // Prüfe, ob Quelle existiert
+  let sourceStats: fsSync.Stats;
   try {
-    await fs.access(fromPath);
+    sourceStats = await fs.stat(fromPath);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
       throw new Error('Source file or folder not found');
     }
     throw error;
   }
-  
-  // Prüfe, ob Ziel bereits existiert
-  try {
-    await fs.access(toPath);
-    throw new Error('Destination already exists');
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-      throw error;
-    }
-  }
+
+  const finalToPath = await findAvailableDestinationPath(requestedToPath, sourceStats.isDirectory());
+  const finalToRelativePath = toRelativePathFromAbsolute(userId, finalToPath, toType);
   
   // Prüfe Berechtigungen
   const canWriteFrom = await checkPermissions(fromPath, 'write');
-  const canWriteTo = await checkPermissions(path.dirname(toPath), 'write');
+  const canWriteTo = await checkPermissions(path.dirname(finalToPath), 'write');
   
   if (!canWriteFrom || !canWriteTo) {
     throw new Error('No write permission');
@@ -1012,44 +1285,45 @@ export async function moveFile(
   
   // Verschiebe Datei/Ordner
   try {
-    await fs.rename(fromPath, toPath);
+    await fs.rename(fromPath, finalToPath);
   } catch (error: any) {
     // Fallback für Cross-Device-Moves (z.B. zwischen unterschiedlichen Mounts)
     if (error.code !== 'EXDEV') {
       throw error;
     }
 
-    const sourceStats = await fs.stat(fromPath);
     if (sourceStats.isDirectory()) {
-      await fs.cp(fromPath, toPath, { recursive: true, force: false, errorOnExist: true });
+      await fs.cp(fromPath, finalToPath, { recursive: true, force: false, errorOnExist: true });
       await fs.rm(fromPath, { recursive: true, force: true });
     } else {
-      await fs.copyFile(fromPath, toPath, fsSync.constants.COPYFILE_EXCL);
+      await fs.copyFile(fromPath, finalToPath, fsSync.constants.COPYFILE_EXCL);
       await fs.unlink(fromPath);
     }
   }
 
-  updateMovedFileMetadata(userId, from, to, fromType, toType);
+  updateMovedFileMetadata(userId, from, finalToRelativePath, fromType, toType);
   
   // Index aktualisieren (asynchron, blockiert nicht)
   // Prüfe, ob es eine Datei war (nicht Ordner)
   try {
-    const toStats = await fs.stat(toPath);
-    if (!toStats.isDirectory() && isIndexable(to)) {
+    const toStats = await fs.stat(finalToPath);
+    if (!toStats.isDirectory() && isIndexable(finalToRelativePath)) {
       // Entferne alten Eintrag
       import('./index.service').then(({ removeFromIndex, indexFile }) => {
         removeFromIndex(userId, from, fromType).catch((error) => {
           console.warn(`Failed to remove old index entry after move: ${from}`, error);
         });
         // Füge neuen Eintrag hinzu
-        indexFile(userId, to, toType).catch((error) => {
-          console.warn(`Failed to index file after move: ${to}`, error);
+        indexFile(userId, finalToRelativePath, toType).catch((error) => {
+          console.warn(`Failed to index file after move: ${finalToRelativePath}`, error);
         });
       });
     }
   } catch (error) {
     // Ignoriere Fehler beim Stat-Check
   }
+
+  return finalToRelativePath;
 }
 
 /**
@@ -1061,9 +1335,9 @@ export async function copyFile(
   to: string,
   fromType: 'private' | 'shared',
   toType: 'private' | 'shared'
-): Promise<void> {
+): Promise<string> {
   const fromPath = resolveUserPath(userId, from, fromType);
-  const toPath = resolveUserPath(userId, to, toType);
+  const requestedToPath = resolveUserPath(userId, to, toType);
 
   // Prüfe, ob Quelle existiert
   let sourceStats: fsSync.Stats;
@@ -1076,17 +1350,9 @@ export async function copyFile(
     throw error;
   }
 
-  // Prüfe, ob Ziel bereits existiert
-  try {
-    await fs.access(toPath);
-    throw new Error('Destination already exists');
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-
-  const destinationDir = path.dirname(toPath);
+  const finalToPath = await findAvailableDestinationPath(requestedToPath, sourceStats.isDirectory());
+  const finalToRelativePath = toRelativePathFromAbsolute(userId, finalToPath, toType);
+  const destinationDir = path.dirname(finalToPath);
   await fs.mkdir(destinationDir, { recursive: true });
 
   // Prüfe Berechtigungen
@@ -1097,24 +1363,24 @@ export async function copyFile(
   }
 
   if (sourceStats.isDirectory()) {
-    await fs.cp(fromPath, toPath, { recursive: true, force: false, errorOnExist: true });
-    copyFileMetadata(userId, from, to, fromType, toType);
+    await fs.cp(fromPath, finalToPath, { recursive: true, force: false, errorOnExist: true });
+    copyFileMetadata(userId, from, finalToRelativePath, fromType, toType);
   } else {
-    await fs.copyFile(fromPath, toPath, fsSync.constants.COPYFILE_EXCL);
-    const copiedStats = await fs.stat(toPath);
+    await fs.copyFile(fromPath, finalToPath, fsSync.constants.COPYFILE_EXCL);
+    const copiedStats = await fs.stat(finalToPath);
     upsertFileMetadata(
       userId,
-      to,
+      finalToRelativePath,
       toType,
       copiedStats.size,
       copiedStats.mtime.toISOString()
     );
 
     // Index aktualisieren (asynchron, blockiert nicht)
-    if (isIndexable(to)) {
+    if (isIndexable(finalToRelativePath)) {
       import('./index.service').then(({ indexFile }) => {
-        indexFile(userId, to, toType).catch((error) => {
-          console.warn(`Failed to index file after copy: ${to}`, error);
+        indexFile(userId, finalToRelativePath, toType).catch((error) => {
+          console.warn(`Failed to index file after copy: ${finalToRelativePath}`, error);
         });
       });
     }
@@ -1122,5 +1388,6 @@ export async function copyFile(
 
   // Metrics-Tracking: Copy verhält sich aus Metriksicht wie "create"
   trackFileOperation('create', toType);
+  return finalToRelativePath;
 }
  

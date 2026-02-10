@@ -37,7 +37,7 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    let { path: dirPath = '/', type = 'private' } = req.query;
+    let { path: dirPath = '/', type = 'private', notesOnly = 'false' } = req.query;
 
     if (typeof dirPath !== 'string' || (type !== 'private' && type !== 'shared')) {
       res.status(400).json({ error: 'Invalid parameters' });
@@ -51,15 +51,19 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
       // Falls Decoding fehlschlägt, verwende den ursprünglichen Pfad
     }
 
+    const onlyNotes = String(notesOnly).toLowerCase() === 'true' || String(notesOnly) === '1';
+
     const items = await listDirectory(
       req.user.id,
       dirPath,
-      type as 'private' | 'shared'
+      type as 'private' | 'shared',
+      { notesOnly: onlyNotes }
     );
 
     res.json({
       path: dirPath,
       type: type as 'private' | 'shared',
+      notesOnly: onlyNotes,
       items
     });
   } catch (error: any) {
@@ -359,7 +363,7 @@ export async function moveFileHandler(req: Request, res: Response): Promise<void
       return;
     }
 
-    await moveFile(
+    const finalPath = await moveFile(
       req.user.id,
       data.from,
       data.to,
@@ -370,7 +374,7 @@ export async function moveFileHandler(req: Request, res: Response): Promise<void
     res.json({
       success: true,
       from: data.from,
-      to: data.to,
+      to: finalPath,
       message: 'File or folder moved successfully'
     });
   } catch (error: any) {
@@ -405,7 +409,7 @@ export async function copyFileHandler(req: Request, res: Response): Promise<void
       return;
     }
 
-    await copyFile(
+    const finalPath = await copyFile(
       req.user.id,
       data.from,
       data.to,
@@ -416,7 +420,7 @@ export async function copyFileHandler(req: Request, res: Response): Promise<void
     res.status(201).json({
       success: true,
       from: data.from,
-      to: data.to,
+      to: finalPath,
       message: 'File or folder copied successfully'
     });
   } catch (error: any) {

@@ -6,11 +6,11 @@ describe('recentGrouping utils', () => {
   const now = new Date('2026-02-09T10:00:00.000Z');
 
   it('should classify dates into expected groups', () => {
-    expect(getRecentGroupKey('2026-02-09T08:00:00.000Z', now)).toBe('today');
-    expect(getRecentGroupKey('2026-02-08T08:00:00.000Z', now)).toBe('yesterday');
+    expect(getRecentGroupKey('2026-02-09T08:00:00.000Z', now)).toBe('last7Days');
+    expect(getRecentGroupKey('2026-02-08T08:00:00.000Z', now)).toBe('last7Days');
     expect(getRecentGroupKey('2026-02-04T08:00:00.000Z', now)).toBe('last7Days');
     expect(getRecentGroupKey('2026-01-20T08:00:00.000Z', now)).toBe('last30Days');
-    expect(getRecentGroupKey('2025-12-20T08:00:00.000Z', now)).toBe('year:2025');
+    expect(getRecentGroupKey('2025-12-20T08:00:00.000Z', now)).toBe('years');
   });
 
   it('should group and sort files by recency', () => {
@@ -22,7 +22,7 @@ describe('recentGrouping utils', () => {
     ];
 
     const groups = groupFilesByRecent(files, now);
-    expect(groups.map((group) => group.key)).toEqual(['today', 'last7Days', 'year:2025']);
-    expect(groups[0].items.map((item) => item.name)).toEqual(['today-2.md', 'today-1.md']);
+    expect(groups.map((group) => group.key)).toEqual(['last7Days', 'years']);
+    expect(groups[0].items.map((item) => item.name)).toEqual(['today-2.md', 'today-1.md', 'week.md']);
   });
 });

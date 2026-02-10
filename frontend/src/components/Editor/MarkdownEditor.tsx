@@ -72,6 +72,21 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
       });
   }, []);
 
+  const scheduleAutoSave = () => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      const currentState = useEditorStore.getState();
+      if (currentState.isDirty) {
+        autoSaveFile(filePath, fileType).catch((err) => {
+          console.warn('Auto-save failed:', err);
+        });
+      }
+    }, 1500);
+  };
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -112,21 +127,7 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
     const newContent = e.target.value;
     
     setContent(newContent);
-    
-    // Auto-Save mit Debounce (2 Sekunden nach letzter Änderung)
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-    
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      const currentState = useEditorStore.getState();
-      if (currentState.isDirty) {
-        // Verwende autoSaveFile für automatisches Speichern (ohne visuelles Feedback)
-        autoSaveFile(filePath, fileType).catch((err) => {
-          console.warn('Auto-save failed:', err);
-        });
-      }
-    }, 2000);
+    scheduleAutoSave();
   };
   
   // Cleanup beim Unmount
@@ -134,9 +135,18 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+
+      // Flush beim Verlassen, damit letzte Änderungen nicht verloren gehen
+      const currentState = useEditorStore.getState();
+      if (currentState.isDirty) {
+        autoSaveFile(filePath, fileType).catch((err) => {
+          console.warn('Auto-save flush failed:', err);
+        });
       }
     };
-  }, []);
+  }, [autoSaveFile, filePath, fileType]);
 
   const handleSave = async () => {
     try {
@@ -290,19 +300,7 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
             content={content}
             onContentChange={(newContent) => {
               setContent(newContent);
-              // Auto-Save mit Debounce
-              if (autoSaveTimeoutRef.current) {
-                clearTimeout(autoSaveTimeoutRef.current);
-              }
-              autoSaveTimeoutRef.current = setTimeout(() => {
-                const currentState = useEditorStore.getState();
-                if (currentState.isDirty) {
-                  // Verwende autoSaveFile für automatisches Speichern (ohne visuelles Feedback)
-                  autoSaveFile(filePath, fileType).catch((err) => {
-                    console.warn('Auto-save failed:', err);
-                  });
-                }
-              }, 2000);
+              scheduleAutoSave();
             }}
             onInsertText={insertText}
           />
