@@ -12,6 +12,7 @@ import { FileItem as FileItemType } from '../../types/file';
 import FileItem from './FileItem';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import FileActionDialog from './FileActionDialog';
+import CreateFileDialog from './CreateFileDialog';
 import ContextMenu, { ContextMenuAction } from './ContextMenu';
 import { formatRecentDate, groupFilesByRecent } from '../../utils/recentGrouping';
 
@@ -38,6 +39,14 @@ function getParentPath(filePath: string): string {
   return `/${segments.slice(0, -1).join('/')}`;
 }
 
+function isNoteOrFolder(item: FileItemType): boolean {
+  if (item.type === 'folder') {
+    return true;
+  }
+  const resolvedType = (item.fileType || item.name.split('.').pop() || '').toLowerCase();
+  return resolvedType === 'md' || resolvedType === 'txt';
+}
+
 export default function FileTree({ type, title, icon, onFileSelect }: FileTreeProps) {
   const navigate = useNavigate();
   const { 
@@ -57,7 +66,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   
   const [showOnlyNotes, setShowOnlyNotes] = useState(false);
   const [nonEditableFilesMode, setNonEditableFilesMode] = useState<'gray' | 'hide'>('gray');
-  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('folders');
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [recentFiles, setRecentFiles] = useState<FileItemType[]>([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
@@ -68,6 +77,8 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   const [deleteTarget, setDeleteTarget] = useState<ContextState | null>(null);
   const [moveTarget, setMoveTarget] = useState<ContextState | null>(null);
   const [copyTarget, setCopyTarget] = useState<ContextState | null>(null);
+  const [showCreateFileDialog, setShowCreateFileDialog] = useState(false);
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const recentLongPressTimerRef = useRef<number | null>(null);
   const suppressRecentClickRef = useRef(false);
   
@@ -82,12 +93,12 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       try {
         const settings = await settingsAPI.getSettings();
         setShowOnlyNotes(settings.show_only_notes || false);
-        setSidebarViewMode(settings.sidebar_view_mode || 'recent');
+        setSidebarViewMode(settings.sidebar_view_mode || 'folders');
         setNonEditableFilesMode(settings.non_editable_files_mode || 'gray');
       } catch (error) {
         console.error('Fehler beim Laden der Einstellungen:', error);
         setShowOnlyNotes(false);
-        setSidebarViewMode('recent');
+        setSidebarViewMode('folders');
         setNonEditableFilesMode('gray');
       } finally {
         setIsLoadingSettings(false);
@@ -151,17 +162,27 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     }
   }, [type]);
 
-  const files = useMemo(() => (
-    nonEditableFilesMode === 'hide'
-      ? allFiles.filter((file) => file.type === 'folder' || file.isEditable !== false)
-      : allFiles
-  ), [allFiles, nonEditableFilesMode]);
+  const files = useMemo(() => {
+    let next = allFiles;
+    if (showOnlyNotes) {
+      next = next.filter(isNoteOrFolder);
+    }
+    if (nonEditableFilesMode === 'hide') {
+      next = next.filter((file) => file.type === 'folder' || file.isEditable !== false);
+    }
+    return next;
+  }, [allFiles, nonEditableFilesMode, showOnlyNotes]);
 
-  const filteredRecentFiles = useMemo(() => (
-    nonEditableFilesMode === 'hide'
-      ? recentFiles.filter((file) => file.type === 'folder' || file.isEditable !== false)
-      : recentFiles
-  ), [nonEditableFilesMode, recentFiles]);
+  const filteredRecentFiles = useMemo(() => {
+    let next = recentFiles;
+    if (showOnlyNotes) {
+      next = next.filter(isNoteOrFolder);
+    }
+    if (nonEditableFilesMode === 'hide') {
+      next = next.filter((file) => file.type === 'folder' || file.isEditable !== false);
+    }
+    return next;
+  }, [nonEditableFilesMode, recentFiles, showOnlyNotes]);
 
   const recentGroups = useMemo(() => groupFilesByRecent(filteredRecentFiles), [filteredRecentFiles]);
 
@@ -181,6 +202,48 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     }
     void refreshRecentFiles();
   }, [isLoadingSettings, refreshRecentFiles, sidebarViewMode]);
+
+  useEffect(() => {
+    const handleFilesChanged = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{
+        type: 'private' | 'shared';
+        path: string;
+      }> | undefined;
+
+      if (detail?.type && detail.type !== type) {
+        return;
+      }
+
+      if (sidebarViewMode === 'recent') {
+        void refreshRecentFiles();
+      } else {
+        void loadFiles(currentPath, type, showOnlyNotes);
+      }
+      void refreshFileStats();
+    };
+
+    const handleRevealInSidebar = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{
+        type: 'private' | 'shared';
+        path: string;
+      }> | undefined;
+
+      if (!detail || detail.type !== type || !detail.path) {
+        return;
+      }
+
+      const targetFolder = getParentPath(detail.path);
+      setSidebarViewMode('folders');
+      void loadFiles(targetFolder, type, showOnlyNotes);
+    };
+
+    window.addEventListener('notenest:files-changed', handleFilesChanged as EventListener);
+    window.addEventListener('notenest:reveal-file-in-sidebar', handleRevealInSidebar as EventListener);
+    return () => {
+      window.removeEventListener('notenest:files-changed', handleFilesChanged as EventListener);
+      window.removeEventListener('notenest:reveal-file-in-sidebar', handleRevealInSidebar as EventListener);
+    };
+  }, [currentPath, loadFiles, refreshFileStats, refreshRecentFiles, showOnlyNotes, sidebarViewMode, type]);
 
   const handleFolderClick = (folderPath: string) => {
     void loadFiles(folderPath, type, showOnlyNotes);
@@ -305,10 +368,45 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
         await loadFiles(currentPath, type, showOnlyNotes);
       }
       await refreshFileStats();
+      window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+        detail: {
+          type,
+          path: getParentPath(deleteTarget.path)
+        }
+      }));
     } catch (apiError) {
       console.error('Löschen fehlgeschlagen:', apiError);
     } finally {
       setDeleteTarget(null);
+    }
+  };
+
+  const handleCreated = (created: { path: string; type: 'private' | 'shared'; name: string }) => {
+    const parentPath = getParentPath(created.path);
+    void loadFiles(parentPath, created.type, showOnlyNotes);
+    void refreshFileStats();
+    window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+      detail: {
+        type: created.type,
+        path: parentPath
+      }
+    }));
+
+    if (created.type === type) {
+      setSidebarViewMode('folders');
+    }
+
+    if (created.type === type && created.name.toLowerCase().endsWith('.md')) {
+      openFile(
+        {
+          name: created.name,
+          path: created.path,
+          type: 'file',
+          fileType: 'md',
+          isEditable: true
+        },
+        created.path
+      );
     }
   };
 
@@ -382,12 +480,48 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           </div>
 
           {!isLoadingSettings && (
-            <div style={{
-              display: 'inline-flex',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              overflow: 'hidden'
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowCreateFolderDialog(true)}
+                title="Neuen Ordner erstellen"
+                style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '0.35rem 0.6rem',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 600
+                }}
+              >
+                + Ordner
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateFileDialog(true)}
+                title="Neue Notiz erstellen"
+                style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '0.35rem 0.6rem',
+                  backgroundColor: 'var(--accent-color)',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 600
+                }}
+              >
+                + Notiz
+              </button>
+
+              <div style={{
+                display: 'inline-flex',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                overflow: 'hidden'
+              }}>
               <button
                 type="button"
                 onClick={() => void handleToggleSidebarViewMode('recent')}
@@ -420,6 +554,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
               >
                 Ordner
               </button>
+              </div>
             </div>
           )}
         </div>
@@ -692,6 +827,30 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
             ))}
           </div>
         )
+      )}
+
+      {showCreateFileDialog && (
+        <CreateFileDialog
+          isOpen={showCreateFileDialog}
+          onClose={() => setShowCreateFileDialog(false)}
+          type="file"
+          initialFolderType={type}
+          initialPath={currentPath}
+          allowTargetSelection={true}
+          onCreated={handleCreated}
+        />
+      )}
+
+      {showCreateFolderDialog && (
+        <CreateFileDialog
+          isOpen={showCreateFolderDialog}
+          onClose={() => setShowCreateFolderDialog(false)}
+          type="folder"
+          initialFolderType={type}
+          initialPath={currentPath}
+          allowTargetSelection={true}
+          onCreated={handleCreated}
+        />
       )}
 
       <ContextMenu

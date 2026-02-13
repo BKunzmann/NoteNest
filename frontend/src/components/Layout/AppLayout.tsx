@@ -10,6 +10,7 @@ import Sidebar from './Sidebar';
 import BottomToolbar from './BottomToolbar';
 import OfflineIndicator from './OfflineIndicator';
 import { useFileStore } from '../../store/fileStore';
+import { useEditorStore } from '../../store/editorStore';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -22,16 +23,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const { selectedFile } = useFileStore();
+  const isPreviewFullscreen = useEditorStore((state) => state.isPreviewFullscreen);
 
   // Prüfe auf mobile Geräte
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < MOBILE_BREAKPOINT;
       setIsMobile(mobile);
-      // Sidebar standardmäßig geschlossen auf mobile
-      if (mobile && sidebarOpen) {
-        setSidebarOpen(false);
-      }
     };
     
     checkMobile();
@@ -71,10 +69,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
       backgroundColor: 'var(--bg-secondary)'
     }}>
       {/* Header */}
-      <Header 
-        onMenuClick={handleMenuClick}
-        sidebarOpen={sidebarOpen}
-      />
+      {!isPreviewFullscreen && (
+        <Header 
+          onMenuClick={handleMenuClick}
+          sidebarOpen={sidebarOpen}
+        />
+      )}
 
       {/* Main Content Area */}
       <div style={{
@@ -84,7 +84,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         position: 'relative'
       }}>
         {/* Mobile Overlay */}
-        {isMobile && sidebarOpen && (
+        {!isPreviewFullscreen && isMobile && sidebarOpen && (
           <div 
             onClick={handleSidebarClose}
             style={{
@@ -101,28 +101,30 @@ export default function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Sidebar */}
-        <div style={{
-          position: isMobile ? 'fixed' : 'relative',
-          top: isMobile ? '60px' : 0, // Unterhalb des Headers
-          left: 0,
-          bottom: isMobile ? '60px' : 0, // Oberhalb der BottomToolbar
-          zIndex: isMobile ? 100 : 'auto',
-          transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-          transition: 'transform 0.3s ease',
-          height: isMobile ? 'auto' : '100%'
-        }}>
-          <Sidebar 
-            isOpen={sidebarOpen}
-            onClose={handleSidebarClose}
-          />
-        </div>
+        {!isPreviewFullscreen && (
+          <div style={{
+            position: isMobile ? 'fixed' : 'relative',
+            top: isMobile ? '60px' : 0, // Unterhalb des Headers
+            left: 0,
+            bottom: isMobile ? '60px' : 0, // Oberhalb der BottomToolbar
+            zIndex: isMobile ? 100 : 'auto',
+            transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+            transition: 'transform 0.3s ease',
+            height: isMobile ? 'auto' : '100%'
+          }}>
+            <Sidebar 
+              isOpen={sidebarOpen}
+              onClose={handleSidebarClose}
+            />
+          </div>
+        )}
 
         {/* Content */}
         <main style={{
           flex: 1,
           overflow: 'auto',
           backgroundColor: 'var(--bg-primary)',
-          padding: '1rem',
+          padding: isPreviewFullscreen ? 0 : '1rem',
           position: 'relative',
           zIndex: 1,
           // Auf mobilen Geräten volle Breite
@@ -133,7 +135,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       {/* Bottom Toolbar */}
-      <BottomToolbar />
+      {!isPreviewFullscreen && <BottomToolbar />}
       <OfflineIndicator />
     </div>
   );

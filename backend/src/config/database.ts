@@ -78,7 +78,7 @@ export function initializeDatabase(): void {
       shared_folder_path VARCHAR(500),
       default_note_type VARCHAR(10) DEFAULT 'private' NOT NULL,
       default_note_folder_path VARCHAR(500) DEFAULT '/' NOT NULL,
-      sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL,
+      sidebar_view_mode VARCHAR(20) DEFAULT 'folders' NOT NULL,
       theme VARCHAR(20) DEFAULT 'light' NOT NULL,
       default_export_size VARCHAR(10) DEFAULT 'A4' NOT NULL,
       default_bible_translation VARCHAR(20) DEFAULT 'LUT' NOT NULL,
@@ -121,12 +121,19 @@ export function initializeDatabase(): void {
 
   // Migration: Füge sidebar_view_mode Spalte hinzu, falls sie nicht existiert
   try {
-    db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL`);
+    db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'folders' NOT NULL`);
   } catch (error: any) {
     if (!error.message.includes('duplicate column name')) {
       console.warn('Migration warning:', error.message);
     }
   }
+
+  // Migration: Verlauf in der Sidebar standardmäßig deaktivieren
+  db.exec(`
+    UPDATE user_settings
+    SET sidebar_view_mode = 'folders'
+    WHERE sidebar_view_mode IS NULL OR sidebar_view_mode = 'recent'
+  `);
 
   // Migration: Füge non_editable_files_mode Spalte hinzu, falls sie nicht existiert
   try {
@@ -412,8 +419,15 @@ export async function initializeDefaultAdmin(): Promise<void> {
     );
     
     db.prepare(`
-      INSERT INTO user_settings (user_id, private_folder_path, shared_folder_path)
-      VALUES (?, ?, ?)
+      INSERT INTO user_settings (
+        user_id,
+        private_folder_path,
+        shared_folder_path,
+        default_note_type,
+        default_note_folder_path,
+        sidebar_view_mode
+      )
+      VALUES (?, ?, ?, 'private', '/', 'folders')
     `).run(userId, privatePath, sharedPath);
 
     // Erstelle Benutzer-Ordner, falls nicht vorhanden

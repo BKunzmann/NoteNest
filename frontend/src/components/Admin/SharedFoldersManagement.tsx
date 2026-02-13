@@ -97,9 +97,22 @@ export default function SharedFoldersManagement() {
   // Verfügbare Ordner zum Hinzufügen (noch nicht zugewiesen)
   const getAvailableFoldersToAdd = (): SharedFolder[] => {
     if (!availableFolders) return [];
-    const userFolderPaths = userFolders.map(uf => uf.folder_path);
+    const assignedRootFolders = new Set(
+      userFolders
+        .map((folder) => folder.folder_path.replace(/\\/g, '/').replace(/^\/+/, ''))
+        .map((folderPath) => {
+          const marker = '/data/shared/';
+          const markerIndex = folderPath.indexOf(marker);
+          const normalized = markerIndex >= 0
+            ? folderPath.slice(markerIndex + marker.length)
+            : folderPath;
+          return normalized.split('/')[0];
+        })
+        .filter(Boolean)
+    );
+
     return availableFolders.filter(folder => 
-      folder.exists && !userFolderPaths.includes(folder.name)
+      folder.exists && !assignedRootFolders.has(folder.name)
     );
   };
 

@@ -13,6 +13,7 @@ import path from 'path';
 import db from '../config/database';
 import { FileItem } from '../types/file';
 import { trackFileOperation } from '../middleware/metrics.middleware';
+import { IS_NAS_MODE } from '../config/constants';
 
 // Unterstützte Dateiendungen für Indexierung (alle Markdown-Varianten + .txt)
 const INDEXABLE_EXTENSIONS = [
@@ -113,6 +114,87 @@ function normalizeRelativePath(relativePath: string): string {
   }
   normalized = normalized.replace(/\/+/g, '/');
   return normalized;
+}
+
+function normalizeSharedAssignmentPath(candidate: string): string {
+  return candidate
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/')
+    .replace(/^\.\//, '');
+}
+
+function getSharedBasePath(_settings?: UserSettings | null): string {
+  const fallback = process.env.NAS_SHARED_PATH || (
+    process.env.NODE_ENV === 'production'
+      ? '/data/shared'
+      : '/app/data/shared'
+  );
+  return path.resolve(fallback);
+}
+
+function normalizeUserSharedFolderAssignment(
+  rawFolderPath: string,
+  sharedBasePath: string
+): string | null {
+  const trimmed = rawFolderPath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const resolvedBase = path.resolve(sharedBasePath);
+  const resolvedCandidate = path.resolve(trimmed);
+
+  let relativeCandidate: string;
+  if (resolvedCandidate === resolvedBase || resolvedCandidate.startsWith(`${resolvedBase}${path.sep}`)) {
+    relativeCandidate = path.relative(resolvedBase, resolvedCandidate);
+  } else {
+    relativeCandidate = trimmed;
+  }
+
+  const normalized = normalizeSharedAssignmentPath(relativeCandidate);
+  if (!normalized || normalized === '.' || normalized.includes('..')) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function getUserAssignedSharedFolders(userId: number, sharedBasePath: string): Set<string> {
+  const rows = db.prepare(`
+    SELECT folder_path FROM user_shared_folders WHERE user_id = ?
+  `).all(userId) as Array<{ folder_path: string }>;
+
+  const assignments = new Set<string>();
+  for (const row of rows) {
+    const normalized = normalizeUserSharedFolderAssignment(row.folder_path, sharedBasePath);
+    if (normalized) {
+      assignments.add(normalized);
+    }
+  }
+
+  return assignments;
+}
+
+function isPathAllowedBySharedAssignments(relativePath: string, assignments: Set<string>): boolean {
+  const normalizedRelative = normalizeRelativePath(relativePath);
+  if (normalizedRelative === '/') {
+    return true;
+  }
+
+  const cleanRelative = normalizeSharedAssignmentPath(normalizedRelative);
+  if (!cleanRelative) {
+    return false;
+  }
+
+  for (const assignment of assignments) {
+    if (cleanRelative === assignment || cleanRelative.startsWith(`${assignment}/`)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function isNoteFileByName(fileName: string): boolean {
@@ -430,11 +512,7 @@ export function resolveUserPath(
         : `/app/data/users/${userId}`
     );
   } else {
-    basePath = settings.shared_folder_path || (
-      process.env.NODE_ENV === 'production' 
-        ? '/data/shared' 
-        : '/app/data/shared'
-    );
+    basePath = settings.shared_folder_path || getSharedBasePath(settings);
   }
   
   // Normalisiere Pfad
@@ -470,6 +548,28 @@ export function resolveUserPath(
   
   if (!resolvedFull.startsWith(resolvedBase)) {
     throw new Error('Path traversal detected');
+  }
+
+  if (type === 'shared' && IS_NAS_MODE) {
+    const sharedAccessBase = getSharedBasePath(settings);
+    const resolvedSharedAccessBase = path.resolve(sharedAccessBase);
+    if (
+      resolvedFull !== resolvedSharedAccessBase &&
+      !resolvedFull.startsWith(`${resolvedSharedAccessBase}${path.sep}`)
+    ) {
+      throw new Error('Access denied to shared folder');
+    }
+
+    const assignments = getUserAssignedSharedFolders(userId, resolvedSharedAccessBase);
+    if (assignments.size === 0) {
+      throw new Error('No shared folders assigned');
+    }
+
+    const relativeFromBase = path.relative(resolvedSharedAccessBase, resolvedFull);
+    const normalizedRelative = normalizeRelativePath(relativeFromBase ? `/${relativeFromBase}` : '/');
+    if (!isPathAllowedBySharedAssignments(normalizedRelative, assignments)) {
+      throw new Error('Access denied to shared folder');
+    }
   }
   
   return resolvedFull;
@@ -717,6 +817,19 @@ export async function listDirectory(
   options?: { notesOnly?: boolean }
 ): Promise<FileItem[]> {
   const notesOnly = options?.notesOnly ?? false;
+  const normalizedDirPath = normalizeRelativePath(dirPath);
+  const sharedSettings = type === 'shared' && IS_NAS_MODE ? getUserSettings(userId) : null;
+  const sharedBasePath = type === 'shared' && IS_NAS_MODE
+    ? getSharedBasePath(sharedSettings)
+    : null;
+  const sharedAssignments = type === 'shared' && IS_NAS_MODE && sharedBasePath
+    ? getUserAssignedSharedFolders(userId, sharedBasePath)
+    : new Set<string>();
+
+  if (type === 'shared' && IS_NAS_MODE && sharedAssignments.size === 0) {
+    return [];
+  }
+
   const fullPath = resolveUserPath(userId, dirPath, type);
   
   // Prüfe, ob Verzeichnis existiert
@@ -748,6 +861,18 @@ export async function listDirectory(
   for (const entry of entries) {
     const entryPath = path.join(fullPath, entry.name);
     const relativePath = path.join(dirPath, entry.name);
+
+    if (type === 'shared' && IS_NAS_MODE && sharedBasePath) {
+      const relativeToSharedBase = normalizeRelativePath(path.relative(sharedBasePath, entryPath));
+      if (!isPathAllowedBySharedAssignments(relativeToSharedBase, sharedAssignments)) {
+        continue;
+      }
+
+      // Im Root nur freigegebene Ordner anzeigen, keine losen Dateien.
+      if (normalizedDirPath === '/' && entry.isFile()) {
+        continue;
+      }
+    }
     
     // Filtere ausgeblendete Ordner
     if (entry.isDirectory() && shouldHideFolder(entry.name)) {
@@ -833,6 +958,18 @@ export async function listRecentFiles(
 ): Promise<FileItem[]> {
   const notesOnly = options?.notesOnly ?? false;
   const limit = Math.max(1, Math.min(options?.limit ?? 200, 1000));
+  const sharedSettings = type === 'shared' && IS_NAS_MODE ? getUserSettings(userId) : null;
+  const sharedBasePath = type === 'shared' && IS_NAS_MODE
+    ? getSharedBasePath(sharedSettings)
+    : null;
+  const sharedAssignments = type === 'shared' && IS_NAS_MODE && sharedBasePath
+    ? getUserAssignedSharedFolders(userId, sharedBasePath)
+    : new Set<string>();
+
+  if (type === 'shared' && IS_NAS_MODE && sharedAssignments.size === 0) {
+    return [];
+  }
+
   const metadataLikePattern = `${type}:%`;
 
   const candidateLimit = Math.max(limit * 5, 500);
@@ -884,6 +1021,9 @@ export async function listRecentFiles(
     if (isPathInHiddenFolder(relativePath)) {
       continue;
     }
+    if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(relativePath, sharedAssignments)) {
+      continue;
+    }
     candidatesByPath.set(relativePath, {
       path: relativePath,
       name: row.file_name || path.basename(relativePath),
@@ -895,6 +1035,9 @@ export async function listRecentFiles(
   for (const row of searchIndexRows) {
     const normalizedPath = normalizeRelativePath(row.file_path);
     if (isPathInHiddenFolder(normalizedPath)) {
+      continue;
+    }
+    if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(normalizedPath, sharedAssignments)) {
       continue;
     }
 
@@ -1003,6 +1146,18 @@ export function getFileStats(
   userId: number,
   type: 'private' | 'shared'
 ): { totalFiles: number; totalNotes: number } {
+  const sharedSettings = type === 'shared' && IS_NAS_MODE ? getUserSettings(userId) : null;
+  const sharedBasePath = type === 'shared' && IS_NAS_MODE
+    ? getSharedBasePath(sharedSettings)
+    : null;
+  const sharedAssignments = type === 'shared' && IS_NAS_MODE && sharedBasePath
+    ? getUserAssignedSharedFolders(userId, sharedBasePath)
+    : new Set<string>();
+
+  if (type === 'shared' && IS_NAS_MODE && sharedAssignments.size === 0) {
+    return { totalFiles: 0, totalNotes: 0 };
+  }
+
   const metadataLikePattern = `${type}:%`;
   const metadataRows = db.prepare(`
     SELECT file_path, file_name
@@ -1021,6 +1176,9 @@ export function getFileStats(
       continue;
     }
     if (isPathInHiddenFolder(parsed.path)) {
+      continue;
+    }
+    if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(parsed.path, sharedAssignments)) {
       continue;
     }
     uniqueFiles.set(parsed.path, row.file_name || path.basename(parsed.path));
@@ -1046,6 +1204,9 @@ export function getFileStats(
     for (const row of indexRows) {
       const normalizedPath = normalizeRelativePath(row.file_path);
       if (isPathInHiddenFolder(normalizedPath)) {
+        continue;
+      }
+      if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(normalizedPath, sharedAssignments)) {
         continue;
       }
       if (!uniqueFiles.has(normalizedPath)) {
@@ -1271,13 +1432,14 @@ export async function deleteFile(
     await fs.unlink(fullPath);
     removeFileMetadata(userId, filePath, type);
     
-    // Index aktualisieren (asynchron, blockiert nicht)
+    // Index sofort aktualisieren, damit Sidebar/Suche den Löschvorgang direkt reflektiert.
     if (isIndexable(filePath)) {
-      import('./index.service').then(({ removeFromIndex }) => {
-        removeFromIndex(userId, filePath, type).catch((error) => {
-          console.warn(`Failed to remove from index after delete: ${filePath}`, error);
-        });
-      });
+      try {
+        const { removeFromIndex } = await import('./index.service');
+        await removeFromIndex(userId, filePath, type);
+      } catch (error) {
+        console.warn(`Failed to remove from index after delete: ${filePath}`, error);
+      }
     }
   }
   

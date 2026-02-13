@@ -26,6 +26,8 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
     setContent, 
     viewMode, 
     setViewMode,
+    isPreviewFullscreen,
+    setPreviewFullscreen,
     isDirty,
     isSaving,
     saveFile,
@@ -71,6 +73,12 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
         console.error('Error loading settings:', err);
       });
   }, []);
+
+  useEffect(() => {
+    if (viewMode !== 'preview' && isPreviewFullscreen) {
+      setPreviewFullscreen(false);
+    }
+  }, [isPreviewFullscreen, setPreviewFullscreen, viewMode]);
 
   const scheduleAutoSave = () => {
     if (autoSaveTimeoutRef.current) {
@@ -346,8 +354,33 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
             overflow: 'auto',
             padding: '1rem',
             backgroundColor: 'var(--bg-primary)',
-            color: 'var(--text-primary)'
+            color: 'var(--text-primary)',
+            position: 'relative'
           }}>
+            {viewMode === 'preview' && isPreviewFullscreen && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewFullscreen(false);
+                  setViewMode('wysiwyg');
+                }}
+                style={{
+                  position: 'sticky',
+                  top: 0,
+                  marginLeft: 'auto',
+                  display: 'block',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  borderRadius: '8px',
+                  padding: '0.4rem 0.65rem',
+                  cursor: 'pointer',
+                  zIndex: 5
+                }}
+              >
+                Vollbild verlassen
+              </button>
+            )}
             <div style={{
               maxWidth: '800px',
               margin: '0 auto'

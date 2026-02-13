@@ -39,6 +39,118 @@ export default function EditorToolbar({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const runWysiwygCommand = (command: string, value?: string) => {
+    const editor = document.querySelector('.wysiwyg-editor') as HTMLElement | null;
+    if (!editor) {
+      return;
+    }
+    editor.focus();
+    document.execCommand(command, false, value);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  const handleFormatChange = (value: string) => {
+    if (!value) {
+      return;
+    }
+
+    if (viewMode === 'wysiwyg') {
+      switch (value) {
+        case 'h1':
+          runWysiwygCommand('formatBlock', 'h1');
+          return;
+        case 'h2':
+          runWysiwygCommand('formatBlock', 'h2');
+          return;
+        case 'h3':
+          runWysiwygCommand('formatBlock', 'h3');
+          return;
+        case 'p':
+          runWysiwygCommand('formatBlock', 'p');
+          return;
+        case 'code':
+          runWysiwygCommand('formatBlock', 'pre');
+          return;
+        default:
+          return;
+      }
+    }
+
+    switch (value) {
+      case 'h1':
+        onInsertText('# ', '');
+        return;
+      case 'h2':
+        onInsertText('## ', '');
+        return;
+      case 'h3':
+        onInsertText('### ', '');
+        return;
+      case 'p':
+        onInsertText('', '');
+        return;
+      case 'code':
+        onInsertText('`', '`');
+        return;
+      default:
+        return;
+    }
+  };
+
+  const handleListChange = (value: string) => {
+    if (!value) {
+      return;
+    }
+
+    if (viewMode === 'wysiwyg') {
+      if (value === 'ordered') {
+        runWysiwygCommand('insertOrderedList');
+        return;
+      }
+      runWysiwygCommand('insertUnorderedList');
+      return;
+    }
+
+    switch (value) {
+      case 'bullet':
+        onInsertText('- ', '');
+        return;
+      case 'bullet-indented':
+        onInsertText('  - ', '');
+        return;
+      case 'hyphen':
+        onInsertText('- ', '');
+        return;
+      case 'hyphen-indented':
+        onInsertText('  - ', '');
+        return;
+      case 'ordered':
+        onInsertText('1. ', '');
+        return;
+      case 'ordered-indented':
+        onInsertText('   a. ', '');
+        return;
+      default:
+        return;
+    }
+  };
+
+  const handleInsertLink = () => {
+    const url = window.prompt('URL eingeben (https://...)');
+    if (!url) {
+      return;
+    }
+    const label = window.prompt('Link-Text (optional)');
+
+    if (viewMode === 'wysiwyg') {
+      runWysiwygCommand('createLink', url);
+      return;
+    }
+
+    const safeLabel = label && label.trim().length > 0 ? label.trim() : url.trim();
+    onInsertText(`[${safeLabel}](`, `${url.trim()})`);
+  };
+
   const buttonStyle: CSSProperties = {
     padding: isMobile ? '0.4rem 0.5rem' : '0.5rem 1rem',
     border: '1px solid var(--border-color)',
@@ -67,40 +179,27 @@ export default function EditorToolbar({
       backgroundColor: 'var(--bg-secondary)',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.5rem',
+      gap: '0.4rem',
       flexWrap: isMobile ? 'nowrap' : 'wrap',
       overflowX: isMobile ? 'auto' : 'visible'
     }}>
-      {/* View Mode Buttons */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0 }}>
-        <button
-          onClick={() => onViewModeChange('edit')}
-          style={viewMode === 'edit' ? activeButtonStyle : buttonStyle}
-          title="Nur Editor"
+      {/* View-Mode Auswahlfeld */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginRight: isMobile ? '0.2rem' : '0.8rem', flexShrink: 0 }}>
+        <select
+          value={viewMode}
+          onChange={(event) => onViewModeChange(event.target.value as 'edit' | 'preview' | 'split' | 'wysiwyg')}
+          style={{
+            ...buttonStyle,
+            marginRight: 0,
+            minWidth: isMobile ? '120px' : '170px'
+          }}
+          title="Editor-Modus auswählen"
         >
-          {isMobile ? '✏️' : '✏️ Editor'}
-        </button>
-        <button
-          onClick={() => onViewModeChange('split')}
-          style={viewMode === 'split' ? activeButtonStyle : buttonStyle}
-          title="Editor + Vorschau"
-        >
-          {isMobile ? '⚡' : '⚡ Split'}
-        </button>
-        <button
-          onClick={() => onViewModeChange('preview')}
-          style={viewMode === 'preview' ? activeButtonStyle : buttonStyle}
-          title="Nur Vorschau"
-        >
-          {isMobile ? '👁️' : '👁️ Vorschau'}
-        </button>
-        <button
-          onClick={() => onViewModeChange('wysiwyg')}
-          style={viewMode === 'wysiwyg' ? activeButtonStyle : buttonStyle}
-          title="Bearbeitbare Vorschau (WYSIWYG)"
-        >
-          {isMobile ? '✍️' : '✍️ WYSIWYG'}
-        </button>
+          <option value="wysiwyg">WYSIWYG</option>
+          <option value="edit">Markdown</option>
+          <option value="split">Split</option>
+          <option value="preview">Vorschau</option>
+        </select>
       </div>
 
       {/* Undo/Redo Buttons */}
@@ -176,140 +275,127 @@ export default function EditorToolbar({
       </div>
 
       {/* Format Buttons */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0 }}>
-        {viewMode === 'wysiwyg' ? (
-          <>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('formatBlock', false, 'h1');
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Überschrift H1"
-            >
-              H1
-            </button>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('bold', false);
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Fett (Ctrl+B)"
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('italic', false);
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Kursiv (Ctrl+I)"
-            >
-              <em>I</em>
-            </button>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('formatBlock', false, 'pre');
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Code"
-            >
-              {'</>'}
-            </button>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('insertUnorderedList', false);
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Liste"
-            >
-              •
-            </button>
-            <button
-              onClick={() => {
-                const editor = document.querySelector('.wysiwyg-editor') as HTMLElement;
-                if (editor) {
-                  editor.focus();
-                  document.execCommand('formatBlock', false, 'blockquote');
-                  editor.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-              }}
-              style={buttonStyle}
-              title="Zitat"
-            >
-              &quot;
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => onInsertText('# ', '')}
-              style={buttonStyle}
-              title="Überschrift"
-            >
-              H1
-            </button>
-            <button
-              onClick={() => onInsertText('**', '**')}
-              style={buttonStyle}
-              title="Fett"
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              onClick={() => onInsertText('*', '*')}
-              style={buttonStyle}
-              title="Kursiv"
-            >
-              <em>I</em>
-            </button>
-            <button
-              onClick={() => onInsertText('`', '`')}
-              style={buttonStyle}
-              title="Code"
-            >
-              {'</>'}
-            </button>
-            <button
-              onClick={() => onInsertText('- ', '')}
-              style={buttonStyle}
-              title="Liste"
-            >
-              •
-            </button>
-            <button
-              onClick={() => onInsertText('> ', '')}
-              style={buttonStyle}
-              title="Zitat"
-            >
-              &quot;
-            </button>
-          </>
-        )}
+      <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0, alignItems: 'center' }}>
+        <select
+          value=""
+          onChange={(event) => {
+            handleFormatChange(event.target.value);
+            event.target.value = '';
+          }}
+          style={{
+            ...buttonStyle,
+            marginRight: 0,
+            minWidth: isMobile ? '86px' : '120px'
+          }}
+          title="Textformat (Aa)"
+        >
+          <option value="">Aa</option>
+          <option value="h1">Titel (H1)</option>
+          <option value="h2">Überschrift (H2)</option>
+          <option value="h3">Unterüberschrift (H3)</option>
+          <option value="p">Normalschrift</option>
+          <option value="code">Inline-Code</option>
+        </select>
+
+        <select
+          value=""
+          onChange={(event) => {
+            handleListChange(event.target.value);
+            event.target.value = '';
+          }}
+          style={{
+            ...buttonStyle,
+            marginRight: 0,
+            minWidth: isMobile ? '90px' : '135px'
+          }}
+          title="Listen-Auswahl"
+        >
+          <option value="">Listen</option>
+          <option value="bullet">• Punkte</option>
+          <option value="bullet-indented">◦ Punkte (2. Ebene)</option>
+          <option value="hyphen">- Bindestrich</option>
+          <option value="hyphen-indented">- Bindestrich (2. Ebene)</option>
+          <option value="ordered">1. Nummeriert</option>
+          <option value="ordered-indented">a. Nummeriert (2. Ebene)</option>
+        </select>
+
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('bold') : onInsertText('**', '**'))}
+          style={viewMode === 'wysiwyg' ? (document.queryCommandState('bold') ? activeButtonStyle : buttonStyle) : buttonStyle}
+          title="Fett"
+        >
+          <strong>B</strong>
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('italic') : onInsertText('*', '*'))}
+          style={buttonStyle}
+          title="Kursiv"
+        >
+          <em>I</em>
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('underline') : onInsertText('<u>', '</u>'))}
+          style={buttonStyle}
+          title="Unterstreichen"
+        >
+          <span style={{ textDecoration: 'underline' }}>U</span>
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('strikeThrough') : onInsertText('~~', '~~'))}
+          style={buttonStyle}
+          title="Durchstreichen"
+        >
+          <span style={{ textDecoration: 'line-through' }}>S</span>
+        </button>
+        <button
+          onClick={handleInsertLink}
+          style={buttonStyle}
+          title="Link einfügen"
+        >
+          🔗
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('insertUnorderedList') : onInsertText('- [ ] ', ''))}
+          style={buttonStyle}
+          title="Aufgabenliste"
+        >
+          ☑
+        </button>
+        <button
+          onClick={() => onInsertText('\n| Spalte 1 | Spalte 2 |\n| --- | --- |\n| Wert 1 | Wert 2 |\n', '')}
+          style={buttonStyle}
+          title="Tabelle einfügen"
+        >
+          ▦
+        </button>
+        <button
+          onClick={() => onInsertText('\n[Anhang: ]', '')}
+          style={buttonStyle}
+          title="Anhang einfügen"
+        >
+          [ ]
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('indent') : onInsertText('  ', ''))}
+          style={buttonStyle}
+          title="Einzug nach rechts"
+        >
+          ⇥
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('outdent') : onInsertText('', ''))}
+          style={buttonStyle}
+          title="Einzug nach links"
+        >
+          ⇤
+        </button>
+        <button
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('formatBlock', 'blockquote') : onInsertText('> ', ''))}
+          style={buttonStyle}
+          title="Zitat einfügen"
+        >
+          ❝
+        </button>
       </div>
 
       {/* Save Button */}

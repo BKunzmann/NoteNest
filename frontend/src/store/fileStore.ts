@@ -46,6 +46,8 @@ interface FileState {
   selectedPath: string | null;
   selectedType: 'private' | 'shared' | null;
   fileContent: string | null;
+  fileLastModified: string | null;
+  fileCreatedAt: string | null;
   
   // Loading States
   isLoading: boolean;
@@ -73,6 +75,8 @@ export const useFileStore = create<FileState>((set, get) => ({
   selectedPath: null,
   selectedType: null,
   fileContent: null,
+  fileLastModified: null,
+  fileCreatedAt: null,
   isLoading: false,
   isLoadingContent: false,
   privateError: null,
@@ -158,6 +162,8 @@ export const useFileStore = create<FileState>((set, get) => ({
           
           set({
             fileContent: response.content,
+            fileLastModified: response.lastModified || null,
+            fileCreatedAt: response.createdAt || null,
             isLoadingContent: false
           });
           console.log('File content loaded successfully:', { filePath, contentLength: response.content.length });
@@ -174,6 +180,8 @@ export const useFileStore = create<FileState>((set, get) => ({
         if (cached) {
           set({
             fileContent: cached.content,
+            fileLastModified: null,
+            fileCreatedAt: null,
             isLoadingContent: false
           });
           console.log('File content loaded from cache:', { filePath });
@@ -187,7 +195,9 @@ export const useFileStore = create<FileState>((set, get) => ({
       const errorMessage = error.message || error.response?.data?.error || 'Fehler beim Laden der Datei';
       set({
         isLoadingContent: false,
-        fileContent: null
+        fileContent: null,
+        fileLastModified: null,
+        fileCreatedAt: null
       });
       // Fehler wird in der Komponente angezeigt
       console.error('Failed to load file content:', { filePath, type, error: errorMessage, fullError: error });
@@ -208,7 +218,9 @@ export const useFileStore = create<FileState>((set, get) => ({
       selectedFile: file,
       selectedPath: normalizedPath,
       selectedType: fileType,
-      fileContent: null // Lösche alten Inhalt
+      fileContent: null, // Lösche alten Inhalt
+      fileLastModified: null,
+      fileCreatedAt: null
     });
     
     // Lade Datei-Inhalt, wenn es eine Datei ist
@@ -230,7 +242,9 @@ export const useFileStore = create<FileState>((set, get) => ({
       selectedFile: null,
       selectedPath: null,
       selectedType: null,
-      fileContent: null
+      fileContent: null,
+      fileLastModified: null,
+      fileCreatedAt: null
     });
   },
 
@@ -253,6 +267,25 @@ export const useFileStore = create<FileState>((set, get) => ({
   deleteItem: async (filePath: string, type: 'private' | 'shared') => {
     try {
       await fileAPI.deleteFile({ path: filePath, type });
+
+      // Entferne gelöschte Einträge sofort aus der aktuellen Sidebar-Liste,
+      // damit keine veralteten Elemente anklickbar bleiben.
+      set((state) => {
+        const matchesDeletedPath = (itemPath: string | undefined) =>
+          Boolean(
+            itemPath &&
+            (itemPath === filePath || itemPath.startsWith(`${filePath.replace(/\/+$/, '')}/`))
+          );
+
+        if (type === 'private') {
+          return {
+            privateFiles: state.privateFiles.filter((item) => !matchesDeletedPath(item.path))
+          };
+        }
+        return {
+          sharedFiles: state.sharedFiles.filter((item) => !matchesDeletedPath(item.path))
+        };
+      });
       
       // Lösche Auswahl, falls die gelöschte Datei/Ordner ausgewählt war
       const { selectedPath, selectedType } = get();

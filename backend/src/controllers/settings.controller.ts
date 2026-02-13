@@ -71,7 +71,10 @@ function isPathAllowedForUser(
     const resolvedRequested = path.resolve(normalizedPath);
     const resolvedSharedBase = path.resolve(nasSharedPath);
     
-    if (!resolvedRequested.startsWith(resolvedSharedBase)) {
+    if (
+      resolvedRequested !== resolvedSharedBase &&
+      !resolvedRequested.startsWith(`${resolvedSharedBase}${path.sep}`)
+    ) {
       return { 
         allowed: false, 
         error: 'Zugriff verweigert: Der Pfad muss im Shared-Bereich liegen' 
@@ -80,23 +83,29 @@ function isPathAllowedForUser(
     
     // Im NAS-Mode: Prüfe, ob der Benutzer Zugriff auf diesen Shared-Ordner hat
     if (IS_NAS_MODE) {
-      const userSharedFolders = db.prepare(`
-        SELECT folder_path FROM user_shared_folders WHERE user_id = ?
-      `).all(userId) as { folder_path: string }[];
-      
-      // Extrahiere den Ordnernamen aus dem Pfad
-      const relativePath = resolvedRequested.replace(resolvedSharedBase, '').replace(/^\/+/, '');
-      const folderName = relativePath.split('/')[0];
-      
-      if (folderName && userSharedFolders.length > 0) {
-        const hasAccess = userSharedFolders.some(folder => 
-          folder.folder_path === folderName || folder.folder_path === relativePath
-        );
-        
+      const assignments = getUserSharedAssignments(userId, resolvedSharedBase);
+      if (assignments.length === 0) {
+        return {
+          allowed: false,
+          error: 'Zugriff verweigert: Es wurden noch keine Shared-Ordner für Sie freigegeben'
+        };
+      }
+
+      const relativePath = resolvedRequested
+        .replace(resolvedSharedBase, '')
+        .replace(/^\/+/, '')
+        .replace(/\\/g, '/');
+
+      if (relativePath) {
+        const hasAccess = assignments.some((assignment) => (
+          relativePath === assignment || relativePath.startsWith(`${assignment}/`)
+        ));
+
         if (!hasAccess) {
-          return { 
-            allowed: false, 
-            error: `Zugriff verweigert: Sie haben keinen Zugriff auf den Shared-Ordner "${folderName}"` 
+          const folderName = relativePath.split('/')[0];
+          return {
+            allowed: false,
+            error: `Zugriff verweigert: Sie haben keinen Zugriff auf den Shared-Ordner "${folderName}"`
           };
         }
       }
@@ -140,6 +149,51 @@ function normalizeAbsolutePath(inputPath: string): string {
   return path.resolve(inputPath).replace(/\\/g, '/');
 }
 
+function normalizeSharedAssignmentPath(folderPath: string, sharedBase: string): string | null {
+  const trimmed = folderPath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const resolvedBase = path.resolve(sharedBase);
+  const resolvedCandidate = path.resolve(trimmed);
+  let relativeCandidate: string;
+
+  if (resolvedCandidate === resolvedBase || resolvedCandidate.startsWith(`${resolvedBase}${path.sep}`)) {
+    relativeCandidate = path.relative(resolvedBase, resolvedCandidate);
+  } else {
+    relativeCandidate = trimmed;
+  }
+
+  const normalized = relativeCandidate
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/')
+    .trim();
+
+  if (!normalized || normalized === '.' || normalized.includes('..')) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function getUserSharedAssignments(userId: number, sharedBase: string): string[] {
+  const rows = db.prepare(`
+    SELECT folder_path FROM user_shared_folders WHERE user_id = ?
+  `).all(userId) as { folder_path: string }[];
+
+  const unique = new Set<string>();
+  for (const row of rows) {
+    const normalized = normalizeSharedAssignmentPath(row.folder_path, sharedBase);
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+
+  return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+}
+
 function getPrivatePathCandidates(userId: number, username: string): Array<{ path: string; label: string }> {
   const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
   const defaultUsersPath = process.env.NODE_ENV === 'production'
@@ -157,28 +211,19 @@ function getPrivatePathCandidates(userId: number, username: string): Array<{ pat
 }
 
 function getSharedPathCandidates(userId: number): Array<{ path: string; label: string }> {
-  const sharedBase = process.env.NAS_SHARED_PATH || (
+  const sharedBase = normalizeAbsolutePath(process.env.NAS_SHARED_PATH || (
     process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
-  );
-
-  const options: Array<{ path: string; label: string }> = [
-    { path: normalizeAbsolutePath(sharedBase), label: 'Shared-Basisordner' }
-  ];
+  ));
 
   if (IS_NAS_MODE) {
-    const userSharedFolders = db.prepare(`
-      SELECT folder_path FROM user_shared_folders WHERE user_id = ?
-    `).all(userId) as { folder_path: string }[];
-
-    for (const folder of userSharedFolders) {
-      options.push({
-        path: normalizeAbsolutePath(path.join(sharedBase, folder.folder_path)),
-        label: `Freigegebener NAS-Ordner (${folder.folder_path})`
-      });
-    }
+    const assignments = getUserSharedAssignments(userId, sharedBase);
+    return assignments.map((assignment) => ({
+      path: normalizeAbsolutePath(path.join(sharedBase, assignment)),
+      label: `Freigegebener NAS-Ordner (${assignment})`
+    }));
   }
 
-  return options;
+  return [{ path: sharedBase, label: 'Shared-Basisordner' }];
 }
 
 /**
@@ -199,7 +244,20 @@ export async function getSettings(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    res.json(settings);
+    const sharedBase = normalizeAbsolutePath(process.env.NAS_SHARED_PATH || (
+      process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
+    ));
+    const sharedAssignments = getUserSharedAssignments(req.user.id, sharedBase);
+    const sharedFolderCount = sharedAssignments.length;
+    const hasSharedAccess = IS_NAS_MODE
+      ? sharedFolderCount > 0
+      : Boolean(settings.shared_folder_path);
+
+    res.json({
+      ...settings,
+      has_shared_access: hasSharedAccess,
+      shared_folder_count: sharedFolderCount
+    });
   } catch (error: any) {
     console.error('Get settings error:', error);
     res.status(500).json({ error: 'Failed to get settings' });

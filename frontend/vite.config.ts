@@ -22,6 +22,7 @@ export default defineConfig({
         enabled: false
       },
       registerType: 'autoUpdate',
+      includeManifestIcons: true,
       includeAssets: [
         'favicon.ico',
         'icons/favicon.ico',
@@ -38,16 +39,31 @@ export default defineConfig({
         'icons/Designer.png'
       ],
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         // Caching-Strategien
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\./,
+            urlPattern: /\/api\/files\/content(\?.*)?$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-file-content-cache',
+              expiration: {
+                maxEntries: 150,
+                maxAgeSeconds: 60 * 60 * 24 * 14
+              },
+              networkTimeoutSeconds: 8
+            }
+          },
+          {
+            urlPattern: /\/api\/.*/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 // 1 Stunde
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 // 24 Stunden
               },
               networkTimeoutSeconds: 10
             }
