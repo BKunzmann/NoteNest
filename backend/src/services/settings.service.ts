@@ -134,7 +134,7 @@ export function createUserSettings(
     shared_folder_path: defaults?.shared_folder_path ?? null,
     default_note_type: defaults?.default_note_type ?? 'private',
     default_note_folder_path: defaults?.default_note_folder_path ?? '/',
-    sidebar_view_mode: defaults?.sidebar_view_mode ?? 'recent',
+    sidebar_view_mode: defaults?.sidebar_view_mode ?? 'folders',
     theme: defaults?.theme ?? 'light',
     default_export_size: defaults?.default_export_size ?? 'A4',
     default_bible_translation: defaults?.default_bible_translation ?? 'LUT1912',

@@ -27,13 +27,14 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [hasSharedAccess, setHasSharedAccess] = useState(false);
   const [pathOptions, setPathOptions] = useState<SettingsPathOptionsResponse | null>(null);
 
   const [privatePath, setPrivatePath] = useState('');
   const [sharedPath, setSharedPath] = useState('');
   const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
   const [defaultNoteFolderPath, setDefaultNoteFolderPath] = useState('/');
-  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('folders');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [exportSize, setExportSize] = useState('A4');
   const [bibleTranslation, setBibleTranslation] = useState('LUT1912');
@@ -95,11 +96,13 @@ export default function SettingsPage() {
     try {
       const data = await settingsAPI.getSettings();
       setSettings(data);
+      const sharedAccess = Boolean(data.has_shared_access);
       setPrivatePath(data.private_folder_path || '');
-      setSharedPath(data.shared_folder_path || '');
-      setDefaultNoteType(data.default_note_type || 'private');
+      setSharedPath(sharedAccess ? (data.shared_folder_path || '') : '');
+      setHasSharedAccess(sharedAccess);
+      setDefaultNoteType(sharedAccess ? (data.default_note_type || 'private') : 'private');
       setDefaultNoteFolderPath(data.default_note_folder_path || '/');
-      setSidebarViewMode(data.sidebar_view_mode || 'recent');
+      setSidebarViewMode(data.sidebar_view_mode || 'folders');
       setTheme((data.theme || 'light') as 'light' | 'dark');
       setExportSize(data.default_export_size || 'A4');
       setNonEditableFilesMode(data.non_editable_files_mode || 'gray');
@@ -243,6 +246,12 @@ export default function SettingsPage() {
     setIsSaving(true);
     setError(null);
     setSuccess(null);
+
+    if (defaultNoteType === 'shared' && !hasSharedAccess) {
+      setIsSaving(false);
+      setError('Für Shared-Notizen wurde noch kein freigegebener Ordner zugewiesen.');
+      return;
+    }
     
     try {
       const oldDefaultTranslation = settings?.default_bible_translation;
@@ -416,6 +425,7 @@ export default function SettingsPage() {
                     id="sharedPath"
                     value={sharedPath}
                     onChange={(e) => setSharedPath(e.target.value)}
+                    disabled={!hasSharedAccess}
                     style={{
                       width: '100%',
                       padding: '0.75rem',
@@ -437,7 +447,9 @@ export default function SettingsPage() {
                     ))}
                   </select>
                   <div style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.25rem' }}>
-                    Shared-Pfade werden aus den erlaubten Freigaben vorgeschlagen.
+                    {hasSharedAccess
+                      ? 'Shared-Pfade werden aus den erlaubten Freigaben vorgeschlagen.'
+                      : 'Kein Shared-Zugriff: Ein Admin muss zuerst mindestens einen Shared-Ordner freigeben.'}
                   </div>
                 </div>
               </>
@@ -462,7 +474,7 @@ export default function SettingsPage() {
                 }}
               >
                 <option value="private">Privat</option>
-                <option value="shared">Geteilt</option>
+                <option value="shared" disabled={!hasSharedAccess}>Geteilt</option>
               </select>
             </div>
             <FolderNavigator

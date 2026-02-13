@@ -7,30 +7,70 @@
 import { fileAPI } from './api';
 import { getPendingChanges, removePendingChange, cacheNote } from './offlineStorage';
 
+export interface SyncFailureDetail {
+  id: string;
+  path: string;
+  type: 'private' | 'shared';
+  action: 'create' | 'update' | 'delete';
+  error: string;
+}
+
+export interface SyncSummary {
+  total: number;
+  success: number;
+  failed: number;
+  syncedPaths: string[];
+  failures: SyncFailureDetail[];
+}
+
 /**
  * Synchronisiert alle ausstehenden Änderungen mit dem Server
  */
-export async function syncPendingChanges(): Promise<{ success: number; failed: number }> {
+export async function syncPendingChanges(): Promise<SyncSummary> {
   const pending = await getPendingChanges();
   
   if (pending.length === 0) {
-    return { success: 0, failed: 0 };
+    return { total: 0, success: 0, failed: 0, syncedPaths: [], failures: [] };
   }
 
   let success = 0;
   let failed = 0;
+  const syncedPaths: string[] = [];
+  const failures: SyncFailureDetail[] = [];
 
   for (const change of pending) {
     try {
       switch (change.action) {
         case 'create':
+          await fileAPI.createFile({
+            path: change.path,
+            content: change.content ?? '',
+            type: change.type
+          });
+          if (change.content !== undefined) {
+            await cacheNote(change.path, change.type, change.content);
+          }
+          break;
         case 'update':
           if (change.content !== undefined) {
-            await fileAPI.updateFile({
-              path: change.path,
-              content: change.content,
-              type: change.type
-            });
+            try {
+              await fileAPI.updateFile({
+                path: change.path,
+                content: change.content,
+                type: change.type
+              });
+            } catch (updateError: any) {
+              // Fallback: Wenn Datei serverseitig fehlt, als create erneut versuchen.
+              if (updateError?.response?.status === 404) {
+                await fileAPI.createFile({
+                  path: change.path,
+                  content: change.content,
+                  type: change.type
+                });
+              } else {
+                throw updateError;
+              }
+            }
             // Aktualisiere Cache nach erfolgreichem Sync
             await cacheNote(change.path, change.type, change.content);
           }
@@ -46,14 +86,24 @@ export async function syncPendingChanges(): Promise<{ success: number; failed: n
       // Entferne aus Queue nach erfolgreichem Sync
       await removePendingChange(change.id);
       success++;
+      syncedPaths.push(change.path);
     } catch (error) {
       console.error(`Failed to sync change ${change.id}:`, error);
       failed++;
+      failures.push({
+        id: change.id,
+        path: change.path,
+        type: change.type,
+        action: change.action,
+        error: error instanceof Error
+          ? error.message
+          : 'Unbekannter Synchronisationsfehler'
+      });
       // Behalte in Queue für nächsten Sync-Versuch
     }
   }
 
-  return { success, failed };
+  return { total: pending.length, success, failed, syncedPaths, failures };
 }
 
 /**

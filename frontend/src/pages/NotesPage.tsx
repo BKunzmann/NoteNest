@@ -12,8 +12,7 @@ import MarkdownEditor from '../components/Editor/MarkdownEditor';
 import DeleteConfirmDialog from '../components/FileManager/DeleteConfirmDialog';
 import FileActionDialog from '../components/FileManager/FileActionDialog';
 import ContextMenu, { ContextMenuAction } from '../components/FileManager/ContextMenu';
-import CreateFileDialog from '../components/FileManager/CreateFileDialog';
-import { settingsAPI } from '../services/api';
+import { fileAPI, settingsAPI } from '../services/api';
 
 function normalizeFolderPath(inputPath: string): string {
   let normalized = inputPath.trim() || '/';
@@ -28,6 +27,56 @@ function normalizeFolderPath(inputPath: string): string {
   return normalized || '/';
 }
 
+function getParentFolderPath(filePath: string): string {
+  const normalized = normalizeFolderPath(filePath);
+  if (normalized === '/') {
+    return '/';
+  }
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length <= 1) {
+    return '/';
+  }
+  return `/${parts.slice(0, -1).join('/')}`;
+}
+
+function buildFilePath(folderPath: string, name: string): string {
+  const normalizedFolder = normalizeFolderPath(folderPath);
+  const cleanName = name.replace(/[\\/]/g, '').trim();
+  if (!cleanName) {
+    return normalizedFolder;
+  }
+  return normalizedFolder === '/'
+    ? `/${cleanName}`
+    : `${normalizedFolder}/${cleanName}`;
+}
+
+function sanitizeFilenameForWindows(name: string): string {
+  return name
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\.+$/g, '')
+    .trim();
+}
+
+function deriveTitleFromFirstLine(content: string): string | null {
+  const firstMeaningfulLine = content
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  if (!firstMeaningfulLine) {
+    return null;
+  }
+
+  const stripped = firstMeaningfulLine.replace(/^#{1,6}\s*/, '').trim();
+  if (!stripped) {
+    return null;
+  }
+
+  const sanitized = sanitizeFilenameForWindows(stripped);
+  return sanitized ? sanitized.slice(0, 80) : null;
+}
+
 export default function NotesPage() {
   const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
   const navigate = useNavigate();
@@ -36,23 +85,21 @@ export default function NotesPage() {
     selectedPath, 
     selectedType,
     fileContent, 
+    fileLastModified,
+    fileCreatedAt,
     isLoadingContent,
     loadFileContent,
     selectFile,
     clearSelection,
     deleteItem
   } = useFileStore();
-  const { reset: resetEditor } = useEditorStore();
+  const { content: editorContent, reset: resetEditor } = useEditorStore();
   const [contextPosition, setContextPosition] = useState<{ x: number; y: number } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
-  const [showQuickCreateDialog, setShowQuickCreateDialog] = useState(false);
-  const [quickCreateTarget, setQuickCreateTarget] = useState<{ type: 'private' | 'shared'; path: string }>({
-    type: 'private',
-    path: '/'
-  });
   const longPressTimerRef = useRef<number | null>(null);
+  const autoRenameTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -60,8 +107,91 @@ export default function NotesPage() {
         window.clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
       }
+      if (autoRenameTimerRef.current !== null) {
+        window.clearTimeout(autoRenameTimerRef.current);
+        autoRenameTimerRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (
+      !selectedFile ||
+      selectedFile.type !== 'file' ||
+      !selectedFile.isAutoNaming ||
+      !selectedPath ||
+      !selectedType
+    ) {
+      return;
+    }
+
+    // Dateiname wird erst synchronisiert, wenn die erste Zeile abgeschlossen wurde.
+    if (!editorContent.includes('\n')) {
+      return;
+    }
+
+    const derivedTitle = deriveTitleFromFirstLine(editorContent);
+    if (!derivedTitle) {
+      return;
+    }
+
+    const extension = selectedFile.name.includes('.')
+      ? selectedFile.name.slice(selectedFile.name.lastIndexOf('.'))
+      : '.md';
+    const nextName = `${derivedTitle}${extension}`;
+    if (nextName === selectedFile.name) {
+      return;
+    }
+
+    if (autoRenameTimerRef.current !== null) {
+      window.clearTimeout(autoRenameTimerRef.current);
+    }
+
+    const pathAtScheduleTime = selectedPath;
+    const typeAtScheduleTime = selectedType;
+    const fileSnapshot = selectedFile;
+    autoRenameTimerRef.current = window.setTimeout(() => {
+      fileAPI.renameFile({
+        path: pathAtScheduleTime,
+        newName: nextName,
+        type: typeAtScheduleTime
+      }).then((response) => {
+        const activeSelection = useFileStore.getState().selectedPath;
+        if (activeSelection !== pathAtScheduleTime) {
+          return;
+        }
+
+        const fallbackPath = buildFilePath(getParentFolderPath(pathAtScheduleTime), nextName);
+        const normalizedNewPath = normalizeFolderPath(response.newPath || fallbackPath);
+        selectFile(
+          {
+            ...fileSnapshot,
+            name: nextName,
+            path: normalizedNewPath,
+            isAutoNaming: true
+          },
+          normalizedNewPath,
+          typeAtScheduleTime
+        );
+
+        window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+          detail: {
+            type: typeAtScheduleTime,
+            path: getParentFolderPath(normalizedNewPath)
+          }
+        }));
+      }).catch((error) => {
+        console.error('Automatisches Umbenennen fehlgeschlagen:', error);
+      });
+    }, 1500);
+
+    return () => {
+      if (autoRenameTimerRef.current !== null) {
+        window.clearTimeout(autoRenameTimerRef.current);
+        autoRenameTimerRef.current = null;
+      }
+    };
+  }, [editorContent, selectFile, selectedFile, selectedPath, selectedType]);
 
   // Lade Datei aus URL-Parametern, wenn vorhanden
   useEffect(() => {
@@ -100,7 +230,8 @@ export default function NotesPage() {
             type: 'file' as const,
             isEditable: true,
             canRead: true,
-            canWrite: true
+            canWrite: true,
+            isAutoNaming: false
           };
           
           selectFile(fileItem, decodedPath, params.type);
@@ -118,17 +249,51 @@ export default function NotesPage() {
   // }, [clearSelection, resetEditor]);
 
   const handleStartNewNote = async () => {
+    const now = new Date();
+    const timestamp = now
+      .toISOString()
+      .replace('T', ' ')
+      .replace(/:/g, '-')
+      .slice(0, 16);
+    const suggestedBaseName = sanitizeFilenameForWindows(`Neue Notiz ${timestamp}`) || `Notiz-${Date.now()}`;
+
     try {
       const settings = await settingsAPI.getSettings();
-      setQuickCreateTarget({
-        type: settings.default_note_type || 'private',
-        path: normalizeFolderPath(settings.default_note_folder_path || '/')
+      const targetType = (settings.default_note_type === 'shared' && !settings.has_shared_access)
+        ? 'private'
+        : (settings.default_note_type || 'private');
+      const targetFolder = normalizeFolderPath(settings.default_note_folder_path || '/');
+      const filePath = buildFilePath(targetFolder, `${suggestedBaseName}.md`);
+
+      await fileAPI.createFile({
+        path: filePath,
+        content: '# ',
+        type: targetType
       });
+
+      selectFile(
+        {
+          name: `${suggestedBaseName}.md`,
+          path: filePath,
+          type: 'file',
+          fileType: 'md',
+          isEditable: true,
+          canRead: true,
+          canWrite: true,
+          isAutoNaming: true
+        },
+        filePath,
+        targetType
+      );
+      window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+        detail: {
+          type: targetType,
+          path: targetFolder
+        }
+      }));
+      navigate('/notes');
     } catch (error) {
-      console.error('Fehler beim Laden der Standardablage:', error);
-      setQuickCreateTarget({ type: 'private', path: '/' });
-    } finally {
-      setShowQuickCreateDialog(true);
+      console.error('Fehler beim Erstellen der Notiz im Standardordner:', error);
     }
   };
 
@@ -166,33 +331,6 @@ export default function NotesPage() {
         >
           Neue Notiz im Standardordner
         </button>
-
-        {showQuickCreateDialog && (
-          <CreateFileDialog
-            isOpen={showQuickCreateDialog}
-            onClose={() => setShowQuickCreateDialog(false)}
-            type="file"
-            initialFolderType={quickCreateTarget.type}
-            initialPath={quickCreateTarget.path}
-            allowTargetSelection={true}
-            onCreated={(created) => {
-              selectFile(
-                {
-                  name: created.name,
-                  path: created.path,
-                  type: 'file',
-                  fileType: 'md',
-                  isEditable: true,
-                  canRead: true,
-                  canWrite: true
-                },
-                created.path,
-                created.type
-              );
-              navigate('/notes');
-            }}
-          />
-        )}
       </div>
     );
   }
@@ -226,7 +364,32 @@ export default function NotesPage() {
   }
 
   // Funktion zum Schließen der Notiz
-  const handleCloseNote = () => {
+  const handleCloseNote = async () => {
+    const cleanedEditorContent = (editorContent || '')
+      .replace(/^#\s*$/gm, '')
+      .trim();
+    const shouldDeleteEmptyNote = Boolean(
+      selectedFile &&
+      selectedFile.type === 'file' &&
+      selectedPath &&
+      selectedType &&
+      cleanedEditorContent.length === 0
+    );
+
+    if (shouldDeleteEmptyNote && selectedPath && selectedType) {
+      try {
+        await deleteItem(selectedPath, selectedType);
+        window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+          detail: {
+            type: selectedType,
+            path: getParentFolderPath(selectedPath)
+          }
+        }));
+      } catch (error) {
+        console.error('Leere Notiz konnte beim Schließen nicht gelöscht werden:', error);
+      }
+    }
+
     clearSelection();
     resetEditor();
     // Navigiere zur Basis-Notes-Seite (ohne Parameter)
@@ -252,6 +415,14 @@ export default function NotesPage() {
     setContextPosition({ x, y });
   };
 
+  const toggleContextMenu = (x: number, y: number) => {
+    if (contextPosition) {
+      setContextPosition(null);
+      return;
+    }
+    openContextMenu(x, y);
+  };
+
   const handleHeaderContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     openContextMenu(event.clientX, event.clientY);
@@ -275,6 +446,12 @@ export default function NotesPage() {
     }
     try {
       await deleteItem(selectedPath, selectedType);
+      window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+        detail: {
+          type: selectedType,
+          path: getParentFolderPath(selectedPath)
+        }
+      }));
       clearSelection();
       resetEditor();
       navigate('/notes');
@@ -286,9 +463,99 @@ export default function NotesPage() {
     }
   };
 
+  const handleRevealInSidebar = () => {
+    if (!selectedPath || !selectedType) {
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('notenest:open-sidebar'));
+    window.dispatchEvent(new CustomEvent('notenest:reveal-file-in-sidebar', {
+      detail: {
+        type: selectedType,
+        path: selectedPath
+      }
+    }));
+  };
+
+  const handleRenameSelected = async () => {
+    if (!selectedPath || !selectedType || !selectedFile) {
+      return;
+    }
+
+    const currentName = selectedFile.name;
+    const rawName = window.prompt('Neuer Dateiname', currentName);
+    if (rawName === null) {
+      return;
+    }
+
+    const sanitizedInput = sanitizeFilenameForWindows(rawName);
+    if (!sanitizedInput) {
+      return;
+    }
+
+    const currentExt = currentName.includes('.') ? currentName.slice(currentName.lastIndexOf('.')) : '';
+    const nextName = currentExt && !sanitizedInput.includes('.')
+      ? `${sanitizedInput}${currentExt}`
+      : sanitizedInput;
+
+    if (nextName === currentName) {
+      return;
+    }
+
+    try {
+      const response = await fileAPI.renameFile({
+        path: selectedPath,
+        newName: nextName,
+        type: selectedType
+      });
+      const fallbackNewPath = buildFilePath(getParentFolderPath(selectedPath), nextName);
+      const normalizedNewPath = normalizeFolderPath(response.newPath || fallbackNewPath);
+
+      selectFile(
+        {
+          ...selectedFile,
+          name: nextName,
+          path: normalizedNewPath,
+          isAutoNaming: false
+        },
+        normalizedNewPath,
+        selectedType
+      );
+
+      window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+        detail: {
+          type: selectedType,
+          path: getParentFolderPath(normalizedNewPath)
+        }
+      }));
+    } catch (error) {
+      console.error('Fehler beim Umbenennen der Datei:', error);
+    }
+  };
+
+  const formatMetaTimestamp = (iso?: string | null): string | null => {
+    if (!iso) {
+      return null;
+    }
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toLocaleString('de-DE');
+  };
+
   const noteMenuActions: ContextMenuAction[] = (!selectedFile || !selectedPath || !selectedType)
     ? []
     : [
+      {
+        id: 'reveal-note-folder',
+        label: 'Ordner in Sidebar öffnen',
+        onClick: handleRevealInSidebar
+      },
+      {
+        id: 'rename-note',
+        label: 'Umbenennen...',
+        onClick: () => void handleRenameSelected()
+      },
       {
         id: 'copy-note',
         label: 'Kopieren...',
@@ -337,12 +604,23 @@ export default function NotesPage() {
               {selectedPath}
             </div>
           )}
+          {(fileCreatedAt || fileLastModified) && (
+            <div style={{
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+              marginTop: '0.2rem'
+            }}>
+              {fileCreatedAt && `Erstellt: ${formatMetaTimestamp(fileCreatedAt) || '—'}`}
+              {fileCreatedAt && fileLastModified && ' · '}
+              {fileLastModified && `Geändert: ${formatMetaTimestamp(fileLastModified) || '—'}`}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button
             onClick={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
-              openContextMenu(rect.left, rect.bottom + 6);
+              toggleContextMenu(rect.left, rect.bottom + 6);
             }}
             title="Dateiaktionen"
             style={{
@@ -366,7 +644,7 @@ export default function NotesPage() {
 
           {/* Schließen-Button */}
           <button
-            onClick={handleCloseNote}
+            onClick={() => void handleCloseNote()}
             title="Notiz schließen"
             style={{
               padding: '0.5rem',
@@ -491,6 +769,14 @@ export default function NotesPage() {
           sourceName={selectedFile.name}
           sourceItemType={selectedFile.type}
           onClose={() => setShowMoveDialog(false)}
+          onSuccess={() => {
+            window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+              detail: {
+                type: selectedType,
+                path: getParentFolderPath(selectedPath)
+              }
+            }));
+          }}
         />
       )}
 
@@ -503,6 +789,14 @@ export default function NotesPage() {
           sourceName={selectedFile.name}
           sourceItemType={selectedFile.type}
           onClose={() => setShowCopyDialog(false)}
+          onSuccess={() => {
+            window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+              detail: {
+                type: selectedType,
+                path: getParentFolderPath(selectedPath)
+              }
+            }));
+          }}
         />
       )}
     </div>

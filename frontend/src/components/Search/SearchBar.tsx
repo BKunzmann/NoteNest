@@ -13,41 +13,7 @@ interface SearchBarProps {
 }
 
 const SEARCH_HISTORY_KEY = 'notenest.search-history';
-const MAX_SEARCH_HISTORY = 12;
 const MOBILE_BREAKPOINT = 700;
-
-function loadSearchHistory(): string[] {
-  try {
-    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((entry): entry is string => typeof entry === 'string');
-  } catch {
-    return [];
-  }
-}
-
-function saveSearchHistory(history: string[]): void {
-  try {
-    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_SEARCH_HISTORY)));
-  } catch {
-    // Verlauf ist optional
-  }
-}
-
-function updateHistory(currentHistory: string[], query: string): string[] {
-  const normalized = query.trim();
-  if (!normalized) {
-    return currentHistory;
-  }
-  const withoutCurrent = currentHistory.filter((entry) => entry.toLowerCase() !== normalized.toLowerCase());
-  return [normalized, ...withoutCurrent].slice(0, MAX_SEARCH_HISTORY);
-}
 
 export default function SearchBar({ onClose }: SearchBarProps) {
   const [query, setQuery] = useState('');
@@ -56,7 +22,6 @@ export default function SearchBar({ onClose }: SearchBarProps) {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showResults, setShowResults] = useState(false);
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
-  const [history, setHistory] = useState<string[]>(() => loadSearchHistory());
   const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < MOBILE_BREAKPOINT);
   const navigate = useNavigate();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -67,6 +32,15 @@ export default function SearchBar({ onClose }: SearchBarProps) {
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    // Verlauf wird bewusst nicht angezeigt/persistiert.
+    try {
+      localStorage.removeItem(SEARCH_HISTORY_KEY);
+    } catch {
+      // optional
     }
   }, []);
 
@@ -123,12 +97,6 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     };
   }, [query]);
 
-  const commitQueryToHistory = (searchedQuery: string) => {
-    const nextHistory = updateHistory(history, searchedQuery);
-    setHistory(nextHistory);
-    saveSearchHistory(nextHistory);
-  };
-
   const handleSelectResult = (result: SearchResult) => {
     let pathForUrl = result.path;
     if (pathForUrl.startsWith('/')) {
@@ -137,8 +105,6 @@ export default function SearchBar({ onClose }: SearchBarProps) {
 
     const encodedPath = encodeURIComponent(pathForUrl);
     navigate(`/notes/${result.type}/${encodedPath}`);
-
-    commitQueryToHistory(query);
     setQuery('');
     setShowResults(false);
     if (onClose) {
@@ -151,25 +117,6 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     setResults([]);
     setShowResults(true);
     setSelectedIndex(-1);
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  };
-
-  const removeHistoryEntry = (entry: string) => {
-    const nextHistory = history.filter((item) => item !== entry);
-    setHistory(nextHistory);
-    saveSearchHistory(nextHistory);
-  };
-
-  const clearAllHistory = () => {
-    setHistory([]);
-    saveSearchHistory([]);
-  };
-
-  const handleHistorySelect = (entry: string) => {
-    setQuery(entry);
-    setShowResults(true);
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -202,7 +149,6 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     }
   };
 
-  const hasHistoryView = showResults && query.trim().length < 2 && history.length > 0;
   const hasResultView = showResults && query.trim().length >= 2;
 
   const resultContainerStyle: React.CSSProperties = isMobile
@@ -307,80 +253,8 @@ export default function SearchBar({ onClose }: SearchBarProps) {
         </span>
       </div>
 
-      {(hasHistoryView || hasResultView) && (
+      {hasResultView && (
         <div id={listboxId} role="listbox" style={resultContainerStyle}>
-          {hasHistoryView && (
-            <div style={{ padding: isMobile ? '0.85rem' : '0.75rem' }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '0.5rem'
-              }}>
-                <strong style={{ fontSize: isMobile ? '0.95rem' : '0.85rem' }}>Letzte Suchen</strong>
-                <button
-                  type="button"
-                  onClick={clearAllHistory}
-                  style={{
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: 'var(--accent-color)',
-                    cursor: 'pointer',
-                    fontSize: isMobile ? '0.85rem' : '0.75rem'
-                  }}
-                >
-                  Alle löschen
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                {history.map((entry) => (
-                  <div
-                    key={`history-${entry}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      padding: '0.5rem 0.65rem'
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleHistorySelect(entry)}
-                      style={{
-                        flex: 1,
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        color: 'var(--text-primary)',
-                        fontSize: isMobile ? '0.95rem' : '0.85rem'
-                      }}
-                    >
-                      {entry}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeHistoryEntry(entry)}
-                      aria-label={`Suche "${entry}" löschen`}
-                      style={{
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        fontSize: '0.95rem'
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {hasResultView && results.map((result, index) => (
             <div
               key={`${result.path}-${result.type}`}

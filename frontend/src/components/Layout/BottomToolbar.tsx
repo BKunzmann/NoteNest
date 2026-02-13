@@ -7,153 +7,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useFileStore } from '../../store/fileStore';
 import { useEditorStore } from '../../store/editorStore';
-import CreateFileDialog from '../FileManager/CreateFileDialog';
 import DeleteConfirmDialog from '../FileManager/DeleteConfirmDialog';
 import { exportAPI, settingsAPI, fileAPI } from '../../services/api';
 
-function normalizeFolderPath(inputPath: string): string {
-  let normalized = inputPath.trim() || '/';
-  normalized = normalized.replace(/\\/g, '/');
-  if (!normalized.startsWith('/')) {
-    normalized = `/${normalized}`;
-  }
-  normalized = normalized.replace(/\/+/g, '/');
-  if (normalized.length > 1 && normalized.endsWith('/')) {
-    normalized = normalized.slice(0, -1);
-  }
-  return normalized || '/';
-}
-
-function getParentPath(filePath: string): string {
-  const normalized = normalizeFolderPath(filePath);
-  if (normalized === '/') {
-    return '/';
-  }
-  const segments = normalized.split('/').filter(Boolean);
-  if (segments.length <= 1) {
-    return '/';
-  }
-  return `/${segments.slice(0, -1).join('/')}`;
-}
-
 export default function BottomToolbar() {
   const { 
-    privatePath, 
-    sharedPath,
     selectedType, 
     selectedFile, 
     selectedPath,
     deleteItem,
     loadFiles
   } = useFileStore();
-  const { viewMode, setViewMode } = useEditorStore();
-  const [showCreateFile, setShowCreateFile] = useState(false);
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const { setViewMode, isPreviewFullscreen, setPreviewFullscreen } = useEditorStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
-  const [createType, setCreateType] = useState<'private' | 'shared'>('private');
-  const [createPath, setCreatePath] = useState<string>('/');
-  const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
-  const [defaultNotePath, setDefaultNotePath] = useState<string>('/');
-  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const exportMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    settingsAPI.getSettings()
-      .then((settings) => {
-        if (!isMounted) {
-          return;
-        }
-        setDefaultNoteType(settings.default_note_type || 'private');
-        setDefaultNotePath(normalizeFolderPath(settings.default_note_folder_path || '/'));
-        setSidebarViewMode(settings.sidebar_view_mode || 'recent');
-      })
-      .catch((error) => {
-        console.error('Fehler beim Laden der Standardablage:', error);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleSettingsChanged = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        default_note_type?: 'private' | 'shared';
-        default_note_folder_path?: string;
-        sidebar_view_mode?: 'recent' | 'folders';
-      }>;
-      const detail = customEvent.detail;
-      if (!detail) {
-        return;
-      }
-      if (detail.default_note_type) {
-        setDefaultNoteType(detail.default_note_type);
-      }
-      if (detail.default_note_folder_path) {
-        setDefaultNotePath(normalizeFolderPath(detail.default_note_folder_path));
-      }
-      if (detail.sidebar_view_mode) {
-        setSidebarViewMode(detail.sidebar_view_mode);
-      }
-    };
-
-    window.addEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
-    return () => {
-      window.removeEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
-    };
-  }, []);
-
-  const resolveCreateContext = async (): Promise<{ type: 'private' | 'shared'; path: string }> => {
-    try {
-      const freshSettings = await settingsAPI.getSettings();
-      const effectiveSidebarMode = freshSettings.sidebar_view_mode || sidebarViewMode;
-      const effectiveDefaultType = freshSettings.default_note_type || defaultNoteType;
-      const effectiveDefaultPath = normalizeFolderPath(freshSettings.default_note_folder_path || defaultNotePath);
-
-      setDefaultNoteType(effectiveDefaultType);
-      setDefaultNotePath(effectiveDefaultPath);
-      setSidebarViewMode(effectiveSidebarMode);
-
-      if (effectiveSidebarMode === 'recent') {
-        return { type: effectiveDefaultType, path: effectiveDefaultPath };
-      }
-    } catch (error) {
-      // Fallback auf lokal bekannten Zustand
-      console.warn('Konnte aktuelle Einstellungen nicht laden, nutze lokalen Zustand', error);
-      if (sidebarViewMode === 'recent') {
-        return { type: defaultNoteType, path: defaultNotePath };
-      }
-    }
-
-    // Ordner-Ansicht: nutze den aktuell geöffneten Ordner
-    if (selectedType && selectedPath) {
-      if (selectedFile?.type === 'folder') {
-        return { type: selectedType, path: normalizeFolderPath(selectedPath) };
-      }
-      return { type: selectedType, path: getParentPath(selectedPath) };
-    }
-
-    const fallbackType = selectedType || defaultNoteType;
-    const fallbackPath = fallbackType === 'private' ? privatePath : sharedPath;
-    return { type: fallbackType, path: normalizeFolderPath(fallbackPath || '/') };
-  };
-
-  const handleCreateFile = async () => {
-    const context = await resolveCreateContext();
-    setCreateType(context.type);
-    setCreatePath(context.path);
-    setShowCreateFile(true);
-  };
-
-  const handleCreateFolder = async () => {
-    const context = await resolveCreateContext();
-    setCreateType(context.type);
-    setCreatePath(context.path);
-    setShowCreateFolder(true);
-  };
 
   const handleDelete = async () => {
     if (!selectedFile || !selectedPath || !selectedType) {
@@ -165,8 +33,16 @@ export default function BottomToolbar() {
     try {
       await deleteItem(selectedPath, selectedType);
       // Lade Dateiliste neu
-      const pathToReload = selectedType === 'private' ? privatePath : sharedPath;
-      await loadFiles(pathToReload, selectedType);
+      const normalized = selectedPath.replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      const parentPath = parts.length <= 1 ? '/' : `/${parts.slice(0, -1).join('/')}`;
+      await loadFiles(parentPath, selectedType);
+      window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+        detail: {
+          type: selectedType,
+          path: parentPath
+        }
+      }));
     } catch (error) {
       console.error('Failed to delete item:', error);
       // Fehler wird im Store gespeichert und kann dort angezeigt werden
@@ -203,10 +79,16 @@ export default function BottomToolbar() {
   };
 
   const handlePreviewToggle = () => {
-    setViewMode(viewMode === 'preview' ? 'wysiwyg' : 'preview');
+    if (isPreviewFullscreen) {
+      setPreviewFullscreen(false);
+      setViewMode('wysiwyg');
+      return;
+    }
+    setViewMode('preview');
+    setPreviewFullscreen(true);
   };
 
-  const isPreviewActive = viewMode === 'preview';
+  const isPreviewActive = isPreviewFullscreen;
 
   const handleExportPDF = async () => {
     if (!selectedFile || !selectedPath || !selectedType) {
@@ -372,52 +254,6 @@ export default function BottomToolbar() {
         height: '56px',
         boxShadow: '0 -1px 3px rgba(0,0,0,0.1)'
       }}>
-        <button
-          onClick={() => void handleCreateFolder()}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            padding: '0.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.25rem',
-            color: '#007AFF',
-            minWidth: '60px',
-            minHeight: '44px'
-          }}
-          aria-label="Ordner erstellen"
-          title="Neuen Ordner erstellen"
-        >
-          <span>📁</span>
-          <span style={{ fontSize: '0.625rem' }}>Ordner</span>
-        </button>
-
-        <button
-          onClick={() => void handleCreateFile()}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            padding: '0.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.25rem',
-            color: '#007AFF',
-            minWidth: '60px',
-            minHeight: '44px'
-          }}
-          aria-label="Datei erstellen"
-          title="Neue Datei erstellen"
-        >
-          <span>✏️</span>
-          <span style={{ fontSize: '0.625rem' }}>Neu</span>
-        </button>
-
         <button
           onClick={handlePreviewToggle}
           aria-pressed={isPreviewActive}
@@ -593,28 +429,6 @@ export default function BottomToolbar() {
           <span style={{ fontSize: '0.625rem' }}>Löschen</span>
         </button>
       </div>
-
-      {showCreateFile && (
-        <CreateFileDialog
-          isOpen={showCreateFile}
-          onClose={() => setShowCreateFile(false)}
-          type="file"
-          initialFolderType={createType}
-          initialPath={createPath}
-          allowTargetSelection={true}
-        />
-      )}
-
-      {showCreateFolder && (
-        <CreateFileDialog
-          isOpen={showCreateFolder}
-          onClose={() => setShowCreateFolder(false)}
-          type="folder"
-          initialFolderType={createType}
-          initialPath={createPath}
-          allowTargetSelection={true}
-        />
-      )}
 
       {showDeleteConfirm && selectedFile && selectedPath && selectedType && (
         <DeleteConfirmDialog

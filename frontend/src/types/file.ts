@@ -12,6 +12,7 @@ export interface FileItem {
   isEditable?: boolean;
   canRead?: boolean;
   canWrite?: boolean;
+  isAutoNaming?: boolean;
 }
 
 export interface FileListResponse {
@@ -26,6 +27,7 @@ export interface FileContentResponse {
   content: string;
   type: 'private' | 'shared';
   lastModified: string;
+  createdAt?: string;
 }
 
 export interface FileStatsResponse {

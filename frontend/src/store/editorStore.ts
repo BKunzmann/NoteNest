@@ -15,6 +15,7 @@ interface EditorState {
   isDirty: boolean; // Hat ungespeicherte Änderungen
   isSaving: boolean;
   viewMode: 'edit' | 'preview' | 'split' | 'wysiwyg'; // Editor-Modus
+  isPreviewFullscreen: boolean;
   error: string | null;
   
   // Undo/Redo
@@ -30,6 +31,7 @@ interface EditorState {
   saveFile: (filePath: string, type: 'private' | 'shared') => Promise<void>;
   autoSaveFile: (filePath: string, type: 'private' | 'shared') => Promise<void>;
   setViewMode: (mode: 'edit' | 'preview' | 'split' | 'wysiwyg') => void;
+  setPreviewFullscreen: (enabled: boolean) => void;
   clearError: () => void;
   undo: () => void;
   redo: () => void;
@@ -41,6 +43,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isDirty: false,
   isSaving: false,
   viewMode: 'wysiwyg',
+  isPreviewFullscreen: false,
   error: null,
   history: [],
   historyIndex: -1,
@@ -117,6 +120,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       content: '',
       originalContent: '',
       isDirty: false,
+      isPreviewFullscreen: false,
       error: null,
       history: [],
       historyIndex: -1,
@@ -255,6 +259,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
    */
   setViewMode: (mode: 'edit' | 'preview' | 'split' | 'wysiwyg') => {
     set({ viewMode: mode });
+  },
+
+  setPreviewFullscreen: (enabled: boolean) => {
+    set({ isPreviewFullscreen: enabled });
   },
 
   /**

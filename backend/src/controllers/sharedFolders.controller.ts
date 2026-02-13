@@ -5,12 +5,41 @@
  */
 
 import { Request, Response } from 'express';
+import path from 'path';
 import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
 import { 
   listAvailableSharedFolders, 
   validateNasSharedPath 
 } from '../utils/nasPathValidator';
+
+function getSharedBasePath(): string {
+  return path.resolve(process.env.NAS_SHARED_PATH || '/data/shared');
+}
+
+function normalizeSharedFolderAssignment(absolutePath: string): string | null {
+  const sharedBasePath = getSharedBasePath();
+  const resolvedTarget = path.resolve(absolutePath);
+
+  if (
+    resolvedTarget !== sharedBasePath &&
+    !resolvedTarget.startsWith(`${sharedBasePath}${path.sep}`)
+  ) {
+    return null;
+  }
+
+  const relative = path.relative(sharedBasePath, resolvedTarget)
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/')
+    .trim();
+
+  if (!relative || relative === '.' || relative.includes('..')) {
+    return null;
+  }
+
+  return relative;
+}
 
 /**
  * GET /api/admin/shared-folders
@@ -68,16 +97,32 @@ export async function grantSharedFolderAccess(req: Request, res: Response): Prom
       return;
     }
 
+    const normalizedFolderPath = normalizeSharedFolderAssignment(validation.path);
+    if (!normalizedFolderPath) {
+      res.status(400).json({
+        error: 'Invalid folder path',
+        message: 'Shared-Ordner muss innerhalb von NAS_SHARED_PATH liegen und darf nicht der Basisordner selbst sein'
+      });
+      return;
+    }
+
     // Füge Shared-Ordner hinzu (oder update)
     db.prepare(`
       INSERT INTO user_shared_folders (user_id, folder_path)
       VALUES (?, ?)
       ON CONFLICT(user_id, folder_path) DO NOTHING
-    `).run(userId, validation.path);
+    `).run(userId, normalizedFolderPath);
+
+    // Stelle sicher, dass der gemeinsame Root-Pfad in den User-Settings hinterlegt ist.
+    db.prepare(`
+      UPDATE user_settings
+      SET shared_folder_path = COALESCE(shared_folder_path, ?)
+      WHERE user_id = ?
+    `).run(getSharedBasePath(), userId);
 
     res.json({ 
       message: 'Shared folder access granted',
-      path: validation.path 
+      path: normalizedFolderPath
     });
   } catch (error) {
     console.error('Error granting shared folder access:', error);

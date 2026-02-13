@@ -5,6 +5,8 @@
  */
 
 import FileTree from '../FileManager/FileTree';
+import { useEffect, useState } from 'react';
+import { settingsAPI } from '../../services/api';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,6 +14,38 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+  const [hasSharedAccess, setHasSharedAccess] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSharedAccess = async () => {
+      try {
+        const settings = await settingsAPI.getSettings();
+        if (!mounted) {
+          return;
+        }
+        setHasSharedAccess(Boolean(settings.has_shared_access));
+      } catch (error) {
+        if (mounted) {
+          setHasSharedAccess(false);
+        }
+      }
+    };
+
+    void loadSharedAccess();
+
+    const handleSettingsChanged = () => {
+      void loadSharedAccess();
+    };
+    window.addEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
+    };
+  }, []);
+
   return (
     <aside style={{
       width: isOpen ? '280px' : '0px',
@@ -36,14 +70,16 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       />
 
       {/* Geteilte Ordner */}
-      <div style={{ borderTop: '1px solid var(--border-color, #e0e0e0)' }}>
-        <FileTree 
-          type="shared" 
-          title="Geteilte Notizen" 
-          icon="👥"
-          onFileSelect={onClose}
-        />
-      </div>
+      {hasSharedAccess && (
+        <div style={{ borderTop: '1px solid var(--border-color, #e0e0e0)' }}>
+          <FileTree 
+            type="shared" 
+            title="Geteilte Notizen" 
+            icon="👥"
+            onFileSelect={onClose}
+          />
+        </div>
+      )}
     </aside>
   );
 }

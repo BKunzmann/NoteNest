@@ -27,6 +27,10 @@ import {
   RenameFileRequest
 } from '../types/file';
 
+function isSharedAccessError(message?: string): boolean {
+  return message === 'No shared folders assigned' || message === 'Access denied to shared folder';
+}
+
 /**
  * GET /api/files/list
  * Listet Verzeichnis-Inhalt auf
@@ -69,6 +73,10 @@ export async function listFiles(req: Request, res: Response): Promise<void> {
       items
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     console.error('List files error:', error);
     res.status(500).json({ error: error.message || 'Failed to list files' });
   }
@@ -107,6 +115,10 @@ export async function listRecentFilesHandler(req: Request, res: Response): Promi
       items
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     console.error('List recent files error:', error);
     res.status(500).json({ error: error.message || 'Failed to list recent files' });
   }
@@ -135,6 +147,10 @@ export async function getFileStatsHandler(req: Request, res: Response): Promise<
       ...stats
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     console.error('Get file stats error:', error);
     res.status(500).json({ error: error.message || 'Failed to get file stats' });
   }
@@ -193,7 +209,8 @@ export async function getFileContent(req: Request, res: Response): Promise<void>
       path: filePath,
       content,
       type: type as 'private' | 'shared',
-      lastModified: stats.mtime.toISOString()
+      lastModified: stats.mtime.toISOString(),
+      createdAt: stats.birthtime?.toISOString?.() || stats.ctime.toISOString()
     });
   } catch (error: any) {
     const errorFilePath = typeof req.query.path === 'string' ? req.query.path : 'unknown';
@@ -206,6 +223,10 @@ export async function getFileContent(req: Request, res: Response): Promise<void>
       stack: error.stack
     });
     
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'File not found') {
       res.status(404).json({ error: 'File not found' });
       return;
@@ -249,6 +270,10 @@ export async function createFileHandler(req: Request, res: Response): Promise<vo
       message: 'File created successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'File already exists') {
       res.status(409).json({ error: 'File already exists' });
       return;
@@ -289,6 +314,10 @@ export async function updateFileHandler(req: Request, res: Response): Promise<vo
       message: 'File updated successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'File not found') {
       res.status(404).json({ error: 'File not found' });
       return;
@@ -328,6 +357,10 @@ export async function deleteFileHandler(req: Request, res: Response): Promise<vo
       message: 'File or folder deleted successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'File or folder not found') {
       res.status(404).json({ error: 'File or folder not found' });
       return;
@@ -367,6 +400,10 @@ export async function createFolderHandler(req: Request, res: Response): Promise<
       message: 'Folder created successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'Folder already exists') {
       res.status(409).json({ error: 'Folder already exists' });
       return;
@@ -409,6 +446,10 @@ export async function moveFileHandler(req: Request, res: Response): Promise<void
       message: 'File or folder moved successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'Source file or folder not found') {
       res.status(404).json({ error: 'Source file or folder not found' });
       return;
@@ -455,6 +496,10 @@ export async function copyFileHandler(req: Request, res: Response): Promise<void
       message: 'File or folder copied successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     if (error.message === 'Source file or folder not found') {
       res.status(404).json({ error: 'Source file or folder not found' });
       return;
@@ -490,7 +535,7 @@ export async function renameFileHandler(req: Request, res: Response): Promise<vo
     const pathLib = await import('path');
     const dir = pathLib.dirname(data.path);
     const newPath = dir === '.' || dir === '/' 
-      ? data.newName 
+      ? `/${data.newName}` 
       : pathLib.join(dir, data.newName);
 
     await moveFile(
@@ -508,6 +553,10 @@ export async function renameFileHandler(req: Request, res: Response): Promise<vo
       message: 'File or folder renamed successfully'
     });
   } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
     console.error('Rename file error:', error);
     res.status(500).json({ error: error.message || 'Failed to rename file' });
   }

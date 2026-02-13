@@ -154,8 +154,15 @@ export async function createUser(data: RegisterRequest): Promise<User> {
   );
   
   db.prepare(`
-    INSERT INTO user_settings (user_id, private_folder_path, shared_folder_path)
-    VALUES (?, ?, ?)
+    INSERT INTO user_settings (
+      user_id,
+      private_folder_path,
+      shared_folder_path,
+      default_note_type,
+      default_note_folder_path,
+      sidebar_view_mode
+    )
+    VALUES (?, ?, ?, 'private', '/', 'folders')
   `).run(
     userId,
     privatePath,

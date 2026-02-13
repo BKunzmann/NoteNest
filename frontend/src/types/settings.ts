@@ -7,6 +7,8 @@ export interface UserSettings {
   user_id: number;
   private_folder_path: string | null;
   shared_folder_path: string | null;
+  has_shared_access?: boolean;
+  shared_folder_count?: number;
   default_note_type: 'private' | 'shared';
   default_note_folder_path: string;
   sidebar_view_mode: 'recent' | 'folders';

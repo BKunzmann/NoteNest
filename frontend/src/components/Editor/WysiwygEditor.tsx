@@ -186,6 +186,40 @@ export default function WysiwygEditor({
     setTimeout(() => setIsUpdating(false), 0);
   }, [content, isUpdating]);
 
+  useEffect(() => {
+    if (!editorRef.current) {
+      return;
+    }
+    const shouldAutofocus = content.trim().length === 0 || content.trim() === '#';
+    if (!shouldAutofocus) {
+      return;
+    }
+    if (document.activeElement === editorRef.current) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      editor.focus();
+      const selection = window.getSelection();
+      if (!selection) {
+        return;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [content]);
+
   // Konvertiere HTML zu Markdown
   const htmlToMarkdown = (html: string): string => {
     if (!turndownService.current) return '';
