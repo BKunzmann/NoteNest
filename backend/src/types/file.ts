@@ -93,3 +93,8 @@ export interface RestoreTrashRequest {
   type: 'private' | 'shared';
 }
 
+export interface RemoveTrashRequest {
+  trashItemId: number;
+  type: 'private' | 'shared';
+}
+

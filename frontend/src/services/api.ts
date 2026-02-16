@@ -324,6 +324,20 @@ export const fileAPI = {
       type
     });
     return response.data;
+  },
+
+  /**
+   * Entfernt einen Papierkorb-Eintrag endgültig.
+   */
+  async removeTrashItem(
+    trashItemId: number,
+    type: 'private' | 'shared'
+  ): Promise<{ success: boolean; removed: { id: number; name: string; type: 'private' | 'shared'; itemType: 'file' | 'folder' }; message: string }> {
+    const response = await api.post('/files/trash/remove', {
+      trashItemId,
+      type
+    });
+    return response.data;
   }
 };
 

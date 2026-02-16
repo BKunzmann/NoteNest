@@ -1657,6 +1657,58 @@ export async function restoreTrashItem(
 }
 
 /**
+ * Entfernt einen Papierkorb-Eintrag endgültig.
+ */
+export async function removeTrashItem(
+  userId: number,
+  trashItemId: number,
+  type: 'private' | 'shared'
+): Promise<{ id: number; name: string; type: 'private' | 'shared'; itemType: 'file' | 'folder' }> {
+  const row = db.prepare(`
+    SELECT id, item_name, item_type, original_type, trash_path, trash_type
+    FROM trash_items
+    WHERE id = ? AND user_id = ? AND original_type = ?
+  `).get(trashItemId, userId, type) as Pick<
+    TrashItemRow,
+    'id' | 'item_name' | 'item_type' | 'original_type' | 'trash_path' | 'trash_type'
+  > | undefined;
+
+  if (!row) {
+    throw new Error('Trash item not found');
+  }
+
+  const trashRootPath = resolveUserPath(userId, '/', row.trash_type);
+  const targetPath = resolveAbsolutePathFromRoot(trashRootPath, normalizeRelativePath(row.trash_path));
+  const targetParent = path.dirname(targetPath);
+
+  const canWriteTarget = await checkPermissions(targetParent, 'write');
+  if (!canWriteTarget) {
+    throw new Error('No write permission');
+  }
+
+  try {
+    if (row.item_type === 'folder') {
+      await fs.rm(targetPath, { recursive: true, force: true });
+    } else {
+      await fs.unlink(targetPath);
+    }
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  db.prepare('DELETE FROM trash_items WHERE id = ?').run(row.id);
+
+  return {
+    id: row.id,
+    name: row.item_name,
+    type: row.original_type,
+    itemType: row.item_type
+  };
+}
+
+/**
  * Erstellt einen neuen Ordner
  */
 export async function createFolder(

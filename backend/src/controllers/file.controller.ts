@@ -14,6 +14,7 @@ import {
   updateFile,
   deleteFile,
   listTrashItems,
+  removeTrashItem,
   restoreTrashItem,
   createFolder,
   moveFile,
@@ -27,7 +28,8 @@ import {
   MoveFileRequest,
   CopyFileRequest,
   RenameFileRequest,
-  RestoreTrashRequest
+  RestoreTrashRequest,
+  RemoveTrashRequest
 } from '../types/file';
 
 function isSharedAccessError(message?: string): boolean {
@@ -448,6 +450,51 @@ export async function restoreTrashHandler(req: Request, res: Response): Promise<
     }
     console.error('Restore trash error:', error);
     res.status(500).json({ error: error.message || 'Failed to restore trash item' });
+  }
+}
+
+/**
+ * POST /api/files/trash/remove
+ * Entfernt einen Papierkorb-Eintrag endgültig.
+ */
+export async function removeTrashHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data: RemoveTrashRequest = req.body;
+    if (!data?.trashItemId || !data?.type) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    if (data.type !== 'private' && data.type !== 'shared') {
+      res.status(400).json({ error: 'Invalid type (allowed: private, shared)' });
+      return;
+    }
+
+    const removed = await removeTrashItem(req.user.id, Number(data.trashItemId), data.type);
+    res.json({
+      success: true,
+      removed,
+      message: 'Trash item removed permanently'
+    });
+  } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    if (error.message === 'Trash item not found') {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    if (error.message === 'No write permission') {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    console.error('Remove trash error:', error);
+    res.status(500).json({ error: error.message || 'Failed to remove trash item' });
   }
 }
 

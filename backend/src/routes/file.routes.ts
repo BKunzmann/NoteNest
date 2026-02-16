@@ -25,6 +25,7 @@ router.post('/move', fileController.moveFileHandler);
 router.post('/copy', fileController.copyFileHandler);
 router.post('/rename', fileController.renameFileHandler);
 router.post('/trash/restore', fileController.restoreTrashHandler);
+router.post('/trash/remove', fileController.removeTrashHandler);
 
 export default router;
 

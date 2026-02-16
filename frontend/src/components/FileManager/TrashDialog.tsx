@@ -29,6 +29,7 @@ export default function TrashDialog({ isOpen, scope, onClose, onRestored }: Tras
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [removingId, setRemovingId] = useState<number | null>(null);
   const [isCompact, setIsCompact] = useState<boolean>(() => window.innerWidth < 760);
   const [activeFilter, setActiveFilter] = useState<'all' | 'private' | 'shared'>(
     scope === 'all' ? 'all' : scope
@@ -212,57 +213,99 @@ export default function TrashDialog({ isOpen, scope, onClose, onRestored }: Tras
                   border: '1px solid var(--border-color)',
                   borderRadius: '10px',
                   padding: '0.65rem 0.7rem',
-                  display: 'grid',
-                  gridTemplateColumns: isCompact ? '1fr' : 'auto minmax(0, 1fr) auto',
-                  gap: isCompact ? '0.45rem' : '0.75rem',
-                  alignItems: isCompact ? 'stretch' : 'center'
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.55rem'
                 }}
               >
-                <div style={{ fontSize: '1rem', alignSelf: isCompact ? 'flex-start' : 'center' }}>
-                  {item.itemType === 'folder' ? '📁' : '📝'}
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '0.7rem', alignItems: 'start' }}>
+                  <div style={{ fontSize: '1rem' }}>
+                    {item.itemType === 'folder' ? '📁' : '📝'}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                      {item.name}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.1rem', wordBreak: 'break-word' }}>
+                      {item.originalPath}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '0.25rem' }}>
+                      {getScopeLabel(item.type)} · geloescht: {formatDeletedAt(item.deletedAt)}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, wordBreak: 'break-word' }}>
-                    {item.name}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.1rem', wordBreak: 'break-word' }}>
-                    {item.originalPath}
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '0.25rem' }}>
-                    {getScopeLabel(item.type)} · geloescht: {formatDeletedAt(item.deletedAt)}
-                  </div>
+
+                <div style={{
+                  display: 'flex',
+                  gap: '0.45rem',
+                  flexWrap: 'wrap'
+                }}>
+                  <button
+                    type="button"
+                    disabled={restoringId === item.id || removingId === item.id}
+                    onClick={async () => {
+                      setRestoringId(item.id);
+                      setError(null);
+                      try {
+                        const response = await fileAPI.restoreTrashItem(item.id, item.type);
+                        onRestored?.(response.restored);
+                        await loadTrash();
+                      } catch (apiError: any) {
+                        setError(apiError?.response?.data?.error || 'Wiederherstellung fehlgeschlagen');
+                      } finally {
+                        setRestoringId(null);
+                      }
+                    }}
+                    style={{
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--accent-color)',
+                      color: '#fff',
+                      cursor: restoringId === item.id || removingId === item.id ? 'not-allowed' : 'pointer',
+                      padding: '0.4rem 0.7rem',
+                      fontSize: '0.8rem',
+                      opacity: restoringId === item.id || removingId === item.id ? 0.7 : 1,
+                      width: isCompact ? '100%' : 'auto'
+                    }}
+                  >
+                    {restoringId === item.id ? 'Stellt her…' : 'Wiederherstellen'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={removingId === item.id || restoringId === item.id}
+                    onClick={async () => {
+                      const confirmed = window.confirm(
+                        `Soll "${item.name}" endgueltig aus dem Papierkorb entfernt werden?`
+                      );
+                      if (!confirmed) {
+                        return;
+                      }
+                      setRemovingId(item.id);
+                      setError(null);
+                      try {
+                        await fileAPI.removeTrashItem(item.id, item.type);
+                        await loadTrash();
+                      } catch (apiError: any) {
+                        setError(apiError?.response?.data?.error || 'Endgueltiges Entfernen fehlgeschlagen');
+                      } finally {
+                        setRemovingId(null);
+                      }
+                    }}
+                    style={{
+                      border: '1px solid var(--error-color)',
+                      borderRadius: '8px',
+                      backgroundColor: 'transparent',
+                      color: 'var(--error-color)',
+                      cursor: restoringId === item.id || removingId === item.id ? 'not-allowed' : 'pointer',
+                      padding: '0.4rem 0.7rem',
+                      fontSize: '0.8rem',
+                      opacity: restoringId === item.id || removingId === item.id ? 0.7 : 1,
+                      width: isCompact ? '100%' : 'auto'
+                    }}
+                  >
+                    {removingId === item.id ? 'Entfernt…' : 'Endgueltig entfernen'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={restoringId === item.id}
-                  onClick={async () => {
-                    setRestoringId(item.id);
-                    setError(null);
-                    try {
-                      const response = await fileAPI.restoreTrashItem(item.id, item.type);
-                      onRestored?.(response.restored);
-                      await loadTrash();
-                    } catch (apiError: any) {
-                      setError(apiError?.response?.data?.error || 'Wiederherstellung fehlgeschlagen');
-                    } finally {
-                      setRestoringId(null);
-                    }
-                  }}
-                  style={{
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    backgroundColor: 'var(--accent-color)',
-                    color: '#fff',
-                    cursor: restoringId === item.id ? 'not-allowed' : 'pointer',
-                    padding: '0.4rem 0.7rem',
-                    fontSize: '0.8rem',
-                    opacity: restoringId === item.id ? 0.7 : 1,
-                    width: isCompact ? '100%' : 'auto',
-                    justifySelf: isCompact ? 'stretch' : 'end'
-                  }}
-                >
-                  {restoringId === item.id ? 'Stellt her…' : 'Wiederherstellen'}
-                </button>
               </div>
             ))}
           </div>

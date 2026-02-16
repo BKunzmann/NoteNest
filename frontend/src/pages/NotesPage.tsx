@@ -182,11 +182,7 @@ export default function NotesPage() {
       return;
     }
 
-    // Dateiname wird erst synchronisiert, wenn die erste Zeile abgeschlossen wurde.
-    if (!editorContent.includes('\n')) {
-      return;
-    }
-
+    // Solange Auto-Naming aktiv ist, folgt der Dateiname der ersten Textzeile.
     const derivedTitle = deriveTitleFromFirstLine(editorContent);
     if (!derivedTitle) {
       return;

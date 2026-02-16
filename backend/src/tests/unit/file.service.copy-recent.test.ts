@@ -11,6 +11,7 @@ import {
   listRecentFiles,
   listTrashItems,
   moveFile,
+  removeTrashItem,
   restoreTrashItem
 } from '../../services/file.service';
 
@@ -154,6 +155,22 @@ describe('file.service copy/recent', () => {
 
     const restoredContent = await fs.readFile(path.join(privateDir, 'restore-me.md'), 'utf-8');
     expect(restoredContent).toContain('restore');
+  });
+
+  it('removeTrashItem should permanently remove entries from trash and disk', async () => {
+    await fs.writeFile(path.join(privateDir, 'remove-me.md'), '# remove');
+    await deleteFile(userId, '/remove-me.md', 'private');
+
+    const trashItems = listTrashItems(userId, 'private');
+    expect(trashItems).toHaveLength(1);
+
+    const removed = await removeTrashItem(userId, trashItems[0].id, 'private');
+    expect(removed.name).toBe('remove-me.md');
+    expect(removed.type).toBe('private');
+    expect(removed.itemType).toBe('file');
+
+    await expect(fs.access(path.join(privateDir, 'remove-me.md'))).rejects.toBeTruthy();
+    expect(listTrashItems(userId, 'private')).toHaveLength(0);
   });
 
   it('getFileStats should return total files and notes', async () => {

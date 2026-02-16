@@ -467,7 +467,12 @@ export default function FileTree({
     return currentPath || '/';
   }, [currentPath, selectedFile?.type, selectedPath, selectedType, type]);
 
-  const handleCreated = useCallback((created: { path: string; type: 'private' | 'shared'; name: string }) => {
+  const handleCreated = useCallback((created: {
+    path: string;
+    type: 'private' | 'shared';
+    name: string;
+    isAutoNaming?: boolean;
+  }) => {
     const parentPath = getParentPath(created.path);
     void loadFiles(parentPath, created.type, showOnlyNotes);
     void refreshFileStats();
@@ -489,7 +494,8 @@ export default function FileTree({
           path: created.path,
           type: 'file',
           fileType: 'md',
-          isEditable: true
+          isEditable: true,
+          isAutoNaming: created.isAutoNaming ?? false
         },
         created.path
       );
@@ -533,7 +539,8 @@ export default function FileTree({
       handleCreated({
         path: targetPath,
         type,
-        name: suggestedName
+        name: suggestedName,
+        isAutoNaming: true
       });
     } catch (error) {
       console.error('Fehler beim direkten Erstellen einer Notiz:', error);
