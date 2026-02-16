@@ -57,7 +57,9 @@ describe('Hidden Folders Configuration', () => {
       `).run(customFolders);
       
       const config = getHiddenFoldersConfig();
-      expect(config).toEqual(['custom_folder', 'test_folder']);
+      expect(config).toContain('.notenest-trash');
+      expect(config).toContain('custom_folder');
+      expect(config).toContain('test_folder');
     });
   });
 
