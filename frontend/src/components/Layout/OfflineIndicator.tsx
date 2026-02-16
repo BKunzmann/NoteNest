@@ -4,7 +4,7 @@
  * Zeigt einen Indikator an, wenn die App offline ist
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { syncPendingChanges } from '../../services/syncService';
 import { isOnline } from '../../services/syncService';
 import type { SyncSummary } from '../../services/syncService';
@@ -17,6 +17,15 @@ export default function OfflineIndicator() {
   const [pendingCount, setPendingCount] = useState(0);
   const [showDetails, setShowDetails] = useState(false);
   const [isPwaUpdateAvailable, setIsPwaUpdateAvailable] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const autoCloseTimerRef = useRef<number | null>(null);
+
+  const clearAutoCloseTimer = () => {
+    if (autoCloseTimerRef.current !== null) {
+      window.clearTimeout(autoCloseTimerRef.current);
+      autoCloseTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const refreshPendingCount = async () => {
@@ -37,11 +46,6 @@ export default function OfflineIndicator() {
         const result = await syncPendingChanges();
         setSyncResult(result);
         await refreshPendingCount();
-        
-        // Verstecke Sync-Ergebnis nach 3 Sekunden
-        setTimeout(() => {
-          setSyncResult(null);
-        }, 3000);
       } catch (error) {
         console.error('Sync failed:', error);
       } finally {
@@ -53,6 +57,7 @@ export default function OfflineIndicator() {
       setIsOffline(true);
       setSyncResult(null);
       setShowDetails(false);
+      clearAutoCloseTimer();
       void refreshPendingCount();
     };
 
@@ -71,11 +76,56 @@ export default function OfflineIndicator() {
     }
 
     return () => {
+      clearAutoCloseTimer();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('notenest:pwa-update-available', handlePwaUpdateAvailable as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    clearAutoCloseTimer();
+    if (!syncResult || showDetails) {
+      return;
+    }
+
+    autoCloseTimerRef.current = window.setTimeout(() => {
+      setSyncResult(null);
+    }, 3000);
+
+    return () => {
+      clearAutoCloseTimer();
+    };
+  }, [showDetails, syncResult]);
+
+  useEffect(() => {
+    if (!syncResult) {
+      setShowDetails(false);
+    }
+  }, [syncResult]);
+
+  useEffect(() => {
+    if (!syncResult || !showDetails) {
+      return;
+    }
+
+    const handleOutsideClose = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (target && containerRef.current?.contains(target)) {
+        return;
+      }
+      setShowDetails(false);
+      setSyncResult(null);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClose);
+    document.addEventListener('touchstart', handleOutsideClose);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClose);
+      document.removeEventListener('touchstart', handleOutsideClose);
+    };
+  }, [showDetails, syncResult]);
 
   if (!isOffline && !isSyncing && !syncResult && !isPwaUpdateAvailable) {
     return null;
@@ -83,6 +133,7 @@ export default function OfflineIndicator() {
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: 'fixed',
         bottom: '1rem',

@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFileStore } from '../../store/fileStore';
 import { fileAPI, settingsAPI } from '../../services/api';
+import { addPendingChange, cacheNote, isIndexedDBAvailable } from '../../services/offlineStorage';
+import { isOnline } from '../../services/syncService';
 import { FileItem as FileItemType } from '../../types/file';
 import FileItem from './FileItem';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
@@ -462,13 +464,30 @@ export default function FileTree({
       .slice(0, 16);
     const suggestedName = `Neue Notiz ${timestamp}.md`;
     const targetPath = buildChildPath(targetFolder, suggestedName);
+    const initialContent = '# ';
 
     try {
-      await fileAPI.createFile({
-        path: targetPath,
-        content: '# ',
-        type
-      });
+      if (isOnline()) {
+        try {
+          await fileAPI.createFile({
+            path: targetPath,
+            content: initialContent,
+            type
+          });
+        } catch (error) {
+          if (!isIndexedDBAvailable()) {
+            throw error;
+          }
+          await cacheNote(targetPath, type, initialContent);
+          await addPendingChange(targetPath, type, 'create', initialContent);
+        }
+      } else {
+        if (!isIndexedDBAvailable()) {
+          throw new Error('Offline-Speicherung ist nicht verfügbar');
+        }
+        await cacheNote(targetPath, type, initialContent);
+        await addPendingChange(targetPath, type, 'create', initialContent);
+      }
 
       handleCreated({
         path: targetPath,

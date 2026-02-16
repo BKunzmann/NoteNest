@@ -13,6 +13,8 @@ import DeleteConfirmDialog from '../components/FileManager/DeleteConfirmDialog';
 import FileActionDialog from '../components/FileManager/FileActionDialog';
 import ContextMenu, { ContextMenuAction } from '../components/FileManager/ContextMenu';
 import { exportAPI, fileAPI, settingsAPI } from '../services/api';
+import { addPendingChange, cacheNote, isIndexedDBAvailable } from '../services/offlineStorage';
+import { isOnline } from '../services/syncService';
 
 function normalizeFolderPath(inputPath: string): string {
   let normalized = inputPath.trim() || '/';
@@ -264,12 +266,29 @@ export default function NotesPage() {
         : (settings.default_note_type || 'private');
       const targetFolder = normalizeFolderPath(settings.default_note_folder_path || '/');
       const filePath = buildFilePath(targetFolder, `${suggestedBaseName}.md`);
+      const initialContent = '# ';
 
-      await fileAPI.createFile({
-        path: filePath,
-        content: '# ',
-        type: targetType
-      });
+      if (isOnline()) {
+        try {
+          await fileAPI.createFile({
+            path: filePath,
+            content: initialContent,
+            type: targetType
+          });
+        } catch (error) {
+          if (!isIndexedDBAvailable()) {
+            throw error;
+          }
+          await cacheNote(filePath, targetType, initialContent);
+          await addPendingChange(filePath, targetType, 'create', initialContent);
+        }
+      } else {
+        if (!isIndexedDBAvailable()) {
+          throw new Error('Offline-Speicherung ist nicht verfügbar');
+        }
+        await cacheNote(filePath, targetType, initialContent);
+        await addPendingChange(filePath, targetType, 'create', initialContent);
+      }
 
       selectFile(
         {

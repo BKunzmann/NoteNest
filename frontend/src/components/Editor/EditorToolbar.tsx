@@ -39,14 +39,15 @@ export default function EditorToolbar({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const runWysiwygCommand = (command: string, value?: string) => {
+  const runWysiwygCommand = (command: string, value?: string): boolean => {
     const editor = document.querySelector('.wysiwyg-editor') as HTMLElement | null;
     if (!editor) {
-      return;
+      return false;
     }
     editor.focus();
-    document.execCommand(command, false, value);
+    const success = document.execCommand(command, false, value);
     editor.dispatchEvent(new Event('input', { bubbles: true }));
+    return success;
   };
 
   const handleFormatChange = (value: string) => {
@@ -71,6 +72,15 @@ export default function EditorToolbar({
         case 'code':
           runWysiwygCommand('formatBlock', 'pre');
           return;
+        case 'code-block':
+          runWysiwygCommand('formatBlock', 'pre');
+          return;
+        case 'strike':
+          runWysiwygCommand('strikeThrough');
+          return;
+        case 'attachment':
+          runWysiwygCommand('insertText', '[Anhang: ]');
+          return;
         default:
           return;
       }
@@ -91,6 +101,15 @@ export default function EditorToolbar({
         return;
       case 'code':
         onInsertText('`', '`');
+        return;
+      case 'code-block':
+        onInsertText('```\n', '\n```');
+        return;
+      case 'strike':
+        onInsertText('~~', '~~');
+        return;
+      case 'attachment':
+        onInsertText('\n[Anhang: ]', '');
         return;
       default:
         return;
@@ -113,22 +132,13 @@ export default function EditorToolbar({
 
     switch (value) {
       case 'bullet':
-        onInsertText('- ', '');
-        return;
-      case 'bullet-indented':
-        onInsertText('  - ', '');
+        onInsertText('* ', '');
         return;
       case 'hyphen':
         onInsertText('- ', '');
         return;
-      case 'hyphen-indented':
-        onInsertText('  - ', '');
-        return;
       case 'ordered':
         onInsertText('1. ', '');
-        return;
-      case 'ordered-indented':
-        onInsertText('   a. ', '');
         return;
       default:
         return;
@@ -191,14 +201,15 @@ export default function EditorToolbar({
           style={{
             ...buttonStyle,
             marginRight: 0,
-            minWidth: isMobile ? '120px' : '170px'
+            minWidth: isMobile ? '88px' : '110px',
+            fontWeight: 700
           }}
           title="Editor-Modus auswählen"
         >
-          <option value="wysiwyg">WYSIWYG</option>
-          <option value="edit">Markdown</option>
-          <option value="split">Split</option>
-          <option value="preview">Vorschau</option>
+          <option value="wysiwyg">🖊 WYS</option>
+          <option value="edit">⌨ MD</option>
+          <option value="split">↔ Split</option>
+          <option value="preview">👁 Vor</option>
         </select>
       </div>
 
@@ -285,7 +296,8 @@ export default function EditorToolbar({
           style={{
             ...buttonStyle,
             marginRight: 0,
-            minWidth: isMobile ? '86px' : '120px'
+            minWidth: isMobile ? '74px' : '84px',
+            fontWeight: 700
           }}
           title="Textformat (Aa)"
         >
@@ -295,6 +307,9 @@ export default function EditorToolbar({
           <option value="h3">Unterüberschrift (H3)</option>
           <option value="p">Normalschrift</option>
           <option value="code">Inline-Code</option>
+          <option value="code-block">Code block</option>
+          <option value="strike">Durchstreichen</option>
+          <option value="attachment">Anhang</option>
         </select>
 
         <select
@@ -306,17 +321,15 @@ export default function EditorToolbar({
           style={{
             ...buttonStyle,
             marginRight: 0,
-            minWidth: isMobile ? '90px' : '135px'
+            minWidth: isMobile ? '76px' : '92px',
+            fontWeight: 700
           }}
           title="Listen-Auswahl"
         >
           <option value="">Listen</option>
           <option value="bullet">• Punkte</option>
-          <option value="bullet-indented">◦ Punkte (2. Ebene)</option>
-          <option value="hyphen">- Bindestrich</option>
-          <option value="hyphen-indented">- Bindestrich (2. Ebene)</option>
+          <option value="hyphen">- Bindestriche</option>
           <option value="ordered">1. Nummeriert</option>
-          <option value="ordered-indented">a. Nummeriert (2. Ebene)</option>
         </select>
 
         <button
@@ -341,13 +354,6 @@ export default function EditorToolbar({
           <span style={{ textDecoration: 'underline' }}>U</span>
         </button>
         <button
-          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('strikeThrough') : onInsertText('~~', '~~'))}
-          style={buttonStyle}
-          title="Durchstreichen"
-        >
-          <span style={{ textDecoration: 'line-through' }}>S</span>
-        </button>
-        <button
           onClick={handleInsertLink}
           style={buttonStyle}
           title="Link einfügen"
@@ -355,25 +361,29 @@ export default function EditorToolbar({
           🔗
         </button>
         <button
-          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('insertUnorderedList') : onInsertText('- [ ] ', ''))}
+          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('insertText', '- [ ] ') : onInsertText('- [ ] ', ''))}
           style={buttonStyle}
           title="Aufgabenliste"
         >
           ☑
         </button>
         <button
-          onClick={() => onInsertText('\n| Spalte 1 | Spalte 2 |\n| --- | --- |\n| Wert 1 | Wert 2 |\n', '')}
+          onClick={() => {
+            const rowsInput = window.prompt('Anzahl Zeilen', '2');
+            const colsInput = window.prompt('Anzahl Spalten', '2');
+            const rows = Math.max(1, Number.parseInt(rowsInput || '2', 10) || 2);
+            const cols = Math.max(1, Number.parseInt(colsInput || '2', 10) || 2);
+            const header = `| ${Array.from({ length: cols }, (_, index) => `Spalte ${index + 1}`).join(' | ')} |`;
+            const separator = `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`;
+            const bodyRows = Array.from({ length: rows }, (_, rowIndex) =>
+              `| ${Array.from({ length: cols }, (_, colIndex) => `Wert ${rowIndex + 1}.${colIndex + 1}`).join(' | ')} |`
+            ).join('\n');
+            onInsertText(`\n${header}\n${separator}\n${bodyRows}\n`, '');
+          }}
           style={buttonStyle}
           title="Tabelle einfügen"
         >
           ▦
-        </button>
-        <button
-          onClick={() => onInsertText('\n[Anhang: ]', '')}
-          style={buttonStyle}
-          title="Anhang einfügen"
-        >
-          [ ]
         </button>
         <button
           onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('indent') : onInsertText('  ', ''))}
@@ -390,7 +400,16 @@ export default function EditorToolbar({
           ⇤
         </button>
         <button
-          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('formatBlock', 'blockquote') : onInsertText('> ', ''))}
+          onClick={() => {
+            if (viewMode === 'wysiwyg') {
+              const success = runWysiwygCommand('formatBlock', 'blockquote');
+              if (!success) {
+                runWysiwygCommand('insertText', '> ');
+              }
+              return;
+            }
+            onInsertText('> ', '');
+          }}
           style={buttonStyle}
           title="Zitat einfügen"
         >
