@@ -9,6 +9,7 @@ interface FolderNavigatorProps {
   disabled?: boolean;
   label?: string;
   helperText?: string;
+  allowCreateFolder?: boolean;
 }
 
 function normalizePath(inputPath: string): string {
@@ -42,7 +43,8 @@ export default function FolderNavigator({
   onChange,
   disabled = false,
   label = 'Ordner',
-  helperText
+  helperText,
+  allowCreateFolder = false
 }: FolderNavigatorProps) {
   const [currentPath, setCurrentPath] = useState<string>(normalizePath(value));
   const [folders, setFolders] = useState<FileItem[]>([]);
@@ -94,6 +96,33 @@ export default function FolderNavigator({
     const normalized = normalizePath(nextPath);
     setCurrentPath(normalized);
     onChange(normalized);
+  };
+
+  const handleCreateFolder = async () => {
+    if (disabled) {
+      return;
+    }
+    const rawFolderName = window.prompt('Name des neuen Ordners');
+    if (rawFolderName === null) {
+      return;
+    }
+    const folderName = rawFolderName.trim().replace(/[\\/]/g, '');
+    if (!folderName || folderName.includes('..')) {
+      setError('Ungültiger Ordnername');
+      return;
+    }
+
+    const folderPath = currentPath === '/' ? `/${folderName}` : `${currentPath}/${folderName}`;
+    try {
+      await fileAPI.createFolder({
+        path: folderPath,
+        type: storageType
+      });
+      setError(null);
+      setPath(folderPath);
+    } catch (apiError: any) {
+      setError(apiError?.response?.data?.error || 'Ordner konnte nicht erstellt werden');
+    }
   };
 
   return (
@@ -150,6 +179,24 @@ export default function FolderNavigator({
           >
             Eine Ebene hoch
           </button>
+          {allowCreateFolder && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => void handleCreateFolder()}
+              style={{
+                padding: '0.4rem 0.7rem',
+                borderRadius: '4px',
+                border: '1px solid #ddd',
+                backgroundColor: '#fff',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                fontSize: '0.8rem'
+              }}
+              title="Neuen Unterordner erstellen"
+            >
+              + Neuer Ordner
+            </button>
+          )}
         </div>
 
         {pathSegments.length > 0 && (

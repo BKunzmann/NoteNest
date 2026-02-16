@@ -13,7 +13,14 @@ interface FileActionDialogProps {
   sourceName: string;
   sourceItemType?: 'file' | 'folder';
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (result: {
+    mode: 'move' | 'copy';
+    sourcePath: string;
+    sourceType: FileStorageType;
+    destinationPath: string;
+    destinationType: FileStorageType;
+    itemType: 'file' | 'folder';
+  }) => void;
 }
 
 function normalizeFolderPath(inputPath: string): string {
@@ -159,7 +166,14 @@ export default function FileActionDialog({
       } else {
         await copyItem(sourcePath, sourceType, destinationPath, targetType);
       }
-      onSuccess?.();
+      onSuccess?.({
+        mode,
+        sourcePath,
+        sourceType,
+        destinationPath,
+        destinationType: targetType,
+        itemType: sourceItemType
+      });
       onClose();
     } catch (apiError: unknown) {
       let errorMessage = 'Aktion fehlgeschlagen';
@@ -255,6 +269,7 @@ export default function FileActionDialog({
             disabled={isSubmitting}
             label="Zielordner"
             helperText="Ordnerauswahl erfolgt per Navigator statt Freitext."
+            allowCreateFolder={true}
           />
 
           <div style={{ marginBottom: '0.85rem' }}>

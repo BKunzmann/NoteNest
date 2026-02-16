@@ -519,6 +519,7 @@ export default function FileTree({
       actions.push({
         id: 'open',
         label: 'Öffnen',
+        icon: '📂',
         onClick: () => openFile(contextMenu.file, contextMenu.path)
       });
     }
@@ -527,16 +528,19 @@ export default function FileTree({
       {
         id: 'copy',
         label: 'Kopieren...',
+        icon: '📄',
         onClick: () => setCopyTarget(contextMenu)
       },
       {
         id: 'move',
         label: 'Verschieben...',
+        icon: '↔️',
         onClick: () => setMoveTarget(contextMenu)
       },
       {
         id: 'delete',
         label: 'Löschen',
+        icon: '🗑️',
         onClick: () => setDeleteTarget(contextMenu),
         destructive: true
       }
@@ -544,6 +548,40 @@ export default function FileTree({
 
     return actions;
   }, [contextMenu, openFile]);
+
+  const focusResultFile = useCallback((result: {
+    destinationPath: string;
+    destinationType: 'private' | 'shared';
+    itemType: 'file' | 'folder';
+  }) => {
+    if (result.itemType !== 'file') {
+      return;
+    }
+
+    const destinationPath = result.destinationPath;
+    const destinationType = result.destinationType;
+    const fileName = destinationPath.split('/').filter(Boolean).pop() || destinationPath;
+
+    if (window.location.pathname !== '/notes') {
+      navigate('/notes');
+    }
+
+    selectFile(
+      {
+        name: fileName,
+        path: destinationPath,
+        type: 'file',
+        fileType: fileName.toLowerCase().endsWith('.txt') ? 'txt' : 'md',
+        isEditable: true
+      },
+      destinationPath,
+      destinationType
+    );
+
+    if (onFileSelect) {
+      setTimeout(() => onFileSelect(), 100);
+    }
+  }, [navigate, onFileSelect, selectFile]);
 
   return (
     <div style={{ padding: '1rem', position: 'relative' }}>
@@ -1067,10 +1105,11 @@ export default function FileTree({
           sourceName={moveTarget.file.name}
           sourceItemType={moveTarget.file.type}
           onClose={() => setMoveTarget(null)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
             void refreshFileStats();
+            focusResultFile(result);
           }}
         />
       )}
@@ -1084,10 +1123,11 @@ export default function FileTree({
           sourceName={copyTarget.file.name}
           sourceItemType={copyTarget.file.type}
           onClose={() => setCopyTarget(null)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
             void refreshFileStats();
+            focusResultFile(result);
           }}
         />
       )}
