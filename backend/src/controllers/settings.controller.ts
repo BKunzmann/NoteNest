@@ -11,6 +11,11 @@ import path from 'path';
 import db from '../config/database';
 import { IS_NAS_MODE } from '../config/constants';
 import { resolveUserPath } from '../services/file.service';
+import {
+  getNasHomesRootPath,
+  getSharedRootPathForDeployment,
+  getStandaloneUsersRootPath
+} from '../utils/storageRoots';
 
 /**
  * Validiert, ob ein Pfad für den Benutzer erlaubt ist
@@ -35,10 +40,8 @@ function isPathAllowedForUser(
 
   if (pathType === 'private') {
     // Für private Pfade: Nur der eigene Benutzer-Ordner ist erlaubt
-    const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
-    const defaultUsersPath = process.env.NODE_ENV === 'production' 
-      ? '/data/users' 
-      : '/app/data/users';
+    const nasHomesPath = getNasHomesRootPath();
+    const defaultUsersPath = getStandaloneUsersRootPath();
     
     // Erlaubte Basis-Pfade für den Benutzer
     const allowedBasePaths = [
@@ -63,9 +66,7 @@ function isPathAllowedForUser(
     }
   } else if (pathType === 'shared') {
     // Für shared Pfade: Nur zugewiesene Shared-Ordner sind erlaubt
-    const nasSharedPath = process.env.NAS_SHARED_PATH || (
-      process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
-    );
+    const nasSharedPath = getSharedRootPathForDeployment();
     
     // Prüfe, ob der Pfad im Shared-Bereich liegt
     const resolvedRequested = path.resolve(normalizedPath);
@@ -195,10 +196,8 @@ function getUserSharedAssignments(userId: number, sharedBase: string): string[] 
 }
 
 function getPrivatePathCandidates(userId: number, username: string): Array<{ path: string; label: string }> {
-  const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
-  const defaultUsersPath = process.env.NODE_ENV === 'production'
-    ? '/data/users'
-    : '/app/data/users';
+  const nasHomesPath = getNasHomesRootPath();
+  const defaultUsersPath = getStandaloneUsersRootPath();
 
   return [
     { path: path.join(nasHomesPath, username), label: 'NAS Home-Verzeichnis' },
@@ -211,9 +210,7 @@ function getPrivatePathCandidates(userId: number, username: string): Array<{ pat
 }
 
 function getSharedPathCandidates(userId: number): Array<{ path: string; label: string }> {
-  const sharedBase = normalizeAbsolutePath(process.env.NAS_SHARED_PATH || (
-    process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
-  ));
+  const sharedBase = normalizeAbsolutePath(getSharedRootPathForDeployment());
 
   if (IS_NAS_MODE) {
     const assignments = getUserSharedAssignments(userId, sharedBase);
@@ -244,9 +241,7 @@ export async function getSettings(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const sharedBase = normalizeAbsolutePath(process.env.NAS_SHARED_PATH || (
-      process.env.NODE_ENV === 'production' ? '/data/shared' : '/app/data/shared'
-    ));
+    const sharedBase = normalizeAbsolutePath(getSharedRootPathForDeployment());
     const sharedAssignments = getUserSharedAssignments(req.user.id, sharedBase);
     const sharedFolderCount = sharedAssignments.length;
     const hasSharedAccess = IS_NAS_MODE

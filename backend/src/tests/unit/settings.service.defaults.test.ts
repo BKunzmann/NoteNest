@@ -22,8 +22,9 @@ describe('settings.service new default note settings', () => {
   it('createUserSettings should set defaults for note target and sidebar mode', () => {
     const created = createUserSettings(userId);
     expect(created.default_note_type).toBe('private');
-    expect(created.default_note_folder_path).toBe('/');
-    expect(created.sidebar_view_mode).toBe('folders');
+    expect(created.default_note_folder_path).toBe('/Notizen');
+    expect(created.sidebar_view_mode).toBe('recent');
+    expect(created.show_only_notes).toBeTruthy();
     expect(created.non_editable_files_mode).toBe('gray');
   });
 

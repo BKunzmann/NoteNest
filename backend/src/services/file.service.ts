@@ -14,6 +14,7 @@ import db from '../config/database';
 import { FileItem } from '../types/file';
 import { trackFileOperation } from '../middleware/metrics.middleware';
 import { IS_NAS_MODE } from '../config/constants';
+import { getPrivateRootPathForDeployment, getSharedRootPathForDeployment } from '../utils/storageRoots';
 
 // Unterstützte Dateiendungen für Indexierung (alle Markdown-Varianten + .txt)
 const INDEXABLE_EXTENSIONS = [
@@ -126,12 +127,7 @@ function normalizeSharedAssignmentPath(candidate: string): string {
 }
 
 function getSharedBasePath(_settings?: UserSettings | null): string {
-  const fallback = process.env.NAS_SHARED_PATH || (
-    process.env.NODE_ENV === 'production'
-      ? '/data/shared'
-      : '/app/data/shared'
-  );
-  return path.resolve(fallback);
+  return path.resolve(getSharedRootPathForDeployment());
 }
 
 function normalizeUserSharedFolderAssignment(
@@ -507,9 +503,7 @@ export function resolveUserPath(
   
   if (type === 'private') {
     basePath = settings.private_folder_path || (
-      process.env.NODE_ENV === 'production' 
-        ? `/data/users/${userId}` 
-        : `/app/data/users/${userId}`
+      path.join(getPrivateRootPathForDeployment(), String(userId))
     );
   } else {
     basePath = settings.shared_folder_path || getSharedBasePath(settings);
