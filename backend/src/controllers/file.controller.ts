@@ -13,6 +13,8 @@ import {
   createFile,
   updateFile,
   deleteFile,
+  listTrashItems,
+  restoreTrashItem,
   createFolder,
   moveFile,
   copyFile
@@ -24,7 +26,8 @@ import {
   CreateFolderRequest,
   MoveFileRequest,
   CopyFileRequest,
-  RenameFileRequest
+  RenameFileRequest,
+  RestoreTrashRequest
 } from '../types/file';
 
 function isSharedAccessError(message?: string): boolean {
@@ -367,6 +370,84 @@ export async function deleteFileHandler(req: Request, res: Response): Promise<vo
     }
     console.error('Delete file error:', error);
     res.status(500).json({ error: error.message || 'Failed to delete file' });
+  }
+}
+
+/**
+ * GET /api/files/trash
+ * Listet Papierkorb-Einträge für den aktuellen Bereich.
+ */
+export async function listTrashHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { type = 'private' } = req.query;
+    if (type !== 'private' && type !== 'shared') {
+      res.status(400).json({ error: 'Invalid type (allowed: private, shared)' });
+      return;
+    }
+
+    const items = listTrashItems(req.user.id, type);
+    res.json({
+      type,
+      count: items.length,
+      items
+    });
+  } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    console.error('List trash error:', error);
+    res.status(500).json({ error: error.message || 'Failed to list trash items' });
+  }
+}
+
+/**
+ * POST /api/files/trash/restore
+ * Stellt einen Papierkorb-Eintrag wieder her.
+ */
+export async function restoreTrashHandler(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const data: RestoreTrashRequest = req.body;
+    if (!data?.trashItemId || !data?.type) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    if (data.type !== 'private' && data.type !== 'shared') {
+      res.status(400).json({ error: 'Invalid type (allowed: private, shared)' });
+      return;
+    }
+
+    const restored = await restoreTrashItem(req.user.id, Number(data.trashItemId), data.type);
+    res.json({
+      success: true,
+      restored,
+      message: 'Trash item restored successfully'
+    });
+  } catch (error: any) {
+    if (isSharedAccessError(error.message)) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    if (error.message === 'Trash item not found' || error.message === 'Trash item not found on disk') {
+      res.status(404).json({ error: error.message });
+      return;
+    }
+    if (error.message === 'No write permission') {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    console.error('Restore trash error:', error);
+    res.status(500).json({ error: error.message || 'Failed to restore trash item' });
   }
 }
 

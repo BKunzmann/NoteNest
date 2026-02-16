@@ -59,3 +59,33 @@ textarea:focus-visible,
   width: 100%;
   height: 100vh;
 }
+
+.wysiwyg-editor ul,
+.wysiwyg-editor ol {
+  padding-left: 1.35rem;
+  margin: 0.4rem 0;
+}
+
+.wysiwyg-editor ul {
+  list-style-type: disc;
+}
+
+.wysiwyg-editor ul ul {
+  list-style-type: circle;
+}
+
+.wysiwyg-editor ul ul ul {
+  list-style-type: square;
+}
+
+.wysiwyg-editor ol {
+  list-style-type: decimal;
+}
+
+.wysiwyg-editor ol ol {
+  list-style-type: lower-alpha;
+}
+
+.wysiwyg-editor li {
+  margin: 0.2rem 0;
+}

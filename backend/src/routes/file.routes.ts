@@ -15,6 +15,7 @@ router.use(authenticateToken);
 router.get('/list', fileController.listFiles);
 router.get('/recent', fileController.listRecentFilesHandler);
 router.get('/stats', fileController.getFileStatsHandler);
+router.get('/trash', fileController.listTrashHandler);
 router.get('/content', fileController.getFileContent);
 router.post('/create', fileController.createFileHandler);
 router.put('/update', fileController.updateFileHandler);
@@ -23,6 +24,7 @@ router.post('/create-folder', fileController.createFolderHandler);
 router.post('/move', fileController.moveFileHandler);
 router.post('/copy', fileController.copyFileHandler);
 router.post('/rename', fileController.renameFileHandler);
+router.post('/trash/restore', fileController.restoreTrashHandler);
 
 export default router;
 

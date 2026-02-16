@@ -57,14 +57,12 @@ interface WysiwygEditorProps {
   content: string;
   onContentChange: (markdown: string) => void;
   onInsertText?: (before: string, after?: string) => void;
-  autoListDetectionEnabled?: boolean;
 }
 
 export default function WysiwygEditor({ 
   content, 
   onContentChange,
-  onInsertText,
-  autoListDetectionEnabled = true
+  onInsertText
 }: WysiwygEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -279,17 +277,45 @@ export default function WysiwygEditor({
     }
   };
 
+  const normalizeTaskListMarkdown = (markdown: string): string => {
+    return markdown
+      .replace(/^(\s*[-*+]\s+)☐\s?/gm, '$1[ ] ')
+      .replace(/^(\s*[-*+]\s+)☑\s?/gm, '$1[x] ');
+  };
+
   // Behandle Änderungen im contentEditable
   const handleInput = () => {
     if (isUpdating || !editorRef.current || !turndownService.current) return;
     
     const html = editorRef.current.innerHTML;
-    const markdown = htmlToMarkdown(html);
+    const markdown = normalizeTaskListMarkdown(htmlToMarkdown(html));
     
     // Aktualisiere nur, wenn sich der Markdown geändert hat
     if (markdown !== lastContentRef.current) {
       lastContentRef.current = markdown;
       onContentChange(markdown);
+    }
+  };
+
+  const getSelectionAnchorElement = (): HTMLElement | null => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+    const anchor = selection.anchorNode;
+    if (!anchor) {
+      return null;
+    }
+    return anchor.nodeType === Node.ELEMENT_NODE
+      ? anchor as HTMLElement
+      : anchor.parentElement;
+  };
+
+  const styleCurrentTaskListItem = () => {
+    const anchorElement = getSelectionAnchorElement();
+    const taskLi = anchorElement?.closest('li');
+    if (taskLi) {
+      taskLi.style.listStyleType = 'none';
     }
   };
 
@@ -448,7 +474,52 @@ export default function WysiwygEditor({
       handleInput();
     }
 
-    if (autoListDetectionEnabled && e.key === ' ' && editorRef.current) {
+    if (
+      e.key.length === 1 &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      editorRef.current
+    ) {
+      const plainText = editorRef.current.innerText.replace(/\u200B/g, '').trim();
+      if (plainText.length === 0) {
+        const anchorElement = getSelectionAnchorElement();
+        if (!anchorElement?.closest('h1')) {
+          document.execCommand('formatBlock', false, 'h1');
+        }
+      }
+    }
+
+    if (e.key === 'Enter' && editorRef.current) {
+      const anchorElement = getSelectionAnchorElement();
+      if (anchorElement?.closest('h1')) {
+        e.preventDefault();
+        const inserted = document.execCommand('insertParagraph', false);
+        if (!inserted) {
+          document.execCommand('insertHTML', false, '<p><br></p>');
+        }
+        document.execCommand('formatBlock', false, 'p');
+        handleInput();
+        return;
+      }
+
+      const listItem = anchorElement?.closest('li');
+      const listText = listItem?.textContent?.trim() || '';
+      const isTaskLine = listText.startsWith('☐') || listText.startsWith('☑');
+      if (listItem && isTaskLine) {
+        e.preventDefault();
+        const inserted = document.execCommand('insertParagraph', false);
+        if (!inserted) {
+          document.execCommand('insertHTML', false, '<li></li>');
+        }
+        document.execCommand('insertText', false, '☐ ');
+        styleCurrentTaskListItem();
+        handleInput();
+        return;
+      }
+    }
+
+    if (e.key === ' ' && editorRef.current) {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) {
         return;

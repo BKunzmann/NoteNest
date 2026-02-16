@@ -297,6 +297,7 @@ export function initializeDatabase(): void {
     '.Trashes',
     '@eaDir',
     '#recycle',
+    '.notenest-trash',
     '.DS_Store',
     'Thumbs.db',
     '.git',
@@ -369,6 +370,27 @@ export function initializeDatabase(): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_search_tokens_file
     ON search_tokens(file_id)
+  `);
+
+  // Tabelle: trash_items (Papierkorb-Metadaten pro Benutzer)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trash_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      item_name VARCHAR(255) NOT NULL,
+      item_type VARCHAR(10) NOT NULL CHECK (item_type IN ('file', 'folder')),
+      original_path VARCHAR(1000) NOT NULL,
+      original_type VARCHAR(10) NOT NULL CHECK (original_type IN ('private', 'shared')),
+      trash_path VARCHAR(1000) NOT NULL,
+      trash_type VARCHAR(10) NOT NULL CHECK (trash_type IN ('private', 'shared')),
+      deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_trash_items_user_deleted
+    ON trash_items(user_id, deleted_at DESC)
   `);
 
   console.log('✅ Database initialized');

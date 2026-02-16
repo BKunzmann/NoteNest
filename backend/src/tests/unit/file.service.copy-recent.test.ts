@@ -3,7 +3,16 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import db, { initializeDatabase } from '../../config/database';
-import { copyFile, getFileStats, listDirectory, listRecentFiles, moveFile } from '../../services/file.service';
+import {
+  copyFile,
+  deleteFile,
+  getFileStats,
+  listDirectory,
+  listRecentFiles,
+  listTrashItems,
+  moveFile,
+  restoreTrashItem
+} from '../../services/file.service';
 
 describe('file.service copy/recent', () => {
   let userId: number;
@@ -110,9 +119,10 @@ describe('file.service copy/recent', () => {
     expect(movedContent).toContain('move source');
   });
 
-  it('listDirectory notesOnly should hide folders without notes', async () => {
+  it('listDirectory notesOnly should hide folders without notes but keep empty folders visible', async () => {
     await fs.mkdir(path.join(privateDir, 'has-notes', 'nested'), { recursive: true });
     await fs.mkdir(path.join(privateDir, 'only-docs'), { recursive: true });
+    await fs.mkdir(path.join(privateDir, 'new-empty-folder'), { recursive: true });
 
     await fs.writeFile(path.join(privateDir, 'has-notes', 'nested', 'note.md'), '# note');
     await fs.writeFile(path.join(privateDir, 'only-docs', 'manual.pdf'), 'pdf');
@@ -122,9 +132,28 @@ describe('file.service copy/recent', () => {
     const items = await listDirectory(userId, '/', 'private', { notesOnly: true });
 
     expect(items.map((item) => item.name)).toContain('has-notes');
+    expect(items.map((item) => item.name)).toContain('new-empty-folder');
     expect(items.map((item) => item.name)).toContain('root-note.txt');
     expect(items.map((item) => item.name)).not.toContain('only-docs');
     expect(items.map((item) => item.name)).not.toContain('root-image.png');
+  });
+
+  it('deleteFile should move entries to trash and restoreTrashItem should restore them', async () => {
+    await fs.writeFile(path.join(privateDir, 'restore-me.md'), '# restore');
+    await deleteFile(userId, '/restore-me.md', 'private');
+
+    await expect(fs.access(path.join(privateDir, 'restore-me.md'))).rejects.toBeTruthy();
+
+    const trashItems = listTrashItems(userId, 'private');
+    expect(trashItems).toHaveLength(1);
+    expect(trashItems[0].originalPath).toBe('/restore-me.md');
+
+    const restored = await restoreTrashItem(userId, trashItems[0].id, 'private');
+    expect(restored.path).toBe('/restore-me.md');
+    expect(restored.itemType).toBe('file');
+
+    const restoredContent = await fs.readFile(path.join(privateDir, 'restore-me.md'), 'utf-8');
+    expect(restoredContent).toContain('restore');
   });
 
   it('getFileStats should return total files and notes', async () => {

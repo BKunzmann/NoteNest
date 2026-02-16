@@ -17,8 +17,6 @@ interface EditorToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  autoListDetectionEnabled: boolean;
-  onToggleAutoListDetection: () => void;
 }
 
 export default function EditorToolbar({
@@ -31,9 +29,7 @@ export default function EditorToolbar({
   onUndo,
   onRedo,
   canUndo,
-  canRedo,
-  autoListDetectionEnabled,
-  onToggleAutoListDetection
+  canRedo
 }: EditorToolbarProps) {
   const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 768);
 
@@ -125,25 +121,54 @@ export default function EditorToolbar({
       return;
     }
 
-    const listPresetMap: Record<string, string> = {
-      bullet: '* ',
-      'bullet-level-2': '  * ',
-      hyphen: '- ',
-      'hyphen-level-2': '  - ',
-      ordered: '1. ',
-      'ordered-level-2': '   a) '
-    };
-    const insertPrefix = listPresetMap[value];
-    if (!insertPrefix) {
+    if (viewMode === 'wysiwyg') {
+      if (value === 'ordered') {
+        runWysiwygCommand('insertOrderedList');
+        return;
+      }
+      runWysiwygCommand('insertUnorderedList');
       return;
     }
+
+    if (value === 'ordered') {
+      onInsertText('1. ', '');
+      return;
+    }
+    if (value === 'hyphen') {
+      onInsertText('- ', '');
+      return;
+    }
+    onInsertText('* ', '');
+  };
+
+  const handleInsertTask = () => {
+    const styleCurrentTaskItem = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return;
+      }
+      const anchor = selection.anchorNode;
+      const anchorElement = anchor
+        ? (anchor.nodeType === Node.ELEMENT_NODE ? anchor as HTMLElement : anchor.parentElement)
+        : null;
+      const listItem = anchorElement?.closest('li');
+      if (listItem) {
+        listItem.style.listStyleType = 'none';
+      }
+    };
 
     if (viewMode === 'wysiwyg') {
-      runWysiwygCommand('insertText', insertPrefix);
+      const listCreated = runWysiwygCommand('insertUnorderedList');
+      if (!listCreated) {
+        runWysiwygCommand('insertText', '☐ ');
+        styleCurrentTaskItem();
+        return;
+      }
+      runWysiwygCommand('insertText', '☐ ');
+      styleCurrentTaskItem();
       return;
     }
-
-    onInsertText(insertPrefix, '');
+    onInsertText('- [ ] ', '');
   };
 
   const handleInsertLink = () => {
@@ -297,19 +322,22 @@ export default function EditorToolbar({
           style={{
             ...buttonStyle,
             marginRight: 0,
-            minWidth: isMobile ? '74px' : '84px',
-            fontWeight: 700
+            minWidth: isMobile ? '58px' : '64px',
+            width: isMobile ? '58px' : '64px',
+            fontWeight: 700,
+            padding: isMobile ? '0.4rem 0.25rem' : '0.5rem 0.35rem',
+            textAlign: 'center'
           }}
           title="Textformat (Aa)"
         >
           <option value="">Aa</option>
-          <option value="h1">Titel (H1)</option>
-          <option value="h2">Überschrift (H2)</option>
-          <option value="h3">Unterüberschrift (H3)</option>
-          <option value="p">Normalschrift</option>
-          <option value="code">Inline-Code</option>
-          <option value="code-block">Code block</option>
-          <option value="strike">Durchstreichen</option>
+          <option value="h1" style={{ fontWeight: 700, fontSize: '1.1em' }}>Titel</option>
+          <option value="h2" style={{ fontWeight: 700 }}>Ueberschrift</option>
+          <option value="h3" style={{ fontWeight: 600 }}>Untertitel</option>
+          <option value="p">Normaltext</option>
+          <option value="code" style={{ fontFamily: 'monospace' }}>Inline-Code</option>
+          <option value="code-block" style={{ fontFamily: 'monospace' }}>Codeblock</option>
+          <option value="strike" style={{ textDecoration: 'line-through' }}>Durchgestrichen</option>
           <option value="attachment">Anhang</option>
         </select>
 
@@ -328,20 +356,10 @@ export default function EditorToolbar({
           title="Listen-Auswahl"
         >
           <option value="">Listen</option>
-          <option value="bullet">● Ebene 1</option>
-          <option value="bullet-level-2">○ Ebene 2</option>
-          <option value="hyphen">- Ebene 1</option>
-          <option value="hyphen-level-2">- Ebene 2</option>
-          <option value="ordered">1. Ebene 1</option>
-          <option value="ordered-level-2">a) Ebene 2</option>
+          <option value="bullet">● Punkte</option>
+          <option value="hyphen">- Bindestriche</option>
+          <option value="ordered">1. Zahlen</option>
         </select>
-        <button
-          onClick={onToggleAutoListDetection}
-          style={autoListDetectionEnabled ? activeButtonStyle : buttonStyle}
-          title={`Automatische Listen-Erkennung ${autoListDetectionEnabled ? 'aktiv' : 'deaktiviert'}`}
-        >
-          {isMobile ? (autoListDetectionEnabled ? '🪄' : '🚫') : (autoListDetectionEnabled ? '🪄 Liste' : '🚫 Liste')}
-        </button>
 
         <button
           onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('bold') : onInsertText('**', '**'))}
@@ -372,7 +390,7 @@ export default function EditorToolbar({
           🔗
         </button>
         <button
-          onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('insertText', '- [ ] ') : onInsertText('- [ ] ', ''))}
+          onClick={handleInsertTask}
           style={buttonStyle}
           title="Aufgabenliste"
         >

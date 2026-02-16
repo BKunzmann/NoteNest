@@ -15,6 +15,7 @@ import FileItem from './FileItem';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import FileActionDialog from './FileActionDialog';
 import CreateFileDialog from './CreateFileDialog';
+import TrashDialog from './TrashDialog';
 import ContextMenu, { ContextMenuAction } from './ContextMenu';
 import { formatRecentDate, groupFilesByRecent } from '../../utils/recentGrouping';
 
@@ -41,6 +42,14 @@ function getParentPath(filePath: string): string {
     return '/';
   }
   return `/${segments.slice(0, -1).join('/')}`;
+}
+
+function normalizeSidebarPath(inputPath: string): string {
+  let normalized = inputPath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  return normalized.replace(/\/+/g, '/');
 }
 
 function buildChildPath(parentPath: string, name: string): string {
@@ -95,11 +104,13 @@ export default function FileTree({
   const [fileStats, setFileStats] = useState<{ totalFiles: number; totalNotes: number } | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextState | null>(null);
+  const [contextHighlightPath, setContextHighlightPath] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContextState | null>(null);
   const [moveTarget, setMoveTarget] = useState<ContextState | null>(null);
   const [copyTarget, setCopyTarget] = useState<ContextState | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [createFolderInitialPath, setCreateFolderInitialPath] = useState('/');
+  const [showTrashDialog, setShowTrashDialog] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState('');
   const [expandedRecentGroups, setExpandedRecentGroups] = useState<Set<string>>(new Set());
   const recentLongPressTimerRef = useRef<number | null>(null);
@@ -116,7 +127,7 @@ export default function FileTree({
       try {
         const settings = await settingsAPI.getSettings();
         setShowOnlyNotes(settings.show_only_notes ?? true);
-        setSidebarViewMode(settings.sidebar_view_mode || 'recent');
+        setSidebarViewMode('recent');
         setNonEditableFilesMode(settings.non_editable_files_mode || 'gray');
       } catch (error) {
         console.error('Fehler beim Laden der Einstellungen:', error);
@@ -333,6 +344,7 @@ export default function FileTree({
   }, [navigate, onFileSelect, selectFile, type]);
 
   const openContextMenu = (file: FileItemType, filePath: string, x: number, y: number) => {
+    setContextHighlightPath(normalizeSidebarPath(filePath));
     setContextMenu({
       file,
       path: filePath,
@@ -602,6 +614,42 @@ export default function FileTree({
     }
   }, [navigate, onFileSelect, selectFile]);
 
+  const handleTrashRestored = useCallback((restored: {
+    path: string;
+    type: 'private' | 'shared';
+    name: string;
+    itemType: 'file' | 'folder';
+  }) => {
+    const parentPath = getParentPath(restored.path);
+    void refreshRecentFiles();
+    void refreshFileStats();
+    void loadFiles(parentPath, restored.type, showOnlyNotes);
+    window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+      detail: {
+        type: restored.type,
+        path: parentPath
+      }
+    }));
+
+    if (restored.type !== type) {
+      return;
+    }
+
+    setSidebarViewMode('folders');
+    if (restored.itemType === 'file') {
+      openFile(
+        {
+          name: restored.name,
+          path: restored.path,
+          type: 'file',
+          fileType: restored.name.toLowerCase().endsWith('.txt') ? 'txt' : 'md',
+          isEditable: true
+        },
+        restored.path
+      );
+    }
+  }, [loadFiles, openFile, refreshFileStats, refreshRecentFiles, showOnlyNotes, type]);
+
   return (
     <div style={{ padding: '1rem', position: 'relative' }}>
       <div style={{ marginBottom: '0.5rem' }}>
@@ -679,13 +727,34 @@ export default function FileTree({
               >
                 + Notiz
               </button>
-
-              <div style={{
-                display: 'inline-flex',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}>
+              <button
+                type="button"
+                onClick={() => setShowTrashDialog(true)}
+                title="Papierkorb öffnen"
+                style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '0.35rem 0.6rem',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.72rem',
+                  fontWeight: 600
+                }}
+              >
+                🗑 Papierkorb
+              </button>
+            </div>
+          )}
+        </div>
+        {!isLoadingSettings && !isCollapsed && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.35rem' }}>
+            <div style={{
+              display: 'inline-flex',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}>
               <button
                 type="button"
                 onClick={() => void handleToggleSidebarViewMode('recent')}
@@ -718,10 +787,9 @@ export default function FileTree({
               >
                 Ordner
               </button>
-              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
         {!isCollapsed && (
           <>
             {!isLoadingSettings && (
@@ -1008,7 +1076,9 @@ export default function FileTree({
                       backgroundColor: 'var(--bg-tertiary)'
                     }}>
                       {group.items.map((file, index) => {
-                        const isSelected = selectedType === type && selectedPath === file.path;
+                        const isSelected =
+                          (selectedType === type && selectedPath === file.path) ||
+                          normalizeSidebarPath(file.path) === contextHighlightPath;
                         return (
                           <div
                             key={`${file.path}-${group.key}`}
@@ -1079,6 +1149,7 @@ export default function FileTree({
                 onFolderClick={handleFolderClick}
                 onFileSelect={onFileSelect}
                 onContextRequest={(payload) => openContextMenu(payload.file, payload.path, payload.x, payload.y)}
+                highlightedPath={contextHighlightPath}
               />
             ))}
           </div>
@@ -1097,12 +1168,22 @@ export default function FileTree({
         />
       )}
 
+      <TrashDialog
+        isOpen={showTrashDialog}
+        type={type}
+        onClose={() => setShowTrashDialog(false)}
+        onRestored={handleTrashRestored}
+      />
+
       <ContextMenu
         isOpen={contextMenu !== null}
         x={contextMenu?.x || 0}
         y={contextMenu?.y || 0}
         actions={menuActions}
-        onClose={() => setContextMenu(null)}
+        onClose={() => {
+          setContextMenu(null);
+          setContextHighlightPath(null);
+        }}
       />
 
       {deleteTarget && (

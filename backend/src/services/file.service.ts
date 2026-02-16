@@ -36,6 +36,7 @@ const METADATA_REFRESH_MAX_DURATION_MS = 15 * 1000; // 15 Sekunden
 const METADATA_REFRESH_MAX_FILES = 20000;
 const metadataRefreshInFlight = new Set<string>();
 const metadataLastRefresh = new Map<string, number>();
+const TRASH_ROOT_FOLDER = '.notenest-trash';
 
 /**
  * Prüft, ob eine Datei indexierbar ist
@@ -60,6 +61,27 @@ interface UserSettings {
   non_editable_files_mode: 'gray' | 'hide';
   created_at: string;
   updated_at: string;
+}
+
+interface TrashItemRow {
+  id: number;
+  user_id: number;
+  item_name: string;
+  item_type: 'file' | 'folder';
+  original_path: string;
+  original_type: 'private' | 'shared';
+  trash_path: string;
+  trash_type: 'private' | 'shared';
+  deleted_at: string;
+}
+
+export interface TrashListItem {
+  id: number;
+  name: string;
+  itemType: 'file' | 'folder';
+  originalPath: string;
+  type: 'private' | 'shared';
+  deletedAt: string;
 }
 
 /**
@@ -251,6 +273,42 @@ async function findAvailableDestinationPath(
   throw new Error('Could not resolve destination name conflict');
 }
 
+async function movePathWithFallback(
+  sourcePath: string,
+  destinationPath: string,
+  isDirectory: boolean
+): Promise<void> {
+  try {
+    await fs.rename(sourcePath, destinationPath);
+  } catch (error: any) {
+    if (error.code !== 'EXDEV') {
+      throw error;
+    }
+
+    if (isDirectory) {
+      await fs.cp(sourcePath, destinationPath, { recursive: true, force: false, errorOnExist: true });
+      await fs.rm(sourcePath, { recursive: true, force: true });
+      return;
+    }
+
+    await fs.copyFile(sourcePath, destinationPath, fsSync.constants.COPYFILE_EXCL);
+    await fs.unlink(sourcePath);
+  }
+}
+
+function buildTrashRelativePath(userId: number, originalPath: string): string {
+  const safeBaseName = path.basename(normalizeRelativePath(originalPath)).replace(/[^\w.-]+/g, '_') || 'item';
+  const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return normalizeRelativePath(
+    `/${TRASH_ROOT_FOLDER}/user-${userId}/${uniqueSuffix}-${safeBaseName}`
+  );
+}
+
+function resolveAbsolutePathFromRoot(rootPath: string, relativePath: string): string {
+  const normalizedRelative = normalizeRelativePath(relativePath);
+  return path.join(rootPath, normalizedRelative.slice(1));
+}
+
 function toRelativePathFromAbsolute(
   userId: number,
   absolutePath: string,
@@ -351,6 +409,16 @@ function removeFileMetadata(userId: number, relativePath: string, type: 'private
     WHERE user_id = ?
       AND (file_path = ? OR file_path LIKE ?)
   `).run(userId, metadataKey, `${metadataKey}/%`);
+}
+
+function removeSearchIndexEntries(userId: number, relativePath: string, type: 'private' | 'shared'): void {
+  const normalizedPath = normalizeRelativePath(relativePath);
+  db.prepare(`
+    DELETE FROM search_index
+    WHERE user_id = ?
+      AND file_type = ?
+      AND (file_path = ? OR file_path LIKE ?)
+  `).run(userId, type, normalizedPath, `${normalizedPath}/%`);
 }
 
 function updateMovedFileMetadata(
@@ -600,12 +668,17 @@ export async function checkPermissions(
  * Holt die Liste der zu versteckenden Ordner aus der app_config
  */
 export function getHiddenFoldersConfig(): string[] {
+  const alwaysHiddenFolders = [TRASH_ROOT_FOLDER];
+
   try {
     const result = db.prepare('SELECT value FROM app_config WHERE key = ?').get('hidden_folders') as { value: string } | undefined;
     
     if (result?.value) {
       // Parse JSON-Array aus der Datenbank
-      return JSON.parse(result.value);
+      const parsed = JSON.parse(result.value);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set([...alwaysHiddenFolders, ...parsed]));
+      }
     }
   } catch (error) {
     console.warn('Error reading hidden_folders config:', error);
@@ -613,6 +686,7 @@ export function getHiddenFoldersConfig(): string[] {
   
   // Fallback: Standard-Liste
   return [
+    ...alwaysHiddenFolders,
     '._DAV',
     '.Trashes',
     '@eaDir',
@@ -898,7 +972,17 @@ export async function listDirectory(
         } else if (entry.isDirectory()) {
           const hasNotes = await directoryContainsNotes(entryPath);
           if (!hasNotes) {
-            continue;
+            // Leere Ordner sollen trotz Notizen-Filter sichtbar bleiben,
+            // damit neue Zielordner direkt nach dem Anlegen erreichbar sind.
+            let directEntries: string[] = [];
+            try {
+              directEntries = await fs.readdir(entryPath);
+            } catch {
+              directEntries = ['__blocked__'];
+            }
+            if (directEntries.length > 0) {
+              continue;
+            }
           }
         }
       }
@@ -1399,10 +1483,11 @@ export async function deleteFile(
   filePath: string,
   type: 'private' | 'shared'
 ): Promise<void> {
-  const fullPath = resolveUserPath(userId, filePath, type);
+  const normalizedRelativePath = normalizeRelativePath(filePath);
+  const fullPath = resolveUserPath(userId, normalizedRelativePath, type);
   
   // Prüfe, ob Datei/Ordner existiert
-  let stats;
+  let stats: fsSync.Stats;
   try {
     stats = await fs.stat(fullPath);
   } catch (error: any) {
@@ -1417,28 +1502,158 @@ export async function deleteFile(
   if (!canWrite) {
     throw new Error('No write permission');
   }
-  
-  // Lösche Datei oder Ordner
-  if (stats.isDirectory()) {
-    await fs.rmdir(fullPath, { recursive: true });
-    removeFileMetadata(userId, filePath, type);
-  } else {
-    await fs.unlink(fullPath);
-    removeFileMetadata(userId, filePath, type);
-    
-    // Index sofort aktualisieren, damit Sidebar/Suche den Löschvorgang direkt reflektiert.
-    if (isIndexable(filePath)) {
-      try {
-        const { removeFromIndex } = await import('./index.service');
-        await removeFromIndex(userId, filePath, type);
-      } catch (error) {
-        console.warn(`Failed to remove from index after delete: ${filePath}`, error);
-      }
-    }
+
+  const rootPath = resolveUserPath(userId, '/', type);
+  const trashRelativePath = buildTrashRelativePath(userId, normalizedRelativePath);
+  const trashAbsolutePath = resolveAbsolutePathFromRoot(rootPath, trashRelativePath);
+  const trashParentDir = path.dirname(trashAbsolutePath);
+
+  await fs.mkdir(trashParentDir, { recursive: true });
+  const canWriteTrash = await checkPermissions(trashParentDir, 'write');
+  if (!canWriteTrash) {
+    throw new Error('No write permission');
   }
+
+  // Verschiebe in den Papierkorb statt hart zu löschen.
+  await movePathWithFallback(fullPath, trashAbsolutePath, stats.isDirectory());
+  removeFileMetadata(userId, normalizedRelativePath, type);
+  removeSearchIndexEntries(userId, normalizedRelativePath, type);
+
+  db.prepare(`
+    INSERT INTO trash_items (
+      user_id,
+      item_name,
+      item_type,
+      original_path,
+      original_type,
+      trash_path,
+      trash_type
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    userId,
+    path.basename(normalizedRelativePath),
+    stats.isDirectory() ? 'folder' : 'file',
+    normalizedRelativePath,
+    type,
+    trashRelativePath,
+    type
+  );
   
   // Metrics-Tracking
   trackFileOperation('delete', type);
+}
+
+/**
+ * Listet Papierkorb-Einträge eines Benutzers.
+ */
+export function listTrashItems(
+  userId: number,
+  type: 'private' | 'shared'
+): TrashListItem[] {
+  const rows = db.prepare(`
+    SELECT id, item_name, item_type, original_path, original_type, deleted_at
+    FROM trash_items
+    WHERE user_id = ? AND original_type = ?
+    ORDER BY datetime(deleted_at) DESC
+  `).all(userId, type) as Array<Pick<
+    TrashItemRow,
+    'id' | 'item_name' | 'item_type' | 'original_path' | 'original_type' | 'deleted_at'
+  >>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.item_name,
+    itemType: row.item_type,
+    originalPath: normalizeRelativePath(row.original_path),
+    type: row.original_type,
+    deletedAt: row.deleted_at
+  }));
+}
+
+/**
+ * Stellt einen Papierkorb-Eintrag an seinem ursprünglichen Ort wieder her.
+ */
+export async function restoreTrashItem(
+  userId: number,
+  trashItemId: number,
+  type: 'private' | 'shared'
+): Promise<{ path: string; type: 'private' | 'shared'; name: string; itemType: 'file' | 'folder' }> {
+  const row = db.prepare(`
+    SELECT id, item_name, item_type, original_path, original_type, trash_path, trash_type
+    FROM trash_items
+    WHERE id = ? AND user_id = ? AND original_type = ?
+  `).get(trashItemId, userId, type) as Pick<
+    TrashItemRow,
+    'id' | 'item_name' | 'item_type' | 'original_path' | 'original_type' | 'trash_path' | 'trash_type'
+  > | undefined;
+
+  if (!row) {
+    throw new Error('Trash item not found');
+  }
+
+  const trashRootPath = resolveUserPath(userId, '/', row.trash_type);
+  const sourcePath = resolveAbsolutePathFromRoot(trashRootPath, normalizeRelativePath(row.trash_path));
+
+  let sourceStats: fsSync.Stats;
+  try {
+    sourceStats = await fs.stat(sourcePath);
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      db.prepare('DELETE FROM trash_items WHERE id = ?').run(row.id);
+      throw new Error('Trash item not found on disk');
+    }
+    throw error;
+  }
+
+  const requestedDestinationPath = resolveUserPath(
+    userId,
+    normalizeRelativePath(row.original_path),
+    row.original_type
+  );
+  await fs.mkdir(path.dirname(requestedDestinationPath), { recursive: true });
+
+  const canWriteDestination = await checkPermissions(path.dirname(requestedDestinationPath), 'write');
+  if (!canWriteDestination) {
+    throw new Error('No write permission');
+  }
+
+  const finalDestinationPath = await findAvailableDestinationPath(
+    requestedDestinationPath,
+    sourceStats.isDirectory()
+  );
+  const finalRelativePath = toRelativePathFromAbsolute(userId, finalDestinationPath, row.original_type);
+
+  await movePathWithFallback(sourcePath, finalDestinationPath, sourceStats.isDirectory());
+  db.prepare('DELETE FROM trash_items WHERE id = ?').run(row.id);
+
+  if (sourceStats.isDirectory()) {
+    scheduleFileMetadataRefresh(userId, row.original_type, true);
+  } else {
+    const restoredStats = await fs.stat(finalDestinationPath);
+    upsertFileMetadata(
+      userId,
+      finalRelativePath,
+      row.original_type,
+      restoredStats.size,
+      restoredStats.mtime.toISOString()
+    );
+
+    if (isIndexable(finalRelativePath)) {
+      import('./index.service').then(({ indexFile }) => {
+        indexFile(userId, finalRelativePath, row.original_type).catch((error) => {
+          console.warn(`Failed to index restored file: ${finalRelativePath}`, error);
+        });
+      });
+    }
+  }
+
+  return {
+    path: finalRelativePath,
+    type: row.original_type,
+    name: path.basename(finalRelativePath),
+    itemType: row.item_type
+  };
 }
 
 /**

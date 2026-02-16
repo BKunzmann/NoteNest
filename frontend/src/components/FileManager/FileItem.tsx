@@ -24,6 +24,7 @@ interface FileItemProps {
   onFolderClick: (path: string) => void;
   onFileSelect?: () => void; // Callback wenn Datei ausgewählt wird (für mobile Sidebar)
   onContextRequest?: (payload: ContextRequestPayload) => void;
+  highlightedPath?: string | null;
 }
 
 function normalizePath(inputPath: string): string {
@@ -40,7 +41,8 @@ export default function FileItem({
   currentPath,
   onFolderClick,
   onFileSelect,
-  onContextRequest
+  onContextRequest,
+  highlightedPath = null
 }: FileItemProps) {
   const { selectFile, selectedPath, selectedType } = useFileStore();
   const navigate = useNavigate();
@@ -169,7 +171,10 @@ export default function FileItem({
 
   const getStyle = () => {
     const itemPath = getItemPath();
-    const isSelected = selectedType === type && selectedPath === itemPath;
+    const normalizedHighlightPath = highlightedPath ? normalizePath(highlightedPath) : null;
+    const isSelected =
+      (selectedType === type && selectedPath === itemPath) ||
+      (normalizedHighlightPath !== null && normalizedHighlightPath === itemPath);
     const baseStyle: React.CSSProperties = {
       display: 'flex',
       alignItems: 'center',

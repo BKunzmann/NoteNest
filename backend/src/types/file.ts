@@ -76,3 +76,20 @@ export interface RenameFileRequest {
   type: 'private' | 'shared';
 }
 
+export interface TrashItem {
+  id: number;
+  user_id: number;
+  item_name: string;
+  item_type: 'file' | 'folder';
+  original_path: string;
+  original_type: 'private' | 'shared';
+  trash_path: string;
+  trash_type: 'private' | 'shared';
+  deleted_at: string;
+}
+
+export interface RestoreTrashRequest {
+  trashItemId: number;
+  type: 'private' | 'shared';
+}
+

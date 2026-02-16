@@ -17,7 +17,8 @@ import {
   CreateFolderRequest,
   MoveFileRequest,
   CopyFileRequest,
-  RenameFileRequest
+  RenameFileRequest,
+  TrashListResponse
 } from '../types/file';
 import {
   UserSettings,
@@ -298,6 +299,30 @@ export const fileAPI = {
    */
   async renameFile(data: RenameFileRequest): Promise<{ success: boolean; path: string; newPath: string; message: string }> {
     const response = await api.post('/files/rename', data);
+    return response.data;
+  },
+
+  /**
+   * Liefert Papierkorb-Einträge.
+   */
+  async listTrash(type: 'private' | 'shared' = 'private'): Promise<TrashListResponse> {
+    const response = await api.get<TrashListResponse>('/files/trash', {
+      params: { type }
+    });
+    return response.data;
+  },
+
+  /**
+   * Stellt einen Papierkorb-Eintrag wieder her.
+   */
+  async restoreTrashItem(
+    trashItemId: number,
+    type: 'private' | 'shared'
+  ): Promise<{ success: boolean; restored: { path: string; type: 'private' | 'shared'; name: string; itemType: 'file' | 'folder' }; message: string }> {
+    const response = await api.post('/files/trash/restore', {
+      trashItemId,
+      type
+    });
     return response.data;
   }
 };

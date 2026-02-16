@@ -85,3 +85,18 @@ export interface RecentFilesResponse {
   items: FileItem[];
 }
 
+export interface TrashItem {
+  id: number;
+  name: string;
+  itemType: 'file' | 'folder';
+  originalPath: string;
+  type: 'private' | 'shared';
+  deletedAt: string;
+}
+
+export interface TrashListResponse {
+  type: 'private' | 'shared';
+  count: number;
+  items: TrashItem[];
+}
+
