@@ -10,34 +10,67 @@ import TurndownService from 'turndown';
 import { findBibleReferences } from '../../utils/bibleReference';
 import BibleReference from './BibleReference';
 import { settingsAPI, bibleAPI } from '../../services/api';
-import { getTranslationName } from '../../utils/bibleTranslation';
+import { getTranslationName, normalizeTranslation } from '../../utils/bibleTranslation';
 
 // marked v9: marked ist eine Funktion, die direkt aufgerufen werden kann
+const BIBLE_LEADING_NUMBER_PATTERN = /^(\s*)(\d+)\.\s*(Mose|Samuel|Könige|Chronik|Korinther|Kor|Thessalonicher|Thess|Timotheus|Tim|Petrus|Johannes|Joh)\b/gim;
+
+function preserveNumberedBibleReferences(markdown: string): string {
+  return markdown.replace(BIBLE_LEADING_NUMBER_PATTERN, '$1$2\\. $3');
+}
+
 const markdownToHtml = (markdown: string): string => {
   try {
-    return marked(markdown) as string;
+    const safeMarkdown = preserveNumberedBibleReferences(markdown);
+    return marked(safeMarkdown) as string;
   } catch (error) {
     console.error('Error parsing markdown:', error);
     return markdown; // Fallback: zeige rohen Text
   }
 };
 
+function formatTooltipError(error: unknown): string {
+  const typedError = error as {
+    message?: string;
+    response?: {
+      status?: number;
+      data?: { error?: string };
+    };
+  };
+  const status = typedError?.response?.status;
+  const serverMessage = typedError?.response?.data?.error?.trim() || '';
+  const genericMessage = typedError?.message?.trim() || '';
+
+  if (status === 404 || /verse or chapter not found/i.test(serverMessage)) {
+    return 'Bibelstelle nicht gefunden. Eventuell wurde die Bibel-Datenbank noch nicht importiert.';
+  }
+  if (status === 503 || status === 500) {
+    return 'Bibeltext ist derzeit nicht verfuegbar. Bitte spaeter erneut versuchen.';
+  }
+  if (/network|timeout|failed to fetch|err_network/i.test(genericMessage.toLowerCase())) {
+    return 'Bibeltext kann gerade nicht geladen werden (Netzwerkproblem).';
+  }
+  return serverMessage || 'Bibelstelle konnte nicht geladen werden';
+}
+
 interface WysiwygEditorProps {
   content: string;
   onContentChange: (markdown: string) => void;
   onInsertText?: (before: string, after?: string) => void;
+  autoListDetectionEnabled?: boolean;
 }
 
 export default function WysiwygEditor({ 
   content, 
   onContentChange,
-  onInsertText
+  onInsertText,
+  autoListDetectionEnabled = true
 }: WysiwygEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const turndownService = useRef<TurndownService | null>(null);
   const lastContentRef = useRef<string>('');
-  const [bibleTranslation, setBibleTranslation] = useState<string>('LUT');
+  const [bibleTranslation, setBibleTranslation] = useState<string>('LUT1912');
   // bibleRefsContainerRef - für zukünftige Verwendung reserviert
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -45,6 +78,7 @@ export default function WysiwygEditor({
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [tooltipVerse, setTooltipVerse] = useState<any>(null);
   const [isLoadingTooltip, setIsLoadingTooltip] = useState(false);
+  const [tooltipError, setTooltipError] = useState<string | null>(null);
   const [popupReference, setPopupReference] = useState<{
     reference: string;
     translation: string;
@@ -57,7 +91,7 @@ export default function WysiwygEditor({
   useEffect(() => {
     settingsAPI.getSettings()
       .then((settings) => {
-        setBibleTranslation(settings.default_bible_translation || 'LUT');
+        setBibleTranslation(normalizeTranslation(settings.default_bible_translation || 'LUT1912'));
       })
       .catch((err) => {
         console.error('Error loading settings:', err);
@@ -68,17 +102,30 @@ export default function WysiwygEditor({
   useEffect(() => {
     if (hoveredReference && tooltipPosition) {
       setIsLoadingTooltip(true);
+      setTooltipError(null);
+      setTooltipVerse(null);
       bibleAPI.getVerse(hoveredReference.reference, hoveredReference.translation)
         .then((data) => {
+          if (!data || typeof data.text !== 'string' || data.text.trim().length === 0) {
+            setTooltipVerse(null);
+            setTooltipError('Kein Bibeltext fuer diese Stelle verfuegbar.');
+            setIsLoadingTooltip(false);
+            return;
+          }
+
           setTooltipVerse(data);
           setIsLoadingTooltip(false);
+          setTooltipError(null);
         })
         .catch((err) => {
           console.error('Error loading verse for tooltip:', err);
           setIsLoadingTooltip(false);
+          setTooltipVerse(null);
+          setTooltipError(formatTooltipError(err));
         });
     } else {
       setTooltipVerse(null);
+      setTooltipError(null);
     }
   }, [hoveredReference, tooltipPosition]);
 
@@ -400,6 +447,50 @@ export default function WysiwygEditor({
       document.execCommand('italic', false);
       handleInput();
     }
+
+    if (autoListDetectionEnabled && e.key === ' ' && editorRef.current) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      if (!range.collapsed || range.startContainer.nodeType !== Node.TEXT_NODE) {
+        return;
+      }
+
+      const textNode = range.startContainer as Text;
+      const beforeCaret = textNode.data.slice(0, range.startOffset);
+      const trimmed = beforeCaret.trim();
+
+      if (trimmed === '-' || trimmed === '*') {
+        e.preventDefault();
+        const markerIndex = beforeCaret.lastIndexOf(trimmed);
+        if (markerIndex >= 0) {
+          textNode.deleteData(markerIndex, trimmed.length);
+          const nextRange = document.createRange();
+          nextRange.setStart(textNode, markerIndex);
+          nextRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(nextRange);
+        }
+        document.execCommand('insertUnorderedList', false);
+        handleInput();
+      } else if (trimmed === '1.') {
+        e.preventDefault();
+        const markerIndex = beforeCaret.lastIndexOf(trimmed);
+        if (markerIndex >= 0) {
+          textNode.deleteData(markerIndex, trimmed.length);
+          const nextRange = document.createRange();
+          nextRange.setStart(textNode, markerIndex);
+          nextRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(nextRange);
+        }
+        document.execCommand('insertOrderedList', false);
+        handleInput();
+      }
+    }
   };
 
   // Event-Delegation für Bibelstellen (funktioniert auch nach Neurendern)
@@ -521,6 +612,9 @@ export default function WysiwygEditor({
           }}
         >
           {isLoadingTooltip && <div>Lädt...</div>}
+          {tooltipError && !isLoadingTooltip && (
+            <div style={{ color: 'var(--error-text, #c33)' }}>{tooltipError}</div>
+          )}
           {tooltipVerse && !isLoadingTooltip && (
             <div>
               <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>

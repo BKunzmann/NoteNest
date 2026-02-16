@@ -12,9 +12,10 @@ import {
   listAvailableSharedFolders, 
   validateNasSharedPath 
 } from '../utils/nasPathValidator';
+import { getNasSharedRootPath } from '../utils/storageRoots';
 
 function getSharedBasePath(): string {
-  return path.resolve(process.env.NAS_SHARED_PATH || '/data/shared');
+  return path.resolve(getNasSharedRootPath());
 }
 
 function normalizeSharedFolderAssignment(absolutePath: string): string | null {

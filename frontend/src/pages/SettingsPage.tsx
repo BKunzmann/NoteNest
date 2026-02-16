@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const [sharedPath, setSharedPath] = useState('');
   const [defaultNoteType, setDefaultNoteType] = useState<'private' | 'shared'>('private');
   const [defaultNoteFolderPath, setDefaultNoteFolderPath] = useState('/');
-  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('folders');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [exportSize, setExportSize] = useState('A4');
   const [bibleTranslation, setBibleTranslation] = useState('LUT1912');
@@ -102,7 +102,7 @@ export default function SettingsPage() {
       setHasSharedAccess(sharedAccess);
       setDefaultNoteType(sharedAccess ? (data.default_note_type || 'private') : 'private');
       setDefaultNoteFolderPath(data.default_note_folder_path || '/');
-      setSidebarViewMode(data.sidebar_view_mode || 'folders');
+      setSidebarViewMode(data.sidebar_view_mode || 'recent');
       setTheme((data.theme || 'light') as 'light' | 'dark');
       setExportSize(data.default_export_size || 'A4');
       setNonEditableFilesMode(data.non_editable_files_mode || 'gray');

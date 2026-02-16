@@ -14,11 +14,14 @@ import WysiwygEditor from './WysiwygEditor';
 import { findBibleReferences } from '../../utils/bibleReference';
 import BibleReference from './BibleReference';
 import { settingsAPI } from '../../services/api';
+import { normalizeTranslation } from '../../utils/bibleTranslation';
 
 interface MarkdownEditorProps {
   filePath: string;
   fileType: 'private' | 'shared';
 }
+
+const AUTO_LIST_DETECTION_STORAGE_KEY = 'notenest.editor.autoListDetection';
 
 export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorProps) {
   const { 
@@ -41,7 +44,18 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
   
   const { loadFileContent } = useFileStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [bibleTranslation, setBibleTranslation] = useState<string>('LUT');
+  const [bibleTranslation, setBibleTranslation] = useState<string>('LUT1912');
+  const [autoListDetectionEnabled, setAutoListDetectionEnabled] = useState<boolean>(() => {
+    try {
+      const storedValue = localStorage.getItem(AUTO_LIST_DETECTION_STORAGE_KEY);
+      if (storedValue === null) {
+        return true;
+      }
+      return storedValue !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Reset Editor beim Wechsel der Datei
@@ -67,12 +81,20 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
   useEffect(() => {
     settingsAPI.getSettings()
       .then((settings) => {
-        setBibleTranslation(settings.default_bible_translation || 'LUT');
+        setBibleTranslation(normalizeTranslation(settings.default_bible_translation || 'LUT1912'));
       })
       .catch((err) => {
         console.error('Error loading settings:', err);
       });
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AUTO_LIST_DETECTION_STORAGE_KEY, autoListDetectionEnabled ? 'true' : 'false');
+    } catch {
+      // LocalStorage kann z.B. im privaten Modus blockiert sein.
+    }
+  }, [autoListDetectionEnabled]);
 
   useEffect(() => {
     if (viewMode !== 'preview' && isPreviewFullscreen) {
@@ -282,6 +304,8 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
         onRedo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
+        autoListDetectionEnabled={autoListDetectionEnabled}
+        onToggleAutoListDetection={() => setAutoListDetectionEnabled((prev) => !prev)}
       />
 
       {/* Error Message */}
@@ -311,6 +335,7 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
               scheduleAutoSave();
             }}
             onInsertText={insertText}
+            autoListDetectionEnabled={autoListDetectionEnabled}
           />
         )}
 

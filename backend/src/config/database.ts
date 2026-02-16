@@ -7,6 +7,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { getPrivateRootPathForDeployment, getSharedRootPathForDeployment } from '../utils/storageRoots';
 
 // Für Development: Relativer Pfad zum Projekt-Root
 // Für Production: Absoluter Pfad aus Umgebungsvariable
@@ -77,12 +78,12 @@ export function initializeDatabase(): void {
       private_folder_path VARCHAR(500),
       shared_folder_path VARCHAR(500),
       default_note_type VARCHAR(10) DEFAULT 'private' NOT NULL,
-      default_note_folder_path VARCHAR(500) DEFAULT '/' NOT NULL,
-      sidebar_view_mode VARCHAR(20) DEFAULT 'folders' NOT NULL,
+      default_note_folder_path VARCHAR(500) DEFAULT '/Notizen' NOT NULL,
+      sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL,
       theme VARCHAR(20) DEFAULT 'light' NOT NULL,
       default_export_size VARCHAR(10) DEFAULT 'A4' NOT NULL,
       default_bible_translation VARCHAR(20) DEFAULT 'LUT' NOT NULL,
-      show_only_notes BOOLEAN DEFAULT 0 NOT NULL,
+      show_only_notes BOOLEAN DEFAULT 1 NOT NULL,
       non_editable_files_mode VARCHAR(10) DEFAULT 'gray' NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -93,7 +94,7 @@ export function initializeDatabase(): void {
 
   // Migration: Füge show_only_notes Spalte hinzu, falls sie nicht existiert
   try {
-    db.exec(`ALTER TABLE user_settings ADD COLUMN show_only_notes BOOLEAN DEFAULT 0 NOT NULL`);
+    db.exec(`ALTER TABLE user_settings ADD COLUMN show_only_notes BOOLEAN DEFAULT 1 NOT NULL`);
   } catch (error: any) {
     // Spalte existiert bereits, ignoriere Fehler
     if (!error.message.includes('duplicate column name')) {
@@ -112,27 +113,33 @@ export function initializeDatabase(): void {
 
   // Migration: Füge default_note_folder_path Spalte hinzu, falls sie nicht existiert
   try {
-    db.exec(`ALTER TABLE user_settings ADD COLUMN default_note_folder_path VARCHAR(500) DEFAULT '/' NOT NULL`);
+    db.exec(`ALTER TABLE user_settings ADD COLUMN default_note_folder_path VARCHAR(500) DEFAULT '/Notizen' NOT NULL`);
   } catch (error: any) {
     if (!error.message.includes('duplicate column name')) {
       console.warn('Migration warning:', error.message);
     }
   }
+
+  db.exec(`
+    UPDATE user_settings
+    SET default_note_folder_path = '/Notizen'
+    WHERE default_note_folder_path IS NULL OR TRIM(default_note_folder_path) = ''
+  `);
 
   // Migration: Füge sidebar_view_mode Spalte hinzu, falls sie nicht existiert
   try {
-    db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'folders' NOT NULL`);
+    db.exec(`ALTER TABLE user_settings ADD COLUMN sidebar_view_mode VARCHAR(20) DEFAULT 'recent' NOT NULL`);
   } catch (error: any) {
     if (!error.message.includes('duplicate column name')) {
       console.warn('Migration warning:', error.message);
     }
   }
 
-  // Migration: Verlauf in der Sidebar standardmäßig deaktivieren
+  // Migration: Standardansicht und Filter gemäss Produktvorgabe setzen.
   db.exec(`
     UPDATE user_settings
-    SET sidebar_view_mode = 'folders'
-    WHERE sidebar_view_mode IS NULL OR sidebar_view_mode = 'recent'
+    SET sidebar_view_mode = 'recent',
+        show_only_notes = 1
   `);
 
   // Migration: Füge non_editable_files_mode Spalte hinzu, falls sie nicht existiert
@@ -406,17 +413,10 @@ export async function initializeDefaultAdmin(): Promise<void> {
     const userId = result.lastInsertRowid as number;
 
     // Erstelle Standard-Einstellungen
-    const privatePath = process.env.NAS_HOMES_PATH 
-      ? `${process.env.NAS_HOMES_PATH}/${adminUsername}`
-      : process.env.NODE_ENV === 'production'
-      ? `/data/users/${adminUsername}`
-      : `/app/data/users/${adminUsername}`;
-    
-    const sharedPath = process.env.NAS_SHARED_PATH || (
-      process.env.NODE_ENV === 'production'
-        ? '/data/shared'
-        : '/app/data/shared'
-    );
+    const privateRoot = getPrivateRootPathForDeployment();
+    const sharedRoot = getSharedRootPathForDeployment();
+    const privatePath = path.join(privateRoot, adminUsername);
+    const sharedPath = sharedRoot;
     
     db.prepare(`
       INSERT INTO user_settings (
@@ -425,9 +425,10 @@ export async function initializeDefaultAdmin(): Promise<void> {
         shared_folder_path,
         default_note_type,
         default_note_folder_path,
-        sidebar_view_mode
+        sidebar_view_mode,
+        show_only_notes
       )
-      VALUES (?, ?, ?, 'private', '/', 'folders')
+      VALUES (?, ?, ?, 'private', '/Notizen', 'recent', 1)
     `).run(userId, privatePath, sharedPath);
 
     // Erstelle Benutzer-Ordner, falls nicht vorhanden
@@ -436,6 +437,11 @@ export async function initializeDefaultAdmin(): Promise<void> {
       if (!fs.existsSync(privatePath)) {
         fs.mkdirSync(privatePath, { recursive: true });
         console.log(`✅ Created admin user directory: ${privatePath}`);
+      }
+      const defaultNotesPath = path.join(privatePath, 'Notizen');
+      if (!fs.existsSync(defaultNotesPath)) {
+        fs.mkdirSync(defaultNotesPath, { recursive: true });
+        console.log(`✅ Created admin notes directory: ${defaultNotesPath}`);
       }
     } catch (error) {
       console.warn(`⚠️ Could not create admin user directory: ${privatePath}`, error);

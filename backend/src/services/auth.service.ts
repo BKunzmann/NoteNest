@@ -10,8 +10,10 @@
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import path from 'path';
 import db from '../config/database';
 import { User, LoginRequest, RegisterRequest } from '../types/auth';
+import { getPrivateRootPathForDeployment, getSharedRootPathForDeployment } from '../utils/storageRoots';
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || '';
@@ -140,18 +142,12 @@ export async function createUser(data: RegisterRequest): Promise<User> {
   const userId = result.lastInsertRowid as number;
   
   // Erstelle Standard-Einstellungen
-  // Für Development: /app/data/users, für Production: /data/users oder NAS_HOMES_PATH
-  const privatePath = process.env.NAS_HOMES_PATH 
-    ? `${process.env.NAS_HOMES_PATH}/${data.username}`
-    : process.env.NODE_ENV === 'production'
-    ? `/data/users/${data.username}`
-    : `/app/data/users/${data.username}`;
-  
-  const sharedPath = process.env.NAS_SHARED_PATH || (
-    process.env.NODE_ENV === 'production'
-      ? '/data/shared'
-      : '/app/data/shared'
-  );
+  // Ziel: konsistente Pfade über Docker-Setups hinweg (auch bei NODE_ENV=development im Container).
+  const privateRoot = getPrivateRootPathForDeployment();
+  const sharedRoot = getSharedRootPathForDeployment();
+  const privatePath = path.join(privateRoot, data.username);
+  const sharedPath = sharedRoot;
+  const defaultNotesFolder = '/Notizen';
   
   db.prepare(`
     INSERT INTO user_settings (
@@ -160,13 +156,15 @@ export async function createUser(data: RegisterRequest): Promise<User> {
       shared_folder_path,
       default_note_type,
       default_note_folder_path,
-      sidebar_view_mode
+      sidebar_view_mode,
+      show_only_notes
     )
-    VALUES (?, ?, ?, 'private', '/', 'folders')
+    VALUES (?, ?, ?, 'private', ?, 'recent', 1)
   `).run(
     userId,
     privatePath,
-    sharedPath
+    sharedPath,
+    defaultNotesFolder
   );
   
   // Erstelle oder validiere Benutzer-Ordner
@@ -184,6 +182,14 @@ export async function createUser(data: RegisterRequest): Promise<User> {
       } else {
         console.log(`✅ Validated NAS home directory: ${validation.path}`);
       }
+      // Lege den Standard-Unterordner "Notizen" an, falls möglich.
+      const notesPath = path.join(privatePath, 'Notizen');
+      const notesResult = createPathIfNotExists(notesPath);
+      if (notesResult.created) {
+        console.log(`✅ Created default notes directory: ${notesPath}`);
+      } else if (notesResult.error) {
+        console.warn(`⚠️ Could not create default notes directory: ${notesResult.error}`);
+      }
     } else {
       // Standalone-Mode: Erstelle Ordner lokal
       const result = createPathIfNotExists(privatePath);
@@ -191,6 +197,14 @@ export async function createUser(data: RegisterRequest): Promise<User> {
         console.log(`✅ Created user directory: ${privatePath}`);
       } else if (result.error) {
         console.warn(`⚠️ Could not create user directory: ${result.error}`);
+      }
+
+      const notesPath = path.join(privatePath, 'Notizen');
+      const notesResult = createPathIfNotExists(notesPath);
+      if (notesResult.created) {
+        console.log(`✅ Created default notes directory: ${notesPath}`);
+      } else if (notesResult.error) {
+        console.warn(`⚠️ Could not create default notes directory: ${notesResult.error}`);
       }
     }
   } catch (error) {

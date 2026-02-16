@@ -12,7 +12,9 @@ import MarkdownEditor from '../components/Editor/MarkdownEditor';
 import DeleteConfirmDialog from '../components/FileManager/DeleteConfirmDialog';
 import FileActionDialog from '../components/FileManager/FileActionDialog';
 import ContextMenu, { ContextMenuAction } from '../components/FileManager/ContextMenu';
-import { fileAPI, settingsAPI } from '../services/api';
+import { exportAPI, fileAPI, settingsAPI } from '../services/api';
+import { addPendingChange, cacheNote, isIndexedDBAvailable } from '../services/offlineStorage';
+import { isOnline } from '../services/syncService';
 
 function normalizeFolderPath(inputPath: string): string {
   let normalized = inputPath.trim() || '/';
@@ -264,12 +266,29 @@ export default function NotesPage() {
         : (settings.default_note_type || 'private');
       const targetFolder = normalizeFolderPath(settings.default_note_folder_path || '/');
       const filePath = buildFilePath(targetFolder, `${suggestedBaseName}.md`);
+      const initialContent = '# ';
 
-      await fileAPI.createFile({
-        path: filePath,
-        content: '# ',
-        type: targetType
-      });
+      if (isOnline()) {
+        try {
+          await fileAPI.createFile({
+            path: filePath,
+            content: initialContent,
+            type: targetType
+          });
+        } catch (error) {
+          if (!isIndexedDBAvailable()) {
+            throw error;
+          }
+          await cacheNote(filePath, targetType, initialContent);
+          await addPendingChange(filePath, targetType, 'create', initialContent);
+        }
+      } else {
+        if (!isIndexedDBAvailable()) {
+          throw new Error('Offline-Speicherung ist nicht verfügbar');
+        }
+        await cacheNote(filePath, targetType, initialContent);
+        await addPendingChange(filePath, targetType, 'create', initialContent);
+      }
 
       selectFile(
         {
@@ -543,32 +562,143 @@ export default function NotesPage() {
     return date.toLocaleString('de-DE');
   };
 
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedFile || !selectedPath || !selectedType) {
+      return;
+    }
+    try {
+      let exportSize: 'A4' | 'A5' = 'A4';
+      try {
+        const settings = await settingsAPI.getSettings();
+        if (settings.default_export_size === 'A5') {
+          exportSize = 'A5';
+        }
+      } catch {
+        // Optional: Fallback bleibt A4
+      }
+
+      const blob = await exportAPI.exportPDF(selectedPath, selectedType, exportSize);
+      downloadBlob(blob, selectedFile.name.replace(/\.(md|txt)$/i, '.pdf'));
+    } catch (error) {
+      console.error('PDF-Export fehlgeschlagen:', error);
+    }
+  };
+
+  const handleExportWord = async () => {
+    if (!selectedFile || !selectedPath || !selectedType) {
+      return;
+    }
+    try {
+      const blob = await exportAPI.exportWord(selectedPath, selectedType);
+      downloadBlob(blob, selectedFile.name.replace(/\.(md|txt)$/i, '.docx'));
+    } catch (error) {
+      console.error('Word-Export fehlgeschlagen:', error);
+    }
+  };
+
+  const handleExportMarkdown = async () => {
+    if (!selectedFile || !selectedPath || !selectedType) {
+      return;
+    }
+    try {
+      const response = await fileAPI.getFileContent(selectedPath, selectedType);
+      const blob = new Blob([response.content], { type: 'text/markdown;charset=utf-8' });
+      downloadBlob(blob, selectedFile.name.replace(/\.(txt)$/i, '.md'));
+    } catch (error) {
+      console.error('Markdown-Export fehlgeschlagen:', error);
+    }
+  };
+
+  const createdMetaLabel = `Erstellt am: ${formatMetaTimestamp(fileCreatedAt) || '—'} · von: —`;
+  const modifiedMetaLabel = `Zuletzt geändert: ${formatMetaTimestamp(fileLastModified) || '—'} · von: —`;
+
   const noteMenuActions: ContextMenuAction[] = (!selectedFile || !selectedPath || !selectedType)
     ? []
     : [
       {
         id: 'reveal-note-folder',
         label: 'Ordner in Sidebar öffnen',
+        icon: '📂',
         onClick: handleRevealInSidebar
       },
       {
         id: 'rename-note',
         label: 'Umbenennen...',
+        icon: '✏️',
         onClick: () => void handleRenameSelected()
       },
       {
         id: 'copy-note',
         label: 'Kopieren...',
+        icon: '📄',
         onClick: () => setShowCopyDialog(true)
       },
       {
         id: 'move-note',
         label: 'Verschieben...',
+        icon: '↔️',
         onClick: () => setShowMoveDialog(true)
+      },
+      {
+        id: 'separator-export',
+        label: '',
+        kind: 'separator'
+      },
+      {
+        id: 'export-pdf',
+        label: 'Als PDF exportieren',
+        icon: '📕',
+        onClick: () => void handleExportPDF()
+      },
+      {
+        id: 'export-word',
+        label: 'Als Word exportieren',
+        icon: '📝',
+        onClick: () => void handleExportWord()
+      },
+      {
+        id: 'export-markdown',
+        label: 'Als Markdown exportieren',
+        icon: '📄',
+        onClick: () => void handleExportMarkdown()
+      },
+      {
+        id: 'separator-meta',
+        label: '',
+        kind: 'separator'
+      },
+      {
+        id: 'created-meta',
+        label: createdMetaLabel,
+        icon: '🕓',
+        kind: 'label'
+      },
+      {
+        id: 'modified-meta',
+        label: modifiedMetaLabel,
+        icon: '🛠️',
+        kind: 'label'
+      },
+      {
+        id: 'separator-delete',
+        label: '',
+        kind: 'separator'
       },
       {
         id: 'delete-note',
         label: 'Löschen',
+        icon: '🗑️',
         onClick: () => setShowDeleteDialog(true),
         destructive: true
       }
@@ -602,17 +732,6 @@ export default function NotesPage() {
               marginTop: '0.25rem' 
             }}>
               {selectedPath}
-            </div>
-          )}
-          {(fileCreatedAt || fileLastModified) && (
-            <div style={{
-              fontSize: '0.75rem',
-              color: 'var(--text-secondary)',
-              marginTop: '0.2rem'
-            }}>
-              {fileCreatedAt && `Erstellt: ${formatMetaTimestamp(fileCreatedAt) || '—'}`}
-              {fileCreatedAt && fileLastModified && ' · '}
-              {fileLastModified && `Geändert: ${formatMetaTimestamp(fileLastModified) || '—'}`}
             </div>
           )}
         </div>
@@ -769,13 +888,34 @@ export default function NotesPage() {
           sourceName={selectedFile.name}
           sourceItemType={selectedFile.type}
           onClose={() => setShowMoveDialog(false)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             window.dispatchEvent(new CustomEvent('notenest:files-changed', {
               detail: {
                 type: selectedType,
                 path: getParentFolderPath(selectedPath)
               }
             }));
+
+            window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+              detail: {
+                type: result.destinationType,
+                path: getParentFolderPath(result.destinationPath)
+              }
+            }));
+
+            if (result.itemType === 'file') {
+              const nextName = result.destinationPath.split('/').filter(Boolean).pop() || selectedFile.name;
+              selectFile(
+                {
+                  ...selectedFile,
+                  name: nextName,
+                  path: result.destinationPath,
+                  isAutoNaming: false
+                },
+                result.destinationPath,
+                result.destinationType
+              );
+            }
           }}
         />
       )}
@@ -789,13 +929,34 @@ export default function NotesPage() {
           sourceName={selectedFile.name}
           sourceItemType={selectedFile.type}
           onClose={() => setShowCopyDialog(false)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             window.dispatchEvent(new CustomEvent('notenest:files-changed', {
               detail: {
                 type: selectedType,
                 path: getParentFolderPath(selectedPath)
               }
             }));
+
+            window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+              detail: {
+                type: result.destinationType,
+                path: getParentFolderPath(result.destinationPath)
+              }
+            }));
+
+            if (result.itemType === 'file') {
+              const nextName = result.destinationPath.split('/').filter(Boolean).pop() || selectedFile.name;
+              selectFile(
+                {
+                  ...selectedFile,
+                  name: nextName,
+                  path: result.destinationPath,
+                  isAutoNaming: false
+                },
+                result.destinationPath,
+                result.destinationType
+              );
+            }
           }}
         />
       )}

@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFileStore } from '../../store/fileStore';
 import { fileAPI, settingsAPI } from '../../services/api';
+import { addPendingChange, cacheNote, isIndexedDBAvailable } from '../../services/offlineStorage';
+import { isOnline } from '../../services/syncService';
 import { FileItem as FileItemType } from '../../types/file';
 import FileItem from './FileItem';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
@@ -21,6 +23,8 @@ interface FileTreeProps {
   title: string;
   icon: string;
   onFileSelect?: () => void; // Callback wenn eine Datei ausgewählt wird (für mobile Sidebar-Schließen)
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 interface ContextState {
@@ -39,6 +43,15 @@ function getParentPath(filePath: string): string {
   return `/${segments.slice(0, -1).join('/')}`;
 }
 
+function buildChildPath(parentPath: string, name: string): string {
+  const normalizedParent = parentPath === '/' ? '/' : parentPath.replace(/\/+$/, '');
+  const cleanName = name.replace(/[\\/]/g, '').trim();
+  if (!cleanName) {
+    return normalizedParent;
+  }
+  return normalizedParent === '/' ? `/${cleanName}` : `${normalizedParent}/${cleanName}`;
+}
+
 function isNoteOrFolder(item: FileItemType): boolean {
   if (item.type === 'folder') {
     return true;
@@ -47,7 +60,14 @@ function isNoteOrFolder(item: FileItemType): boolean {
   return resolvedType === 'md' || resolvedType === 'txt';
 }
 
-export default function FileTree({ type, title, icon, onFileSelect }: FileTreeProps) {
+export default function FileTree({
+  type,
+  title,
+  icon,
+  onFileSelect,
+  isCollapsed = false,
+  onToggleCollapsed
+}: FileTreeProps) {
   const navigate = useNavigate();
   const { 
     privateFiles, 
@@ -60,13 +80,14 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     isLoading,
     privateError,
     sharedError,
+    selectedFile,
     selectedPath,
     selectedType
   } = useFileStore();
   
-  const [showOnlyNotes, setShowOnlyNotes] = useState(false);
+  const [showOnlyNotes, setShowOnlyNotes] = useState(true);
   const [nonEditableFilesMode, setNonEditableFilesMode] = useState<'gray' | 'hide'>('gray');
-  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('folders');
+  const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [recentFiles, setRecentFiles] = useState<FileItemType[]>([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
@@ -77,8 +98,10 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   const [deleteTarget, setDeleteTarget] = useState<ContextState | null>(null);
   const [moveTarget, setMoveTarget] = useState<ContextState | null>(null);
   const [copyTarget, setCopyTarget] = useState<ContextState | null>(null);
-  const [showCreateFileDialog, setShowCreateFileDialog] = useState(false);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [createFolderInitialPath, setCreateFolderInitialPath] = useState('/');
+  const [sidebarFilter, setSidebarFilter] = useState('');
+  const [expandedRecentGroups, setExpandedRecentGroups] = useState<Set<string>>(new Set());
   const recentLongPressTimerRef = useRef<number | null>(null);
   const suppressRecentClickRef = useRef(false);
   
@@ -92,13 +115,13 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     const loadSettings = async () => {
       try {
         const settings = await settingsAPI.getSettings();
-        setShowOnlyNotes(settings.show_only_notes || false);
-        setSidebarViewMode(settings.sidebar_view_mode || 'folders');
+        setShowOnlyNotes(settings.show_only_notes ?? true);
+        setSidebarViewMode(settings.sidebar_view_mode || 'recent');
         setNonEditableFilesMode(settings.non_editable_files_mode || 'gray');
       } catch (error) {
         console.error('Fehler beim Laden der Einstellungen:', error);
-        setShowOnlyNotes(false);
-        setSidebarViewMode('folders');
+        setShowOnlyNotes(true);
+        setSidebarViewMode('recent');
         setNonEditableFilesMode('gray');
       } finally {
         setIsLoadingSettings(false);
@@ -170,8 +193,15 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     if (nonEditableFilesMode === 'hide') {
       next = next.filter((file) => file.type === 'folder' || file.isEditable !== false);
     }
+    const query = sidebarFilter.trim().toLowerCase();
+    if (query) {
+      next = next.filter((file) =>
+        file.name.toLowerCase().includes(query) ||
+        file.path.toLowerCase().includes(query)
+      );
+    }
     return next;
-  }, [allFiles, nonEditableFilesMode, showOnlyNotes]);
+  }, [allFiles, nonEditableFilesMode, showOnlyNotes, sidebarFilter]);
 
   const filteredRecentFiles = useMemo(() => {
     let next = recentFiles;
@@ -181,10 +211,39 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     if (nonEditableFilesMode === 'hide') {
       next = next.filter((file) => file.type === 'folder' || file.isEditable !== false);
     }
+    const query = sidebarFilter.trim().toLowerCase();
+    if (query) {
+      next = next.filter((file) =>
+        file.name.toLowerCase().includes(query) ||
+        file.path.toLowerCase().includes(query)
+      );
+    }
     return next;
-  }, [nonEditableFilesMode, recentFiles, showOnlyNotes]);
+  }, [nonEditableFilesMode, recentFiles, showOnlyNotes, sidebarFilter]);
 
   const recentGroups = useMemo(() => groupFilesByRecent(filteredRecentFiles), [filteredRecentFiles]);
+
+  useEffect(() => {
+    if (sidebarViewMode !== 'recent') {
+      return;
+    }
+
+    setExpandedRecentGroups((previous) => {
+      const availableKeys = new Set(recentGroups.map((group) => group.key));
+      const next = new Set<string>();
+      for (const key of previous) {
+        if (availableKeys.has(key as any)) {
+          next.add(key);
+        }
+      }
+
+      if (next.size === 0 && recentGroups.length > 0) {
+        next.add(recentGroups[0].key);
+      }
+
+      return next;
+    });
+  }, [recentGroups, sidebarViewMode]);
 
   useEffect(() => {
     if (isLoadingSettings) {
@@ -250,6 +309,11 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
   };
 
   const handleTitleClick = () => {
+    if (onToggleCollapsed) {
+      onToggleCollapsed();
+      return;
+    }
+
     // Navigiere zur Notes-Seite, falls nicht bereits dort
     if (window.location.pathname !== '/notes') {
       navigate('/notes');
@@ -381,6 +445,60 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
     }
   };
 
+  const resolveCreateBasePath = useCallback(() => {
+    if (selectedType === type && selectedPath) {
+      if (selectedFile?.type === 'file') {
+        return getParentPath(selectedPath);
+      }
+      return selectedPath;
+    }
+    return currentPath || '/';
+  }, [currentPath, selectedFile?.type, selectedPath, selectedType, type]);
+
+  const handleQuickCreateNote = async () => {
+    const targetFolder = resolveCreateBasePath();
+    const timestamp = new Date()
+      .toISOString()
+      .replace('T', ' ')
+      .replace(/:/g, '-')
+      .slice(0, 16);
+    const suggestedName = `Neue Notiz ${timestamp}.md`;
+    const targetPath = buildChildPath(targetFolder, suggestedName);
+    const initialContent = '# ';
+
+    try {
+      if (isOnline()) {
+        try {
+          await fileAPI.createFile({
+            path: targetPath,
+            content: initialContent,
+            type
+          });
+        } catch (error) {
+          if (!isIndexedDBAvailable()) {
+            throw error;
+          }
+          await cacheNote(targetPath, type, initialContent);
+          await addPendingChange(targetPath, type, 'create', initialContent);
+        }
+      } else {
+        if (!isIndexedDBAvailable()) {
+          throw new Error('Offline-Speicherung ist nicht verfügbar');
+        }
+        await cacheNote(targetPath, type, initialContent);
+        await addPendingChange(targetPath, type, 'create', initialContent);
+      }
+
+      handleCreated({
+        path: targetPath,
+        type,
+        name: suggestedName
+      });
+    } catch (error) {
+      console.error('Fehler beim direkten Erstellen einer Notiz:', error);
+    }
+  };
+
   const handleCreated = (created: { path: string; type: 'private' | 'shared'; name: string }) => {
     const parentPath = getParentPath(created.path);
     void loadFiles(parentPath, created.type, showOnlyNotes);
@@ -420,6 +538,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       actions.push({
         id: 'open',
         label: 'Öffnen',
+        icon: '📂',
         onClick: () => openFile(contextMenu.file, contextMenu.path)
       });
     }
@@ -428,16 +547,19 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
       {
         id: 'copy',
         label: 'Kopieren...',
+        icon: '📄',
         onClick: () => setCopyTarget(contextMenu)
       },
       {
         id: 'move',
         label: 'Verschieben...',
+        icon: '↔️',
         onClick: () => setMoveTarget(contextMenu)
       },
       {
         id: 'delete',
         label: 'Löschen',
+        icon: '🗑️',
         onClick: () => setDeleteTarget(contextMenu),
         destructive: true
       }
@@ -445,6 +567,40 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
 
     return actions;
   }, [contextMenu, openFile]);
+
+  const focusResultFile = useCallback((result: {
+    destinationPath: string;
+    destinationType: 'private' | 'shared';
+    itemType: 'file' | 'folder';
+  }) => {
+    if (result.itemType !== 'file') {
+      return;
+    }
+
+    const destinationPath = result.destinationPath;
+    const destinationType = result.destinationType;
+    const fileName = destinationPath.split('/').filter(Boolean).pop() || destinationPath;
+
+    if (window.location.pathname !== '/notes') {
+      navigate('/notes');
+    }
+
+    selectFile(
+      {
+        name: fileName,
+        path: destinationPath,
+        type: 'file',
+        fileType: fileName.toLowerCase().endsWith('.txt') ? 'txt' : 'md',
+        isEditable: true
+      },
+      destinationPath,
+      destinationType
+    );
+
+    if (onFileSelect) {
+      setTimeout(() => onFileSelect(), 100);
+    }
+  }, [navigate, onFileSelect, selectFile]);
 
   return (
     <div style={{ padding: '1rem', position: 'relative' }}>
@@ -473,17 +629,25 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
-            title="Zum Hauptordner zurückkehren"
+            title={onToggleCollapsed ? 'Bereich ein-/ausklappen' : 'Zum Hauptordner zurückkehren'}
           >
             <span>{icon}</span>
             <span>{title}</span>
+            {onToggleCollapsed && (
+              <span style={{ marginLeft: '0.15rem', fontSize: '0.8rem' }}>
+                {isCollapsed ? '▸' : '▾'}
+              </span>
+            )}
           </div>
 
-          {!isLoadingSettings && (
+          {!isLoadingSettings && !isCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <button
                 type="button"
-                onClick={() => setShowCreateFolderDialog(true)}
+                onClick={() => {
+                  setCreateFolderInitialPath(resolveCreateBasePath());
+                  setShowCreateFolderDialog(true);
+                }}
                 title="Neuen Ordner erstellen"
                 style={{
                   border: '1px solid var(--border-color)',
@@ -500,7 +664,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
               </button>
               <button
                 type="button"
-                onClick={() => setShowCreateFileDialog(true)}
+                onClick={() => void handleQuickCreateNote()}
                 title="Neue Notiz erstellen"
                 style={{
                   border: '1px solid var(--border-color)',
@@ -558,78 +722,129 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
             </div>
           )}
         </div>
-        
-        {/* Toggle für Notizen/alle Dateien */}
-        {!isLoadingSettings && (
-          <div
-            onClick={handleToggleShowOnlyNotes}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.75rem',
-              color: '#666',
-              cursor: 'pointer',
-              padding: '0.25rem 0.5rem',
-              borderRadius: '4px',
-              transition: 'background-color 0.2s',
-              userSelect: 'none'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-            title={showOnlyNotes ? 'Zeige alle Dateien' : 'Zeige nur Notizen (Markdown + TXT)'}
-          >
-            <div
-              style={{
-                width: '32px',
-                height: '18px',
-                borderRadius: '9px',
-                backgroundColor: showOnlyNotes ? '#4CAF50' : '#ccc',
-                position: 'relative',
-                transition: 'background-color 0.2s',
-                flexShrink: 0
-              }}
-            >
-              <div
-                style={{
-                  width: '14px',
-                  height: '14px',
-                  borderRadius: '50%',
-                  backgroundColor: '#fff',
+        {!isCollapsed && (
+          <>
+            {!isLoadingSettings && (
+              <div style={{ marginBottom: '0.35rem', position: 'relative' }}>
+                <input
+                  type="text"
+                  value={sidebarFilter}
+                  onChange={(event) => setSidebarFilter(event.target.value)}
+                  placeholder="In Sidebar filtern..."
+                  style={{
+                    width: '100%',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '0.42rem 2rem 0.42rem 0.6rem',
+                    fontSize: '0.76rem',
+                    backgroundColor: 'var(--bg-primary)',
+                    color: 'var(--text-primary)'
+                  }}
+                />
+                <span style={{
                   position: 'absolute',
-                  top: '2px',
-                  left: showOnlyNotes ? '16px' : '2px',
-                  transition: 'left 0.2s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-                }}
-              />
-            </div>
-            <span>{showOnlyNotes ? 'Nur Notizen' : 'Alle Dateien'}</span>
-          </div>
-        )}
+                  right: '0.55rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-secondary)'
+                }}>
+                  {sidebarFilter ? '⨯' : '🔍'}
+                </span>
+                {sidebarFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarFilter('')}
+                    style={{
+                      position: 'absolute',
+                      right: '0.2rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      cursor: 'pointer',
+                      width: '1.5rem',
+                      height: '1.5rem'
+                    }}
+                    title="Filter löschen"
+                  />
+                )}
+              </div>
+            )}
 
-        {!isLoadingSettings && (
-          <div style={{
-            marginTop: '0.15rem',
-            padding: '0 0.5rem',
-            fontSize: '0.72rem',
-            color: 'var(--text-secondary)'
-          }}>
-            {isLoadingStats
-              ? 'Gesamt wird berechnet...'
-              : fileStats
-                ? `Gesamt: ${showOnlyNotes ? fileStats.totalNotes : fileStats.totalFiles} ${showOnlyNotes ? 'Notizen' : 'Dokumente'}`
-                : ''}
-          </div>
+            {/* Toggle für Notizen/alle Dateien */}
+            {!isLoadingSettings && (
+              <div
+                onClick={handleToggleShowOnlyNotes}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.75rem',
+                  color: '#666',
+                  cursor: 'pointer',
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                  userSelect: 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                title={showOnlyNotes ? 'Zeige alle Dateien' : 'Zeige nur Notizen (Markdown + TXT)'}
+              >
+                <div
+                  style={{
+                    width: '32px',
+                    height: '18px',
+                    borderRadius: '9px',
+                    backgroundColor: showOnlyNotes ? '#4CAF50' : '#ccc',
+                    position: 'relative',
+                    transition: 'background-color 0.2s',
+                    flexShrink: 0
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '14px',
+                      height: '14px',
+                      borderRadius: '50%',
+                      backgroundColor: '#fff',
+                      position: 'absolute',
+                      top: '2px',
+                      left: showOnlyNotes ? '16px' : '2px',
+                      transition: 'left 0.2s',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                    }}
+                  />
+                </div>
+                <span>{showOnlyNotes ? 'Nur Notizen' : 'Alle Dateien'}</span>
+              </div>
+            )}
+
+            {!isLoadingSettings && (
+              <div style={{
+                marginTop: '0.15rem',
+                padding: '0 0.5rem',
+                fontSize: '0.72rem',
+                color: 'var(--text-secondary)'
+              }}>
+                {isLoadingStats
+                  ? 'Gesamt wird berechnet...'
+                  : fileStats
+                    ? `Gesamt: ${showOnlyNotes ? fileStats.totalNotes : fileStats.totalFiles} ${showOnlyNotes ? 'Notizen' : 'Dokumente'}`
+                    : ''}
+              </div>
+            )}
+          </>
         )}
       </div>
       
       {/* Pfad-Navigation (Ordneransicht) */}
-      {sidebarViewMode === 'folders' && (
+      {!isCollapsed && sidebarViewMode === 'folders' && (
         <div style={{
           fontSize: '0.75rem',
           color: '#999',
@@ -700,7 +915,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
         </div>
       )}
 
-      {error && (
+      {!isCollapsed && error && (
         <div style={{
           fontSize: '0.75rem',
           color: '#c33',
@@ -713,7 +928,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
         </div>
       )}
 
-      {sidebarViewMode === 'recent' ? (
+      {!isCollapsed && (sidebarViewMode === 'recent' ? (
         <>
           {recentError && (
             <div style={{
@@ -734,72 +949,111 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
             </div>
           ) : recentGroups.length === 0 ? (
             <div style={{ fontSize: '0.875rem', color: '#999', fontStyle: 'italic' }}>
-              Keine zuletzt bearbeiteten {type === 'private' ? 'Notizen' : 'geteilten Notizen'} vorhanden
+              {sidebarFilter.trim()
+                ? 'Keine Treffer für den Sidebar-Filter'
+                : `Keine zuletzt bearbeiteten ${type === 'private' ? 'Notizen' : 'geteilten Notizen'} vorhanden`}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {recentGroups.map((group) => (
+              {recentGroups.map((group) => {
+                const isGroupExpanded = expandedRecentGroups.has(group.key);
+                return (
                 <section key={group.key}>
-                  <h4 style={{
-                    fontSize: '1rem',
-                    marginBottom: '0.35rem',
-                    color: 'var(--text-primary)'
-                  }}>
-                    {group.label}
-                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedRecentGroups((previous) => {
+                        const next = new Set(previous);
+                        if (next.has(group.key)) {
+                          next.delete(group.key);
+                        } else {
+                          next.add(group.key);
+                        }
+                        return next;
+                      });
+                    }}
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      marginBottom: '0.35rem',
+                      padding: '0.15rem 0.1rem',
+                      color: 'var(--text-primary)'
+                    }}
+                    title="Gruppe auf-/zuklappen"
+                  >
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700 }}>
+                      {isGroupExpanded ? '▾' : '▸'} {group.label}
+                    </span>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '999px',
+                      padding: '0.05rem 0.45rem',
+                      backgroundColor: 'var(--bg-primary)'
+                    }}>
+                      {group.items.length}
+                    </span>
+                  </button>
 
-                  <div style={{
-                    borderRadius: '14px',
-                    overflow: 'hidden',
-                    border: '1px solid var(--border-color)',
-                    backgroundColor: 'var(--bg-tertiary)'
-                  }}>
-                    {group.items.map((file, index) => {
-                      const isSelected = selectedType === type && selectedPath === file.path;
-                      return (
-                        <div
-                          key={`${file.path}-${group.key}`}
-                          onClick={() => handleRecentClick(file)}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            openContextMenu(file, file.path, event.clientX, event.clientY);
-                          }}
-                          onTouchStart={(event) => handleRecentTouchStart(event, file)}
-                          onTouchEnd={clearRecentLongPress}
-                          onTouchMove={clearRecentLongPress}
-                          onTouchCancel={clearRecentLongPress}
-                          style={{
-                            padding: '0.65rem 0.8rem',
-                            borderBottom: index < group.items.length - 1 ? '1px solid var(--border-color)' : 'none',
-                            cursor: 'pointer',
-                            backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent'
-                          }}
-                        >
-                          <div style={{
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                            marginBottom: '0.15rem',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            {file.name}
+                  {isGroupExpanded && (
+                    <div style={{
+                      borderRadius: '14px',
+                      overflow: 'hidden',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-tertiary)'
+                    }}>
+                      {group.items.map((file, index) => {
+                        const isSelected = selectedType === type && selectedPath === file.path;
+                        return (
+                          <div
+                            key={`${file.path}-${group.key}`}
+                            onClick={() => handleRecentClick(file)}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              openContextMenu(file, file.path, event.clientX, event.clientY);
+                            }}
+                            onTouchStart={(event) => handleRecentTouchStart(event, file)}
+                            onTouchEnd={clearRecentLongPress}
+                            onTouchMove={clearRecentLongPress}
+                            onTouchCancel={clearRecentLongPress}
+                            style={{
+                              padding: '0.65rem 0.8rem',
+                              borderBottom: index < group.items.length - 1 ? '1px solid var(--border-color)' : 'none',
+                              cursor: 'pointer',
+                              backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent'
+                            }}
+                          >
+                            <div style={{
+                              fontWeight: 600,
+                              color: 'var(--text-primary)',
+                              marginBottom: '0.15rem',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {file.name}
+                            </div>
+                            <div style={{
+                              fontSize: '0.78rem',
+                              color: 'var(--text-secondary)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {formatRecentDate(file.lastModified)} · {getParentPath(file.path)}
+                            </div>
                           </div>
-                          <div style={{
-                            fontSize: '0.78rem',
-                            color: 'var(--text-secondary)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            {formatRecentDate(file.lastModified)} · {getParentPath(file.path)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </section>
-              ))}
+              )})}
             </div>
           )}
         </>
@@ -810,7 +1064,9 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           </div>
         ) : files.length === 0 ? (
           <div style={{ fontSize: '0.875rem', color: '#999', fontStyle: 'italic' }}>
-            Keine {type === 'private' ? 'Notizen' : 'geteilten Notizen'} vorhanden
+            {sidebarFilter.trim()
+              ? 'Keine Treffer für den Sidebar-Filter'
+              : `Keine ${type === 'private' ? 'Notizen' : 'geteilten Notizen'} vorhanden`}
           </div>
         ) : (
           <div>
@@ -827,19 +1083,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
             ))}
           </div>
         )
-      )}
-
-      {showCreateFileDialog && (
-        <CreateFileDialog
-          isOpen={showCreateFileDialog}
-          onClose={() => setShowCreateFileDialog(false)}
-          type="file"
-          initialFolderType={type}
-          initialPath={currentPath}
-          allowTargetSelection={true}
-          onCreated={handleCreated}
-        />
-      )}
+      ))}
 
       {showCreateFolderDialog && (
         <CreateFileDialog
@@ -847,7 +1091,7 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           onClose={() => setShowCreateFolderDialog(false)}
           type="folder"
           initialFolderType={type}
-          initialPath={currentPath}
+          initialPath={createFolderInitialPath}
           allowTargetSelection={true}
           onCreated={handleCreated}
         />
@@ -880,10 +1124,11 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           sourceName={moveTarget.file.name}
           sourceItemType={moveTarget.file.type}
           onClose={() => setMoveTarget(null)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
             void refreshFileStats();
+            focusResultFile(result);
           }}
         />
       )}
@@ -897,10 +1142,11 @@ export default function FileTree({ type, title, icon, onFileSelect }: FileTreePr
           sourceName={copyTarget.file.name}
           sourceItemType={copyTarget.file.type}
           onClose={() => setCopyTarget(null)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             void loadFiles(currentPath, type, showOnlyNotes);
             void refreshRecentFiles();
             void refreshFileStats();
+            focusResultFile(result);
           }}
         />
       )}

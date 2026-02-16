@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { IS_NAS_MODE } from '../config/constants';
+import { getNasHomesRootPath, getNasSharedRootPath } from './storageRoots';
 
 /**
  * Prüft, ob ein Pfad existiert und zugänglich ist
@@ -82,7 +83,7 @@ export function validateNasHomePath(username: string): {
     };
   }
 
-  const nasHomesPath = process.env.NAS_HOMES_PATH || '/data/homes';
+  const nasHomesPath = getNasHomesRootPath();
   const userHomePath = path.join(nasHomesPath, username);
 
   const validation = validatePath(userHomePath);
@@ -120,7 +121,7 @@ export function validateNasSharedPath(sharedPath: string): {
   path: string;
   error?: string;
 } {
-  const nasSharedPath = process.env.NAS_SHARED_PATH || '/data/shared';
+  const nasSharedPath = getNasSharedRootPath();
   
   // Wenn Pfad absolut ist und mit nasSharedPath beginnt, verwende ihn direkt
   // Sonst kombiniere mit nasSharedPath
@@ -170,7 +171,7 @@ export function listAvailableSharedFolders(): {
   error?: string;
 } {
   try {
-    const nasSharedPath = process.env.NAS_SHARED_PATH || '/data/shared';
+    const nasSharedPath = getNasSharedRootPath();
 
     if (!fs.existsSync(nasSharedPath)) {
       // Wenn Pfad nicht existiert, erstelle ihn

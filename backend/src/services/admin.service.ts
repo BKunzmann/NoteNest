@@ -8,6 +8,8 @@ import db from '../config/database';
 import { User, RegisterRequest } from '../types/auth';
 import { hashPassword } from './auth.service';
 import fs from 'fs';
+import path from 'path';
+import { getPrivateRootPathForDeployment, getSharedRootPathForDeployment } from '../utils/storageRoots';
 
 /**
  * Gibt alle Benutzer zurück (für Admin-Übersicht)
@@ -31,17 +33,11 @@ export async function adminCreateUser(data: RegisterRequest, isAdmin: boolean = 
   const userId = result.lastInsertRowid as number;
   
   // Erstelle Standard-Einstellungen
-  const privatePath = process.env.NAS_HOMES_PATH 
-    ? `${process.env.NAS_HOMES_PATH}/${data.username}`
-    : process.env.NODE_ENV === 'production'
-    ? `/data/users/${data.username}`
-    : `/app/data/users/${data.username}`;
-  
-  const sharedPath = process.env.NAS_SHARED_PATH || (
-    process.env.NODE_ENV === 'production'
-      ? '/data/shared'
-      : '/app/data/shared'
-  );
+  const privateRoot = getPrivateRootPathForDeployment();
+  const sharedRoot = getSharedRootPathForDeployment();
+  const privatePath = path.join(privateRoot, data.username);
+  const sharedPath = sharedRoot;
+  const defaultNotesFolder = '/Notizen';
   
   db.prepare(`
     INSERT INTO user_settings (
@@ -50,16 +46,23 @@ export async function adminCreateUser(data: RegisterRequest, isAdmin: boolean = 
       shared_folder_path,
       default_note_type,
       default_note_folder_path,
-      sidebar_view_mode
+      sidebar_view_mode,
+      show_only_notes
     )
-    VALUES (?, ?, ?, 'private', '/', 'folders')
-  `).run(userId, privatePath, sharedPath);
+    VALUES (?, ?, ?, 'private', ?, 'recent', 1)
+  `).run(userId, privatePath, sharedPath, defaultNotesFolder);
   
   // Erstelle Benutzer-Ordner, falls nicht vorhanden
   try {
     if (!fs.existsSync(privatePath)) {
       fs.mkdirSync(privatePath, { recursive: true });
       console.log(`✅ Created user directory: ${privatePath}`);
+    }
+
+    const notesPath = path.join(privatePath, 'Notizen');
+    if (!fs.existsSync(notesPath)) {
+      fs.mkdirSync(notesPath, { recursive: true });
+      console.log(`✅ Created default notes directory: ${notesPath}`);
     }
   } catch (error) {
     console.warn(`⚠️ Could not create user directory: ${privatePath}`, error);

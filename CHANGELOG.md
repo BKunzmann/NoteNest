@@ -9,6 +9,22 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### 🛠️ Editor-, Offline- und Versions-Feinschliff (2026-02-13)
+- **Editor-Listensteuerung erweitert**:
+  - Automatische Listen-Erkennung im WYSIWYG kann jetzt direkt in der Toolbar aktiviert/deaktiviert werden.
+  - Auswahlfeld "Listen" bietet wieder definierte Zwischenstufen (Ebene 1/2) fuer Punkte, Bindestrich und nummerierte Listen.
+- **Bibel-Tooltip im WYSIWYG gehaertet**:
+  - Leere Antworten fuehren nicht mehr zu einem "leeren" Tooltip.
+  - Fehlertexte werden nutzerfreundlich normalisiert (z. B. bei nicht importierter Bibeldatenbank oder Netzwerkproblemen).
+- **Bibel-Uebersetzung vereinheitlicht**:
+  - Markdown-Editor verwendet konsistent normalisierte Uebersetzungs-Codes mit `LUT1912` als robustem Fallback.
+- **Versionierung fortgefuehrt**:
+  - Projektversion auf `1.3.1` angehoben (Root, Backend, Frontend und zentrale Version-Konfiguration).
+  - Dadurch ist die aktualisierte Versionsnummer im User-Menue direkt sichtbar.
+
+### ✅ Tests
+- Frontend: TypeScript + Vite Build erfolgreich.
+
 ### 🛠️ UX/Index-Optimierungen (2026-02-10 – Iteration 2)
 - **Header-Fix**: Bei Nicht-Admins wird kein `0`-Artefakt mehr statt der Krone angezeigt.
 - **Version & Autor in GUI**: Im Benutzer-Menü wird jetzt ein Hinweis `vX.Y.Z · © C-Autor` angezeigt.
