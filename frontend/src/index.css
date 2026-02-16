@@ -89,3 +89,28 @@ textarea:focus-visible,
 .wysiwyg-editor li {
   margin: 0.2rem 0;
 }
+
+.wysiwyg-editor blockquote {
+  border-left: 4px solid var(--accent-color);
+  padding-left: 0.9rem;
+  margin: 0.55rem 0;
+  color: var(--text-secondary);
+}
+
+.wysiwyg-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+
+.wysiwyg-editor th,
+.wysiwyg-editor td {
+  border: 1px solid var(--border-color);
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.wysiwyg-editor th {
+  background-color: var(--bg-secondary);
+}

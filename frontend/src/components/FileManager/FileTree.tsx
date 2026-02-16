@@ -26,6 +26,7 @@ interface FileTreeProps {
   onFileSelect?: () => void; // Callback wenn eine Datei ausgewählt wird (für mobile Sidebar-Schließen)
   isCollapsed?: boolean;
   onToggleCollapsed?: () => void;
+  showSectionActions?: boolean;
 }
 
 interface ContextState {
@@ -75,7 +76,8 @@ export default function FileTree({
   icon,
   onFileSelect,
   isCollapsed = false,
-  onToggleCollapsed
+  onToggleCollapsed,
+  showSectionActions = true
 }: FileTreeProps) {
   const navigate = useNavigate();
   const { 
@@ -127,7 +129,7 @@ export default function FileTree({
       try {
         const settings = await settingsAPI.getSettings();
         setShowOnlyNotes(settings.show_only_notes ?? true);
-        setSidebarViewMode('recent');
+        setSidebarViewMode(settings.sidebar_view_mode === 'folders' ? 'folders' : 'recent');
         setNonEditableFilesMode(settings.non_editable_files_mode || 'gray');
       } catch (error) {
         console.error('Fehler beim Laden der Einstellungen:', error);
@@ -467,7 +469,36 @@ export default function FileTree({
     return currentPath || '/';
   }, [currentPath, selectedFile?.type, selectedPath, selectedType, type]);
 
-  const handleQuickCreateNote = async () => {
+  const handleCreated = useCallback((created: { path: string; type: 'private' | 'shared'; name: string }) => {
+    const parentPath = getParentPath(created.path);
+    void loadFiles(parentPath, created.type, showOnlyNotes);
+    void refreshFileStats();
+    window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+      detail: {
+        type: created.type,
+        path: parentPath
+      }
+    }));
+
+    if (created.type === type) {
+      setSidebarViewMode('folders');
+    }
+
+    if (created.type === type && created.name.toLowerCase().endsWith('.md')) {
+      openFile(
+        {
+          name: created.name,
+          path: created.path,
+          type: 'file',
+          fileType: 'md',
+          isEditable: true
+        },
+        created.path
+      );
+    }
+  }, [loadFiles, openFile, refreshFileStats, showOnlyNotes, type]);
+
+  const handleQuickCreateNote = useCallback(async () => {
     const targetFolder = resolveCreateBasePath();
     const timestamp = new Date()
       .toISOString()
@@ -509,36 +540,48 @@ export default function FileTree({
     } catch (error) {
       console.error('Fehler beim direkten Erstellen einer Notiz:', error);
     }
-  };
+  }, [handleCreated, resolveCreateBasePath, type]);
 
-  const handleCreated = (created: { path: string; type: 'private' | 'shared'; name: string }) => {
-    const parentPath = getParentPath(created.path);
-    void loadFiles(parentPath, created.type, showOnlyNotes);
-    void refreshFileStats();
-    window.dispatchEvent(new CustomEvent('notenest:files-changed', {
-      detail: {
-        type: created.type,
-        path: parentPath
+  const openCreateFolderDialog = useCallback(() => {
+    setCreateFolderInitialPath(resolveCreateBasePath());
+    setShowCreateFolderDialog(true);
+  }, [resolveCreateBasePath]);
+
+  useEffect(() => {
+    const handleCreateFolderRequest = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{ type: 'private' | 'shared' }> | undefined;
+      if (!detail || detail.type !== type) {
+        return;
       }
-    }));
+      openCreateFolderDialog();
+    };
 
-    if (created.type === type) {
-      setSidebarViewMode('folders');
-    }
+    const handleCreateNoteRequest = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{ type: 'private' | 'shared' }> | undefined;
+      if (!detail || detail.type !== type) {
+        return;
+      }
+      void handleQuickCreateNote();
+    };
 
-    if (created.type === type && created.name.toLowerCase().endsWith('.md')) {
-      openFile(
-        {
-          name: created.name,
-          path: created.path,
-          type: 'file',
-          fileType: 'md',
-          isEditable: true
-        },
-        created.path
-      );
-    }
-  };
+    const handleOpenTrashRequest = (event: Event) => {
+      const detail = (event as CustomEvent).detail as Partial<{ type: 'private' | 'shared' }> | undefined;
+      if (!detail || detail.type !== type) {
+        return;
+      }
+      setShowTrashDialog(true);
+    };
+
+    window.addEventListener('notenest:sidebar-create-folder', handleCreateFolderRequest as EventListener);
+    window.addEventListener('notenest:sidebar-create-note', handleCreateNoteRequest as EventListener);
+    window.addEventListener('notenest:sidebar-open-trash', handleOpenTrashRequest as EventListener);
+
+    return () => {
+      window.removeEventListener('notenest:sidebar-create-folder', handleCreateFolderRequest as EventListener);
+      window.removeEventListener('notenest:sidebar-create-note', handleCreateNoteRequest as EventListener);
+      window.removeEventListener('notenest:sidebar-open-trash', handleOpenTrashRequest as EventListener);
+    };
+  }, [handleQuickCreateNote, openCreateFolderDialog, type]);
 
   const menuActions: ContextMenuAction[] = useMemo(() => {
     if (!contextMenu) {
@@ -688,14 +731,11 @@ export default function FileTree({
             )}
           </div>
 
-          {!isLoadingSettings && !isCollapsed && (
+          {showSectionActions && !isLoadingSettings && !isCollapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <button
                 type="button"
-                onClick={() => {
-                  setCreateFolderInitialPath(resolveCreateBasePath());
-                  setShowCreateFolderDialog(true);
-                }}
+                onClick={openCreateFolderDialog}
                 title="Neuen Ordner erstellen"
                 style={{
                   border: '1px solid var(--border-color)',
@@ -747,7 +787,7 @@ export default function FileTree({
             </div>
           )}
         </div>
-        {!isLoadingSettings && !isCollapsed && (
+        {showSectionActions && !isLoadingSettings && !isCollapsed && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.35rem' }}>
             <div style={{
               display: 'inline-flex',

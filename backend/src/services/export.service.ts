@@ -11,7 +11,16 @@
 import puppeteer from 'puppeteer';
 // @ts-ignore - markdown-it types not available
 import MarkdownIt from 'markdown-it';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, ExternalHyperlink } from 'docx';
+import {
+  AlignmentType,
+  Document,
+  ExternalHyperlink,
+  HeadingLevel,
+  LevelFormat,
+  Packer,
+  Paragraph,
+  TextRun
+} from 'docx';
 import { readFile } from './file.service';
 
 const md = new MarkdownIt({
@@ -20,6 +29,175 @@ const md = new MarkdownIt({
   typographer: true,
   breaks: true
 });
+
+const BULLET_NUMBERING_REFERENCE = 'notenest-bullet-list';
+const ORDERED_NUMBERING_REFERENCE = 'notenest-ordered-list';
+const MAX_EXPORT_LIST_LEVEL = 8;
+
+function countIndentation(rawIndent: string): number {
+  return rawIndent.replace(/\t/g, '    ').length;
+}
+
+function normalizeMarkdownForExport(markdown: string): string {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const normalizedLines: string[] = [];
+  let isInsideFence = false;
+
+  for (const originalLine of lines) {
+    const line = originalLine;
+    const trimmedLine = line.trim();
+
+    if (trimmedLine.startsWith('```')) {
+      isInsideFence = !isInsideFence;
+      normalizedLines.push(line);
+      continue;
+    }
+
+    if (isInsideFence) {
+      normalizedLines.push(line);
+      continue;
+    }
+
+    const taskMatch = line.match(/^(\s*)[-*+]\s+\[( |x|X)\]\s+(.*)$/);
+    if (taskMatch) {
+      const level = Math.max(0, Math.floor(countIndentation(taskMatch[1]) / 2));
+      const indent = '    '.repeat(level);
+      const check = taskMatch[2].toLowerCase() === 'x' ? 'x' : ' ';
+      normalizedLines.push(`${indent}- [${check}] ${taskMatch[3]}`);
+      continue;
+    }
+
+    const checkboxMatch = line.match(/^(\s*)([☐☑])\s+(.*)$/);
+    if (checkboxMatch) {
+      const level = Math.max(0, Math.floor(countIndentation(checkboxMatch[1]) / 2));
+      const indent = '    '.repeat(level);
+      const check = checkboxMatch[2] === '☑' ? 'x' : ' ';
+      normalizedLines.push(`${indent}- [${check}] ${checkboxMatch[3]}`);
+      continue;
+    }
+
+    const bulletMatch = line.match(/^(\s*)[-*+•●○]\s+(.*)$/);
+    if (bulletMatch) {
+      const level = Math.max(0, Math.floor(countIndentation(bulletMatch[1]) / 2));
+      const indent = '    '.repeat(level);
+      normalizedLines.push(`${indent}- ${bulletMatch[2]}`);
+      continue;
+    }
+
+    const orderedMatch = line.match(/^(\s*)(?:\d+[.)]|[a-zA-Z][)])\s+(.*)$/);
+    if (orderedMatch) {
+      const level = Math.max(0, Math.floor(countIndentation(orderedMatch[1]) / 2));
+      const indent = '    '.repeat(level);
+      normalizedLines.push(`${indent}1. ${orderedMatch[2]}`);
+      continue;
+    }
+
+    normalizedLines.push(line);
+  }
+
+  return normalizedLines.join('\n');
+}
+
+function parseMarkdownListLine(line: string): {
+  kind: 'bullet' | 'ordered';
+  level: number;
+  text: string;
+} | null {
+  const taskMatch = line.match(/^(\s*)-\s+\[( |x|X)\]\s+(.*)$/);
+  if (taskMatch) {
+    const level = Math.min(MAX_EXPORT_LIST_LEVEL, Math.floor(countIndentation(taskMatch[1]) / 4));
+    const isDone = taskMatch[2].toLowerCase() === 'x';
+    return {
+      kind: 'bullet',
+      level: Math.max(0, level),
+      text: `${isDone ? '☑' : '☐'} ${taskMatch[3]}`
+    };
+  }
+
+  const bulletMatch = line.match(/^(\s*)[-*+]\s+(.*)$/);
+  if (bulletMatch) {
+    const level = Math.min(MAX_EXPORT_LIST_LEVEL, Math.floor(countIndentation(bulletMatch[1]) / 4));
+    return {
+      kind: 'bullet',
+      level: Math.max(0, level),
+      text: bulletMatch[2]
+    };
+  }
+
+  const orderedMatch = line.match(/^(\s*)(?:\d+[.)]|[a-zA-Z][)])\s+(.*)$/);
+  if (orderedMatch) {
+    const level = Math.min(MAX_EXPORT_LIST_LEVEL, Math.floor(countIndentation(orderedMatch[1]) / 4));
+    return {
+      kind: 'ordered',
+      level: Math.max(0, level),
+      text: orderedMatch[2]
+    };
+  }
+
+  return null;
+}
+
+function createListNumberingConfig() {
+  return [
+    {
+      reference: BULLET_NUMBERING_REFERENCE,
+      levels: Array.from({ length: MAX_EXPORT_LIST_LEVEL + 1 }, (_, level) => {
+        const bulletSymbols = ['●', '○', '■'];
+        return {
+          level,
+          format: LevelFormat.BULLET,
+          text: bulletSymbols[level % bulletSymbols.length],
+          alignment: AlignmentType.LEFT,
+          style: {
+            paragraph: {
+              indent: {
+                left: 720 + level * 360,
+                hanging: 260
+              }
+            }
+          }
+        };
+      })
+    },
+    {
+      reference: ORDERED_NUMBERING_REFERENCE,
+      levels: Array.from({ length: MAX_EXPORT_LIST_LEVEL + 1 }, (_, level) => {
+        const placeHolderIndex = level + 1;
+        if (level === 1) {
+          return {
+            level,
+            format: LevelFormat.LOWER_LETTER,
+            text: `%${placeHolderIndex})`,
+            alignment: AlignmentType.LEFT,
+            style: {
+              paragraph: {
+                indent: {
+                  left: 720 + level * 360,
+                  hanging: 260
+                }
+              }
+            }
+          };
+        }
+
+        return {
+          level,
+          format: LevelFormat.DECIMAL,
+          text: `%${placeHolderIndex}.`,
+          alignment: AlignmentType.LEFT,
+          style: {
+            paragraph: {
+              indent: {
+                left: 720 + level * 360,
+                hanging: 260
+              }
+            }
+          }
+        };
+      })
+    }
+  ];
+}
 
 /**
  * CSS-Template für PDF-Export
@@ -87,6 +265,26 @@ function getPDFCSS(size: 'A4' | 'A5'): string {
     ul, ol {
       margin-bottom: 1em;
       padding-left: 2em;
+    }
+
+    ul {
+      list-style-type: disc;
+    }
+
+    ul ul {
+      list-style-type: circle;
+    }
+
+    ul ul ul {
+      list-style-type: square;
+    }
+
+    ol {
+      list-style-type: decimal;
+    }
+
+    ol ol {
+      list-style-type: lower-alpha;
     }
     
     li {
@@ -306,13 +504,16 @@ export async function generatePDF(
 ): Promise<Buffer> {
   const { size = 'A4', title } = options;
   
-  // 1. Markdown zu HTML konvertieren
-  const html = markdownToHTML(markdown);
+  // 1. Listen-Normalisierung, damit Einrückung/Marker in allen Exporten konsistent sind
+  const normalizedMarkdown = normalizeMarkdownForExport(markdown);
+
+  // 2. Markdown zu HTML konvertieren
+  const html = markdownToHTML(normalizedMarkdown);
   
-  // 2. Vollständiges HTML-Dokument erstellen
+  // 3. Vollständiges HTML-Dokument erstellen
   const fullHTML = createHTMLDocument(html, size, title);
   
-  // 3. Puppeteer Browser starten
+  // 4. Puppeteer Browser starten
   // Prüfe, ob Chromium im Container verfügbar ist (Docker/Alpine)
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || 
     (process.platform === 'linux' ? '/usr/bin/chromium-browser' : undefined);
@@ -337,13 +538,13 @@ export async function generatePDF(
   try {
     const page = await browser.newPage();
     
-    // 4. HTML laden
+    // 5. HTML laden
     await page.setContent(fullHTML, {
       waitUntil: 'networkidle0',
       timeout: 30000
     });
     
-    // 5. PDF generieren
+    // 6. PDF generieren
     const pdfBuffer = await page.pdf({
       format: size,
       printBackground: true,
@@ -389,7 +590,8 @@ function markdownToDocx(markdown: string): Paragraph[] {
   const paragraphs: Paragraph[] = [];
   
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    const rawLine = lines[i];
+    const line = rawLine.trim();
     
     if (!line) {
       // Leere Zeile
@@ -473,12 +675,16 @@ function markdownToDocx(markdown: string): Paragraph[] {
       continue;
     }
     
-    // Liste (vereinfacht)
-    if (line.match(/^[\*\-\+] /) || line.match(/^\d+\. /)) {
-      const listText = line.replace(/^[\*\-\+] /, '').replace(/^\d+\. /, '');
+    const listLine = parseMarkdownListLine(rawLine);
+    if (listLine) {
       paragraphs.push(new Paragraph({
-        text: `• ${listText}`,
-        indent: { left: 400 },
+        children: parseInlineFormatting(listLine.text),
+        numbering: {
+          reference: listLine.kind === 'ordered'
+            ? ORDERED_NUMBERING_REFERENCE
+            : BULLET_NUMBERING_REFERENCE,
+          level: listLine.level
+        },
         spacing: { after: 100 }
       }));
       continue;
@@ -629,11 +835,15 @@ export async function generateDOCX(
 ): Promise<Buffer> {
   const { title } = options;
   
-  // 1. Markdown zu DOCX-Paragraphen konvertieren
-  const paragraphs = markdownToDocx(markdown);
+  // 1. Listen normalisieren und dann zu DOCX-Paragraphen konvertieren
+  const normalizedMarkdown = normalizeMarkdownForExport(markdown);
+  const paragraphs = markdownToDocx(normalizedMarkdown);
   
   // 2. Erstelle Word-Dokument
   const doc = new Document({
+    numbering: {
+      config: createListNumberingConfig()
+    },
     sections: [{
       properties: {},
       children: [

@@ -477,6 +477,43 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
                         marginBottom: '1rem'
                       }} {...props} />
                     ),
+                  ul: ({ node, ...props }: any) => (
+                    <ul style={{
+                      paddingLeft: '1.35rem',
+                      margin: '0.4rem 0',
+                      listStyleType: 'disc'
+                    }} {...props} />
+                  ),
+                  ol: ({ node, ...props }: any) => (
+                    <ol style={{
+                      paddingLeft: '1.35rem',
+                      margin: '0.4rem 0',
+                      listStyleType: 'decimal'
+                    }} {...props} />
+                  ),
+                  table: ({ node, ...props }: any) => (
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      marginBottom: '1rem',
+                      border: '1px solid var(--border-color)'
+                    }} {...props} />
+                  ),
+                  th: ({ node, ...props }: any) => (
+                    <th style={{
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-secondary)',
+                      padding: '0.45rem 0.55rem',
+                      textAlign: 'left'
+                    }} {...props} />
+                  ),
+                  td: ({ node, ...props }: any) => (
+                    <td style={{
+                      border: '1px solid var(--border-color)',
+                      padding: '0.45rem 0.55rem',
+                      verticalAlign: 'top'
+                    }} {...props} />
+                  ),
                   blockquote: ({ node, children, ...props }: any) => {
                     const processChildren = (children: any): React.ReactNode => {
                       if (typeof children === 'string') {

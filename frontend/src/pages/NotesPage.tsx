@@ -79,6 +79,61 @@ function deriveTitleFromFirstLine(content: string): string | null {
   return sanitized ? sanitized.slice(0, 80) : null;
 }
 
+function normalizeMarkdownForExport(content: string): string {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const normalized: string[] = [];
+  let isInsideFence = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('```')) {
+      isInsideFence = !isInsideFence;
+      normalized.push(line);
+      continue;
+    }
+    if (isInsideFence) {
+      normalized.push(line);
+      continue;
+    }
+
+    const leadingSpaces = (value: string) => value.replace(/\t/g, '    ').length;
+
+    const taskMatch = line.match(/^(\s*)[-*+]\s+\[( |x|X)\]\s+(.*)$/);
+    if (taskMatch) {
+      const level = Math.max(0, Math.floor(leadingSpaces(taskMatch[1]) / 2));
+      const check = taskMatch[2].toLowerCase() === 'x' ? 'x' : ' ';
+      normalized.push(`${'    '.repeat(level)}- [${check}] ${taskMatch[3]}`);
+      continue;
+    }
+
+    const checkboxMatch = line.match(/^(\s*)([☐☑])\s+(.*)$/);
+    if (checkboxMatch) {
+      const level = Math.max(0, Math.floor(leadingSpaces(checkboxMatch[1]) / 2));
+      const check = checkboxMatch[2] === '☑' ? 'x' : ' ';
+      normalized.push(`${'    '.repeat(level)}- [${check}] ${checkboxMatch[3]}`);
+      continue;
+    }
+
+    const bulletMatch = line.match(/^(\s*)[-*+•●○]\s+(.*)$/);
+    if (bulletMatch) {
+      const level = Math.max(0, Math.floor(leadingSpaces(bulletMatch[1]) / 2));
+      normalized.push(`${'    '.repeat(level)}- ${bulletMatch[2]}`);
+      continue;
+    }
+
+    const orderedMatch = line.match(/^(\s*)(?:\d+[.)]|[a-zA-Z][)])\s+(.*)$/);
+    if (orderedMatch) {
+      const level = Math.max(0, Math.floor(leadingSpaces(orderedMatch[1]) / 2));
+      normalized.push(`${'    '.repeat(level)}1. ${orderedMatch[2]}`);
+      continue;
+    }
+
+    normalized.push(line);
+  }
+
+  return normalized.join('\n');
+}
+
 export default function NotesPage() {
   const params = useParams<{ type?: 'private' | 'shared'; path?: string }>();
   const navigate = useNavigate();
@@ -613,7 +668,8 @@ export default function NotesPage() {
     }
     try {
       const response = await fileAPI.getFileContent(selectedPath, selectedType);
-      const blob = new Blob([response.content], { type: 'text/markdown;charset=utf-8' });
+      const normalizedContent = normalizeMarkdownForExport(response.content);
+      const blob = new Blob([normalizedContent], { type: 'text/markdown;charset=utf-8' });
       downloadBlob(blob, selectedFile.name.replace(/\.(txt)$/i, '.md'));
     } catch (error) {
       console.error('Markdown-Export fehlgeschlagen:', error);

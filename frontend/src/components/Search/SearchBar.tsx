@@ -13,11 +13,13 @@ interface SearchBarProps {
 }
 
 const SEARCH_HISTORY_KEY = 'notenest.search-history';
+const MAX_SEARCH_HISTORY_ITEMS = 8;
 const MOBILE_BREAKPOINT = 700;
 
 export default function SearchBar({ onClose }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [showResults, setShowResults] = useState(false);
@@ -36,11 +38,27 @@ export default function SearchBar({ onClose }: SearchBarProps) {
   }, []);
 
   useEffect(() => {
-    // Verlauf wird bewusst nicht angezeigt/persistiert.
     try {
-      localStorage.removeItem(SEARCH_HISTORY_KEY);
+      const rawHistory = localStorage.getItem(SEARCH_HISTORY_KEY);
+      if (!rawHistory) {
+        setSearchHistory([]);
+        return;
+      }
+
+      const parsedHistory = JSON.parse(rawHistory);
+      if (!Array.isArray(parsedHistory)) {
+        setSearchHistory([]);
+        return;
+      }
+
+      const cleanedHistory = parsedHistory
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length >= 2)
+        .slice(0, MAX_SEARCH_HISTORY_ITEMS);
+      setSearchHistory(cleanedHistory);
     } catch {
-      // optional
+      setSearchHistory([]);
     }
   }, []);
 
@@ -97,7 +115,33 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     };
   }, [query]);
 
+  const persistSearchHistory = (nextHistory: string[]) => {
+    setSearchHistory(nextHistory);
+    try {
+      if (nextHistory.length === 0) {
+        localStorage.removeItem(SEARCH_HISTORY_KEY);
+        return;
+      }
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(nextHistory));
+    } catch {
+      // optional
+    }
+  };
+
+  const addQueryToHistory = (value: string) => {
+    const normalized = value.trim();
+    if (normalized.length < 2) {
+      return;
+    }
+    const deduplicated = searchHistory.filter(
+      (historyEntry) => historyEntry.toLowerCase() !== normalized.toLowerCase()
+    );
+    persistSearchHistory([normalized, ...deduplicated].slice(0, MAX_SEARCH_HISTORY_ITEMS));
+  };
+
   const handleSelectResult = (result: SearchResult) => {
+    addQueryToHistory(query);
+
     let pathForUrl = result.path;
     if (pathForUrl.startsWith('/')) {
       pathForUrl = pathForUrl.substring(1);
@@ -110,6 +154,27 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     if (onClose) {
       onClose();
     }
+  };
+
+  const handleHistorySelect = (historyQuery: string) => {
+    setQuery(historyQuery);
+    setShowResults(true);
+    setSelectedIndex(-1);
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  const removeHistoryItem = (value: string) => {
+    persistSearchHistory(
+      searchHistory.filter(
+        (historyEntry) => historyEntry.toLowerCase() !== value.toLowerCase()
+      )
+    );
+  };
+
+  const clearSearchHistory = () => {
+    persistSearchHistory([]);
   };
 
   const clearQuery = () => {
@@ -149,7 +214,9 @@ export default function SearchBar({ onClose }: SearchBarProps) {
     }
   };
 
-  const hasResultView = showResults && query.trim().length >= 2;
+  const normalizedQuery = query.trim();
+  const hasResultView = showResults && normalizedQuery.length >= 2;
+  const hasHistoryView = showResults && normalizedQuery.length < 2 && searchHistory.length > 0;
 
   const resultContainerStyle: React.CSSProperties = isMobile
     ? {
@@ -253,8 +320,88 @@ export default function SearchBar({ onClose }: SearchBarProps) {
         </span>
       </div>
 
-      {hasResultView && (
+      {(hasResultView || hasHistoryView) && (
         <div id={listboxId} role="listbox" style={resultContainerStyle}>
+          {hasHistoryView && (
+            <div style={{ padding: isMobile ? '0.85rem' : '1rem' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.5rem',
+                gap: '0.5rem'
+              }}>
+                <div style={{
+                  fontSize: isMobile ? '0.86rem' : '0.8rem',
+                  color: 'var(--text-secondary, #666)',
+                  fontWeight: 700
+                }}>
+                  Letzte Suchen
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSearchHistory}
+                  style={{
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: 'var(--accent-color, #1976d2)',
+                    cursor: 'pointer',
+                    fontSize: isMobile ? '0.8rem' : '0.75rem'
+                  }}
+                >
+                  Verlauf löschen
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                {searchHistory.map((historyEntry) => (
+                  <div
+                    key={historyEntry}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleHistorySelect(historyEntry)}
+                      style={{
+                        border: '1px solid var(--border-color, #ddd)',
+                        borderRadius: '999px',
+                        padding: isMobile ? '0.45rem 0.65rem' : '0.35rem 0.6rem',
+                        backgroundColor: 'var(--bg-secondary, #f8f8f8)',
+                        color: 'var(--text-primary, #333)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontSize: isMobile ? '0.86rem' : '0.8rem',
+                        flex: 1,
+                        minHeight: '36px'
+                      }}
+                    >
+                      {historyEntry}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeHistoryItem(historyEntry)}
+                      aria-label={`Suchverlaufseintrag ${historyEntry} entfernen`}
+                      style={{
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        color: 'var(--text-secondary, #666)',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        lineHeight: 1
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {hasResultView && results.map((result, index) => (
             <div
               key={`${result.path}-${result.type}`}

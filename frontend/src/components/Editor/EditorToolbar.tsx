@@ -31,6 +31,7 @@ export default function EditorToolbar({
   canUndo,
   canRedo
 }: EditorToolbarProps) {
+  const SELECT_PLACEHOLDER_VALUE = '__placeholder__';
   const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 768);
 
   useEffect(() => {
@@ -187,6 +188,35 @@ export default function EditorToolbar({
     onInsertText(`[${safeLabel}](`, `${url.trim()})`);
   };
 
+  const escapeHtml = (value: string): string => (
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  );
+
+  const handleInsertQuote = () => {
+    if (viewMode !== 'wysiwyg') {
+      onInsertText('> ', '');
+      return;
+    }
+
+    const hasQuoteBlock = runWysiwygCommand('formatBlock', 'blockquote');
+    if (hasQuoteBlock) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim() || '';
+    if (selectedText.length > 0) {
+      runWysiwygCommand('insertHTML', `<blockquote>${escapeHtml(selectedText)}</blockquote>`);
+      return;
+    }
+    runWysiwygCommand('insertHTML', '<blockquote><br></blockquote>');
+  };
+
   const buttonStyle: CSSProperties = {
     padding: isMobile ? '0.4rem 0.5rem' : '0.5rem 1rem',
     border: '1px solid var(--border-color)',
@@ -313,53 +343,66 @@ export default function EditorToolbar({
 
       {/* Format Buttons */}
       <div style={{ display: 'flex', gap: '0.25rem', marginRight: isMobile ? '0.25rem' : '1rem', flexShrink: 0, alignItems: 'center' }}>
-        <select
-          value=""
-          onChange={(event) => {
-            handleFormatChange(event.target.value);
-            event.target.value = '';
-          }}
-          style={{
-            ...buttonStyle,
-            marginRight: 0,
-            minWidth: isMobile ? '58px' : '64px',
-            width: isMobile ? '58px' : '64px',
-            fontWeight: 700,
-            padding: isMobile ? '0.4rem 0.25rem' : '0.5rem 0.35rem',
-            textAlign: 'center'
-          }}
-          title="Textformat (Aa)"
-        >
-          <option value="">Aa</option>
-          <option value="h1" style={{ fontWeight: 700, fontSize: '1.1em' }}>Titel</option>
-          <option value="h2" style={{ fontWeight: 700 }}>Ueberschrift</option>
-          <option value="h3" style={{ fontWeight: 600 }}>Untertitel</option>
-          <option value="p">Normaltext</option>
-          <option value="code" style={{ fontFamily: 'monospace' }}>Inline-Code</option>
-          <option value="code-block" style={{ fontFamily: 'monospace' }}>Codeblock</option>
-          <option value="strike" style={{ textDecoration: 'line-through' }}>Durchgestrichen</option>
-          <option value="attachment">Anhang</option>
-        </select>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            Aa
+          </span>
+          <select
+            value={SELECT_PLACEHOLDER_VALUE}
+            onChange={(event) => {
+              handleFormatChange(event.target.value);
+              event.target.value = SELECT_PLACEHOLDER_VALUE;
+            }}
+            style={{
+              ...buttonStyle,
+              marginRight: 0,
+              minWidth: isMobile ? '46px' : '52px',
+              width: isMobile ? '46px' : '52px',
+              fontWeight: 700,
+              padding: isMobile ? '0.4rem 0.35rem' : '0.5rem 0.4rem',
+              textAlign: 'left'
+            }}
+            title="Textformat"
+          >
+            <option value={SELECT_PLACEHOLDER_VALUE} disabled hidden />
+            <option value="h1" style={{ fontWeight: 700, fontSize: '1.1em', textAlign: 'left' }}>Titel</option>
+            <option value="h2" style={{ fontWeight: 700, textAlign: 'left' }}>Ueberschrift</option>
+            <option value="h3" style={{ fontWeight: 600, textAlign: 'left' }}>Untertitel</option>
+            <option value="p" style={{ textAlign: 'left' }}>Normaltext</option>
+            <option value="code" style={{ fontFamily: 'monospace', textAlign: 'left' }}>Inline-Code</option>
+            <option value="code-block" style={{ fontFamily: 'monospace', textAlign: 'left' }}>Codeblock</option>
+            <option value="strike" style={{ textDecoration: 'line-through', textAlign: 'left' }}>Durchgestrichen</option>
+            <option value="attachment" style={{ textAlign: 'left' }}>Anhang</option>
+          </select>
+        </div>
 
-        <select
-          value=""
-          onChange={(event) => {
-            handleListChange(event.target.value);
-            event.target.value = '';
-          }}
-          style={{
-            ...buttonStyle,
-            marginRight: 0,
-            minWidth: isMobile ? '76px' : '92px',
-            fontWeight: 700
-          }}
-          title="Listen-Auswahl"
-        >
-          <option value="">Listen</option>
-          <option value="bullet">● Punkte</option>
-          <option value="hyphen">- Bindestriche</option>
-          <option value="ordered">1. Zahlen</option>
-        </select>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            Listen
+          </span>
+          <select
+            value={SELECT_PLACEHOLDER_VALUE}
+            onChange={(event) => {
+              handleListChange(event.target.value);
+              event.target.value = SELECT_PLACEHOLDER_VALUE;
+            }}
+            style={{
+              ...buttonStyle,
+              marginRight: 0,
+              minWidth: isMobile ? '44px' : '48px',
+              width: isMobile ? '44px' : '48px',
+              fontWeight: 700,
+              padding: isMobile ? '0.4rem 0.3rem' : '0.5rem 0.35rem',
+              textAlign: 'left'
+            }}
+            title="Listen-Auswahl"
+          >
+            <option value={SELECT_PLACEHOLDER_VALUE} disabled hidden />
+            <option value="bullet">● Punkte</option>
+            <option value="hyphen">- Bindestriche</option>
+            <option value="ordered">1. Zahlen</option>
+          </select>
+        </div>
 
         <button
           onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('bold') : onInsertText('**', '**'))}
@@ -429,16 +472,7 @@ export default function EditorToolbar({
           ⇤
         </button>
         <button
-          onClick={() => {
-            if (viewMode === 'wysiwyg') {
-              const success = runWysiwygCommand('formatBlock', 'blockquote');
-              if (!success) {
-                runWysiwygCommand('insertText', '> ');
-              }
-              return;
-            }
-            onInsertText('> ', '');
-          }}
+          onClick={handleInsertQuote}
           style={buttonStyle}
           title="Zitat einfügen"
         >
