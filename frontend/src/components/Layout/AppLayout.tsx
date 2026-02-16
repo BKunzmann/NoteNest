@@ -4,7 +4,7 @@
  * Haupt-Layout mit Header, Sidebar und Content-Bereich
  */
 
-import { ReactNode, useState, useEffect, useCallback } from 'react';
+import { ReactNode, useState, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import BottomToolbar from './BottomToolbar';
@@ -18,12 +18,36 @@ interface AppLayoutProps {
 
 // Breakpoint für mobile Geräte
 const MOBILE_BREAKPOINT = 768;
+const SIDEBAR_MIN_WIDTH = 280;
+const SIDEBAR_MAX_WIDTH = 620;
+const SIDEBAR_DEFAULT_WIDTH = 320;
+const SIDEBAR_WIDTH_STORAGE_KEY = 'notenest.sidebar.width';
+
+function clampSidebarWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+}
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    try {
+      const raw = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+      if (!raw) {
+        return SIDEBAR_DEFAULT_WIDTH;
+      }
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) {
+        return SIDEBAR_DEFAULT_WIDTH;
+      }
+      return clampSidebarWidth(parsed);
+    } catch {
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+  });
   const { selectedFile } = useFileStore();
   const isPreviewFullscreen = useEditorStore((state) => state.isPreviewFullscreen);
+  const effectiveSidebarWidth = isMobile ? Math.min(sidebarWidth, 380) : sidebarWidth;
 
   // Prüfe auf mobile Geräte
   useEffect(() => {
@@ -60,6 +84,41 @@ export default function AppLayout({ children }: AppLayoutProps) {
     window.addEventListener('notenest:open-sidebar', handleOpenSidebar as EventListener);
     return () => window.removeEventListener('notenest:open-sidebar', handleOpenSidebar as EventListener);
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+    } catch {
+      // optional
+    }
+  }, [sidebarWidth]);
+
+  const handleSidebarResizeStart = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (isMobile || !sidebarOpen) {
+      return;
+    }
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setSidebarWidth(clampSidebarWidth(startWidth + delta));
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [isMobile, sidebarOpen, sidebarWidth]);
 
   return (
     <div style={{
@@ -110,13 +169,47 @@ export default function AppLayout({ children }: AppLayoutProps) {
             zIndex: isMobile ? 100 : 'auto',
             transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
             transition: 'transform 0.3s ease',
-            height: isMobile ? 'auto' : '100%'
+            height: isMobile ? 'auto' : '100%',
+            width: isMobile
+              ? `min(92vw, ${effectiveSidebarWidth}px)`
+              : (sidebarOpen ? `${effectiveSidebarWidth}px` : '0px'),
+            minWidth: isMobile
+              ? `min(92vw, ${effectiveSidebarWidth}px)`
+              : (sidebarOpen ? `${effectiveSidebarWidth}px` : '0px'),
+            maxWidth: isMobile
+              ? `min(92vw, ${effectiveSidebarWidth}px)`
+              : (sidebarOpen ? `${effectiveSidebarWidth}px` : '0px'),
+            flexShrink: 0
           }}>
             <Sidebar 
               isOpen={sidebarOpen}
               onClose={handleSidebarClose}
+              width={effectiveSidebarWidth}
             />
           </div>
+        )}
+
+        {!isPreviewFullscreen && !isMobile && sidebarOpen && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Sidebar-Breite anpassen"
+            onMouseDown={handleSidebarResizeStart}
+            style={{
+              width: '6px',
+              cursor: 'col-resize',
+              backgroundColor: 'transparent',
+              transition: 'background-color 0.2s ease',
+              flexShrink: 0
+            }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.backgroundColor = 'rgba(10, 132, 255, 0.2)';
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.backgroundColor = 'transparent';
+            }}
+            title="Sidebar-Breite ziehen"
+          />
         )}
 
         {/* Content */}

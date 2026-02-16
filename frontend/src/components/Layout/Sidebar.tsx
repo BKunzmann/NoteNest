@@ -5,6 +5,7 @@
  */
 
 import FileTree from '../FileManager/FileTree';
+import TrashDialog from '../FileManager/TrashDialog';
 import { useEffect, useState } from 'react';
 import { settingsAPI } from '../../services/api';
 import { useFileStore } from '../../store/fileStore';
@@ -12,14 +13,25 @@ import { useFileStore } from '../../store/fileStore';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  width: number;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+function getParentPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= 1) {
+    return '/';
+  }
+  return `/${segments.slice(0, -1).join('/')}`;
+}
+
+export default function Sidebar({ isOpen, onClose, width }: SidebarProps) {
   const { selectedType } = useFileStore();
   const [hasSharedAccess, setHasSharedAccess] = useState(false);
   const [privateCollapsed, setPrivateCollapsed] = useState(false);
   const [sharedCollapsed, setSharedCollapsed] = useState(false);
   const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
+  const [showTrashDialog, setShowTrashDialog] = useState(false);
 
   const activeActionType: 'private' | 'shared' =
     selectedType === 'shared' && hasSharedAccess ? 'shared' : 'private';
@@ -84,9 +96,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <aside style={{
-      width: isOpen ? '320px' : '0px',
-      minWidth: isOpen ? '320px' : '0px',
-      maxWidth: isOpen ? '320px' : '0px',
+      width: isOpen ? `${width}px` : '0px',
+      minWidth: isOpen ? `${width}px` : '0px',
+      maxWidth: isOpen ? `${width}px` : '0px',
       backgroundColor: 'var(--bg-secondary, #f8f8f8)',
       borderRight: isOpen ? '1px solid var(--border-color, #e0e0e0)' : 'none',
       overflow: 'auto',
@@ -144,24 +156,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           >
             +Notiz
           </button>
-          <button
-            type="button"
-            onClick={() => dispatchSidebarAction('notenest:sidebar-open-trash')}
-            title={`Papierkorb öffnen (${activeActionType === 'private' ? 'Meine Notizen' : 'Geteilte Notizen'})`}
-            style={{
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              padding: '0.35rem 0.55rem',
-              backgroundColor: 'var(--bg-primary)',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              flexShrink: 0
-            }}
-          >
-            🗑 Papierkorb
-          </button>
           <div
             style={{
               display: 'inline-flex',
@@ -206,6 +200,27 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               Ordner
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowTrashDialog(true)}
+            title={hasSharedAccess
+              ? 'Papierkorb fuer Meine und Geteilte Notizen oeffnen'
+              : `Papierkorb öffnen (${activeActionType === 'private' ? 'Meine Notizen' : 'Geteilte Notizen'})`}
+            style={{
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '0.35rem 0.55rem',
+              backgroundColor: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              flexShrink: 0,
+              marginLeft: 'auto'
+            }}
+          >
+            🗑 Papierkorb
+          </button>
         </div>
       </div>
 
@@ -234,6 +249,20 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           />
         </div>
       )}
+
+      <TrashDialog
+        isOpen={showTrashDialog}
+        scope={hasSharedAccess ? 'all' : 'private'}
+        onClose={() => setShowTrashDialog(false)}
+        onRestored={(restored) => {
+          window.dispatchEvent(new CustomEvent('notenest:files-changed', {
+            detail: {
+              type: restored.type,
+              path: getParentPath(restored.path)
+            }
+          }));
+        }}
+      />
     </aside>
   );
 }

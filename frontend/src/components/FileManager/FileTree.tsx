@@ -15,7 +15,6 @@ import FileItem from './FileItem';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import FileActionDialog from './FileActionDialog';
 import CreateFileDialog from './CreateFileDialog';
-import TrashDialog from './TrashDialog';
 import ContextMenu, { ContextMenuAction } from './ContextMenu';
 import { formatRecentDate, groupFilesByRecent } from '../../utils/recentGrouping';
 
@@ -112,7 +111,6 @@ export default function FileTree({
   const [copyTarget, setCopyTarget] = useState<ContextState | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [createFolderInitialPath, setCreateFolderInitialPath] = useState('/');
-  const [showTrashDialog, setShowTrashDialog] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState('');
   const [expandedRecentGroups, setExpandedRecentGroups] = useState<Set<string>>(new Set());
   const recentLongPressTimerRef = useRef<number | null>(null);
@@ -564,22 +562,12 @@ export default function FileTree({
       void handleQuickCreateNote();
     };
 
-    const handleOpenTrashRequest = (event: Event) => {
-      const detail = (event as CustomEvent).detail as Partial<{ type: 'private' | 'shared' }> | undefined;
-      if (!detail || detail.type !== type) {
-        return;
-      }
-      setShowTrashDialog(true);
-    };
-
     window.addEventListener('notenest:sidebar-create-folder', handleCreateFolderRequest as EventListener);
     window.addEventListener('notenest:sidebar-create-note', handleCreateNoteRequest as EventListener);
-    window.addEventListener('notenest:sidebar-open-trash', handleOpenTrashRequest as EventListener);
 
     return () => {
       window.removeEventListener('notenest:sidebar-create-folder', handleCreateFolderRequest as EventListener);
       window.removeEventListener('notenest:sidebar-create-note', handleCreateNoteRequest as EventListener);
-      window.removeEventListener('notenest:sidebar-open-trash', handleOpenTrashRequest as EventListener);
     };
   }, [handleQuickCreateNote, openCreateFolderDialog, type]);
 
@@ -657,42 +645,6 @@ export default function FileTree({
     }
   }, [navigate, onFileSelect, selectFile]);
 
-  const handleTrashRestored = useCallback((restored: {
-    path: string;
-    type: 'private' | 'shared';
-    name: string;
-    itemType: 'file' | 'folder';
-  }) => {
-    const parentPath = getParentPath(restored.path);
-    void refreshRecentFiles();
-    void refreshFileStats();
-    void loadFiles(parentPath, restored.type, showOnlyNotes);
-    window.dispatchEvent(new CustomEvent('notenest:files-changed', {
-      detail: {
-        type: restored.type,
-        path: parentPath
-      }
-    }));
-
-    if (restored.type !== type) {
-      return;
-    }
-
-    setSidebarViewMode('folders');
-    if (restored.itemType === 'file') {
-      openFile(
-        {
-          name: restored.name,
-          path: restored.path,
-          type: 'file',
-          fileType: restored.name.toLowerCase().endsWith('.txt') ? 'txt' : 'md',
-          isEditable: true
-        },
-        restored.path
-      );
-    }
-  }, [loadFiles, openFile, refreshFileStats, refreshRecentFiles, showOnlyNotes, type]);
-
   return (
     <div style={{ padding: '1rem', position: 'relative' }}>
       <div style={{ marginBottom: '0.5rem' }}>
@@ -766,23 +718,6 @@ export default function FileTree({
                 }}
               >
                 + Notiz
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowTrashDialog(true)}
-                title="Papierkorb öffnen"
-                style={{
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '0.35rem 0.6rem',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontSize: '0.72rem',
-                  fontWeight: 600
-                }}
-              >
-                🗑 Papierkorb
               </button>
             </div>
           )}
@@ -1207,13 +1142,6 @@ export default function FileTree({
           onCreated={handleCreated}
         />
       )}
-
-      <TrashDialog
-        isOpen={showTrashDialog}
-        type={type}
-        onClose={() => setShowTrashDialog(false)}
-        onRestored={handleTrashRestored}
-      />
 
       <ContextMenu
         isOpen={contextMenu !== null}

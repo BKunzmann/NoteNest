@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fileAPI } from '../../services/api';
 import type { TrashItem } from '../../types/file';
 
 interface TrashDialogProps {
   isOpen: boolean;
-  type: 'private' | 'shared';
+  scope: 'private' | 'shared' | 'all';
   onClose: () => void;
   onRestored?: (restored: { path: string; type: 'private' | 'shared'; name: string; itemType: 'file' | 'folder' }) => void;
 }
@@ -20,18 +20,66 @@ function formatDeletedAt(value: string): string {
   }).format(date);
 }
 
-export default function TrashDialog({ isOpen, type, onClose, onRestored }: TrashDialogProps) {
+function getScopeLabel(scope: 'private' | 'shared'): string {
+  return scope === 'private' ? 'Meine Notizen' : 'Geteilte Notizen';
+}
+
+export default function TrashDialog({ isOpen, scope, onClose, onRestored }: TrashDialogProps) {
   const [items, setItems] = useState<TrashItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [isCompact, setIsCompact] = useState<boolean>(() => window.innerWidth < 760);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'private' | 'shared'>(
+    scope === 'all' ? 'all' : scope
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 760);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    setActiveFilter(scope === 'all' ? 'all' : scope);
+  }, [scope]);
 
   const loadTrash = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fileAPI.listTrash(type);
-      setItems(response.items);
+      if (scope === 'all') {
+        const [privateResult, sharedResult] = await Promise.allSettled([
+          fileAPI.listTrash('private'),
+          fileAPI.listTrash('shared')
+        ]);
+
+        const mergedItems: TrashItem[] = [];
+        if (privateResult.status === 'fulfilled') {
+          mergedItems.push(...privateResult.value.items);
+        }
+        if (sharedResult.status === 'fulfilled') {
+          mergedItems.push(...sharedResult.value.items);
+        }
+
+        mergedItems.sort((a, b) => {
+          const left = new Date(b.deletedAt).getTime();
+          const right = new Date(a.deletedAt).getTime();
+          return left - right;
+        });
+        setItems(mergedItems);
+
+        if (privateResult.status === 'rejected' && sharedResult.status === 'rejected') {
+          setError('Papierkorb konnte nicht geladen werden');
+        } else if (privateResult.status === 'rejected') {
+          setError('Nur geteilte Eintraege konnten geladen werden');
+        } else if (sharedResult.status === 'rejected') {
+          setError('Nur private Eintraege konnten geladen werden');
+        }
+      } else {
+        const response = await fileAPI.listTrash(scope);
+        setItems(response.items);
+      }
     } catch (apiError: any) {
       setError(apiError?.response?.data?.error || 'Papierkorb konnte nicht geladen werden');
       setItems([]);
@@ -45,7 +93,19 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
       return;
     }
     void loadTrash();
-  }, [isOpen, type]);
+  }, [isOpen, scope]);
+
+  const filteredItems = useMemo(() => (
+    activeFilter === 'all'
+      ? items
+      : items.filter((item) => item.type === activeFilter)
+  ), [activeFilter, items]);
+
+  const counts = useMemo(() => ({
+    all: items.length,
+    private: items.filter((item) => item.type === 'private').length,
+    shared: items.filter((item) => item.type === 'shared').length
+  }), [items]);
 
   if (!isOpen) {
     return null;
@@ -70,8 +130,8 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
         style={{
-          width: 'min(720px, 100%)',
-          maxHeight: '80vh',
+          width: 'min(980px, 100%)',
+          maxHeight: '85vh',
           overflow: 'auto',
           backgroundColor: 'var(--bg-primary)',
           border: '1px solid var(--border-color)',
@@ -98,6 +158,34 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
           </button>
         </div>
 
+        {scope === 'all' && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.75rem' }}>
+            {([
+              ['all', `Alle (${counts.all})`],
+              ['private', `Meine (${counts.private})`],
+              ['shared', `Geteilte (${counts.shared})`]
+            ] as Array<['all' | 'private' | 'shared', string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setActiveFilter(value)}
+                style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '999px',
+                  padding: '0.3rem 0.65rem',
+                  backgroundColor: activeFilter === value ? 'var(--accent-color)' : 'var(--bg-secondary)',
+                  color: activeFilter === value ? '#fff' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.78rem',
+                  fontWeight: 600
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {error && (
           <div style={{
             padding: '0.6rem 0.75rem',
@@ -113,32 +201,35 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
 
         {isLoading ? (
           <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Papierkorb wird geladen…</div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Der Papierkorb ist leer.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <div
                 key={item.id}
                 style={{
                   border: '1px solid var(--border-color)',
                   borderRadius: '10px',
                   padding: '0.65rem 0.7rem',
-                  display: 'flex',
-                  gap: '0.75rem',
-                  alignItems: 'center'
+                  display: 'grid',
+                  gridTemplateColumns: isCompact ? '1fr' : 'auto minmax(0, 1fr) auto',
+                  gap: isCompact ? '0.45rem' : '0.75rem',
+                  alignItems: isCompact ? 'stretch' : 'center'
                 }}
               >
-                <div style={{ fontSize: '1rem' }}>{item.itemType === 'folder' ? '📁' : '📝'}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '1rem', alignSelf: isCompact ? 'flex-start' : 'center' }}>
+                  {item.itemType === 'folder' ? '📁' : '📝'}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, wordBreak: 'break-word' }}>
                     {item.name}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.1rem', wordBreak: 'break-word' }}>
                     {item.originalPath}
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '0.2rem' }}>
-                    geloescht: {formatDeletedAt(item.deletedAt)}
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '0.25rem' }}>
+                    {getScopeLabel(item.type)} · geloescht: {formatDeletedAt(item.deletedAt)}
                   </div>
                 </div>
                 <button
@@ -148,7 +239,7 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
                     setRestoringId(item.id);
                     setError(null);
                     try {
-                      const response = await fileAPI.restoreTrashItem(item.id, type);
+                      const response = await fileAPI.restoreTrashItem(item.id, item.type);
                       onRestored?.(response.restored);
                       await loadTrash();
                     } catch (apiError: any) {
@@ -165,7 +256,9 @@ export default function TrashDialog({ isOpen, type, onClose, onRestored }: Trash
                     cursor: restoringId === item.id ? 'not-allowed' : 'pointer',
                     padding: '0.4rem 0.7rem',
                     fontSize: '0.8rem',
-                    opacity: restoringId === item.id ? 0.7 : 1
+                    opacity: restoringId === item.id ? 0.7 : 1,
+                    width: isCompact ? '100%' : 'auto',
+                    justifySelf: isCompact ? 'stretch' : 'end'
                   }}
                 >
                   {restoringId === item.id ? 'Stellt her…' : 'Wiederherstellen'}
