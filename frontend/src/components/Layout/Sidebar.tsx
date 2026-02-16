@@ -15,6 +15,8 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [hasSharedAccess, setHasSharedAccess] = useState(false);
+  const [privateCollapsed, setPrivateCollapsed] = useState(false);
+  const [sharedCollapsed, setSharedCollapsed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -48,9 +50,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <aside style={{
-      width: isOpen ? '280px' : '0px',
-      minWidth: isOpen ? '280px' : '0px',
-      maxWidth: isOpen ? '280px' : '0px',
+      width: isOpen ? '320px' : '0px',
+      minWidth: isOpen ? '320px' : '0px',
+      maxWidth: isOpen ? '320px' : '0px',
       backgroundColor: 'var(--bg-secondary, #f8f8f8)',
       borderRight: isOpen ? '1px solid var(--border-color, #e0e0e0)' : 'none',
       overflow: 'auto',
@@ -67,6 +69,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         title="Meine Notizen" 
         icon="📁"
         onFileSelect={onClose}
+        isCollapsed={privateCollapsed}
+        onToggleCollapsed={() => setPrivateCollapsed((previous) => !previous)}
       />
 
       {/* Geteilte Ordner */}
@@ -77,6 +81,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             title="Geteilte Notizen" 
             icon="👥"
             onFileSelect={onClose}
+            isCollapsed={sharedCollapsed}
+            onToggleCollapsed={() => setSharedCollapsed((previous) => !previous)}
           />
         </div>
       )}
