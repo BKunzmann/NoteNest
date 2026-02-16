@@ -29,16 +29,42 @@ const markdownToHtml = (markdown: string): string => {
   }
 };
 
+function formatTooltipError(error: unknown): string {
+  const typedError = error as {
+    message?: string;
+    response?: {
+      status?: number;
+      data?: { error?: string };
+    };
+  };
+  const status = typedError?.response?.status;
+  const serverMessage = typedError?.response?.data?.error?.trim() || '';
+  const genericMessage = typedError?.message?.trim() || '';
+
+  if (status === 404 || /verse or chapter not found/i.test(serverMessage)) {
+    return 'Bibelstelle nicht gefunden. Eventuell wurde die Bibel-Datenbank noch nicht importiert.';
+  }
+  if (status === 503 || status === 500) {
+    return 'Bibeltext ist derzeit nicht verfuegbar. Bitte spaeter erneut versuchen.';
+  }
+  if (/network|timeout|failed to fetch|err_network/i.test(genericMessage.toLowerCase())) {
+    return 'Bibeltext kann gerade nicht geladen werden (Netzwerkproblem).';
+  }
+  return serverMessage || 'Bibelstelle konnte nicht geladen werden';
+}
+
 interface WysiwygEditorProps {
   content: string;
   onContentChange: (markdown: string) => void;
   onInsertText?: (before: string, after?: string) => void;
+  autoListDetectionEnabled?: boolean;
 }
 
 export default function WysiwygEditor({ 
   content, 
   onContentChange,
-  onInsertText
+  onInsertText,
+  autoListDetectionEnabled = true
 }: WysiwygEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -77,8 +103,16 @@ export default function WysiwygEditor({
     if (hoveredReference && tooltipPosition) {
       setIsLoadingTooltip(true);
       setTooltipError(null);
+      setTooltipVerse(null);
       bibleAPI.getVerse(hoveredReference.reference, hoveredReference.translation)
         .then((data) => {
+          if (!data || typeof data.text !== 'string' || data.text.trim().length === 0) {
+            setTooltipVerse(null);
+            setTooltipError('Kein Bibeltext fuer diese Stelle verfuegbar.');
+            setIsLoadingTooltip(false);
+            return;
+          }
+
           setTooltipVerse(data);
           setIsLoadingTooltip(false);
           setTooltipError(null);
@@ -86,7 +120,8 @@ export default function WysiwygEditor({
         .catch((err) => {
           console.error('Error loading verse for tooltip:', err);
           setIsLoadingTooltip(false);
-          setTooltipError(err?.response?.data?.error || 'Bibelstelle konnte nicht geladen werden');
+          setTooltipVerse(null);
+          setTooltipError(formatTooltipError(err));
         });
     } else {
       setTooltipVerse(null);
@@ -413,7 +448,7 @@ export default function WysiwygEditor({
       handleInput();
     }
 
-    if (e.key === ' ' && editorRef.current) {
+    if (autoListDetectionEnabled && e.key === ' ' && editorRef.current) {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) {
         return;

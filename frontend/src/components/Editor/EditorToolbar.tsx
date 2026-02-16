@@ -17,6 +17,8 @@ interface EditorToolbarProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  autoListDetectionEnabled: boolean;
+  onToggleAutoListDetection: () => void;
 }
 
 export default function EditorToolbar({
@@ -29,7 +31,9 @@ export default function EditorToolbar({
   onUndo,
   onRedo,
   canUndo,
-  canRedo
+  canRedo,
+  autoListDetectionEnabled,
+  onToggleAutoListDetection
 }: EditorToolbarProps) {
   const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 768);
 
@@ -121,28 +125,25 @@ export default function EditorToolbar({
       return;
     }
 
-    if (viewMode === 'wysiwyg') {
-      if (value === 'ordered') {
-        runWysiwygCommand('insertOrderedList');
-        return;
-      }
-      runWysiwygCommand('insertUnorderedList');
+    const listPresetMap: Record<string, string> = {
+      bullet: '* ',
+      'bullet-level-2': '  * ',
+      hyphen: '- ',
+      'hyphen-level-2': '  - ',
+      ordered: '1. ',
+      'ordered-level-2': '   a) '
+    };
+    const insertPrefix = listPresetMap[value];
+    if (!insertPrefix) {
       return;
     }
 
-    switch (value) {
-      case 'bullet':
-        onInsertText('* ', '');
-        return;
-      case 'hyphen':
-        onInsertText('- ', '');
-        return;
-      case 'ordered':
-        onInsertText('1. ', '');
-        return;
-      default:
-        return;
+    if (viewMode === 'wysiwyg') {
+      runWysiwygCommand('insertText', insertPrefix);
+      return;
     }
+
+    onInsertText(insertPrefix, '');
   };
 
   const handleInsertLink = () => {
@@ -327,10 +328,20 @@ export default function EditorToolbar({
           title="Listen-Auswahl"
         >
           <option value="">Listen</option>
-          <option value="bullet">• Punkte</option>
-          <option value="hyphen">- Bindestriche</option>
-          <option value="ordered">1. Nummeriert</option>
+          <option value="bullet">● Ebene 1</option>
+          <option value="bullet-level-2">○ Ebene 2</option>
+          <option value="hyphen">- Ebene 1</option>
+          <option value="hyphen-level-2">- Ebene 2</option>
+          <option value="ordered">1. Ebene 1</option>
+          <option value="ordered-level-2">a) Ebene 2</option>
         </select>
+        <button
+          onClick={onToggleAutoListDetection}
+          style={autoListDetectionEnabled ? activeButtonStyle : buttonStyle}
+          title={`Automatische Listen-Erkennung ${autoListDetectionEnabled ? 'aktiv' : 'deaktiviert'}`}
+        >
+          {isMobile ? (autoListDetectionEnabled ? '🪄' : '🚫') : (autoListDetectionEnabled ? '🪄 Liste' : '🚫 Liste')}
+        </button>
 
         <button
           onClick={() => (viewMode === 'wysiwyg' ? runWysiwygCommand('bold') : onInsertText('**', '**'))}
