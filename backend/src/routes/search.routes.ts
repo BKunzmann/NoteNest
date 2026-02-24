@@ -13,6 +13,8 @@ router.use(authenticateToken);
 
 // Search Operations
 router.get('/', searchController.search);
+router.get('/index-status', searchController.getUserIndexStatus);
+router.post('/reindex', searchController.triggerUserReindex);
 
 export default router;
 

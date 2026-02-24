@@ -74,6 +74,21 @@ function extractLineMatches(content: string, query: string, maxMatches: number =
   return matches;
 }
 
+function getFilenamePriority(fileName: string, query: string): number {
+  const normalizedName = fileName.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+  if (normalizedName === normalizedQuery) {
+    return 3;
+  }
+  if (normalizedName.startsWith(normalizedQuery)) {
+    return 2;
+  }
+  if (normalizedName.includes(normalizedQuery)) {
+    return 1;
+  }
+  return 0;
+}
+
 async function searchByFilesystemFallback(
   userId: number,
   searchTerm: string,
@@ -152,7 +167,14 @@ async function searchByFilesystemFallback(
     await scanDirectory(targetType, '/', 0);
   }
 
-  results.sort((a, b) => b.relevance - a.relevance);
+  results.sort((a, b) => {
+    const aFilenamePriority = getFilenamePriority(a.name, searchTerm);
+    const bFilenamePriority = getFilenamePriority(b.name, searchTerm);
+    if (bFilenamePriority !== aFilenamePriority) {
+      return bFilenamePriority - aFilenamePriority;
+    }
+    return b.relevance - a.relevance;
+  });
   return results;
 }
 
@@ -272,7 +294,25 @@ export async function searchNotes(
       }
     }
 
-    validResults.sort((a, b) => b.relevance - a.relevance);
+    validResults.sort((a, b) => {
+      const aFilenamePriority = getFilenamePriority(a.name, trimmedTerm);
+      const bFilenamePriority = getFilenamePriority(b.name, trimmedTerm);
+      if (bFilenamePriority !== aFilenamePriority) {
+        return bFilenamePriority - aFilenamePriority;
+      }
+
+      const aHasFilenameMatch = a.matches.some((match) => match.line === 0);
+      const bHasFilenameMatch = b.matches.some((match) => match.line === 0);
+      if (aHasFilenameMatch !== bHasFilenameMatch) {
+        return aHasFilenameMatch ? -1 : 1;
+      }
+
+      if (b.relevance !== a.relevance) {
+        return b.relevance - a.relevance;
+      }
+
+      return a.name.localeCompare(b.name, 'de', { sensitivity: 'base' });
+    });
     const results: SearchResult[] = validResults.map(({ fromIndex: _fromIndex, ...result }) => result);
 
     // 4) Fallback: Wenn Index keine verwertbaren Ergebnisse liefert, Dateisystem direkt durchsuchen

@@ -8,6 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
 import { initializeDatabase } from './config/database';
 import logger, { logInfo, logError, logWarn } from './config/logger';
 import { apiLimiter } from './middleware/rateLimit.middleware';
@@ -165,6 +166,7 @@ app.get('/api/health', async (_req, res) => {
     // System-Informationen
     const uptime = process.uptime();
     const memoryUsage = process.memoryUsage();
+    const loadAverage = os.loadavg();
     
     res.json({ 
       status: dbStatus === 'ok' ? 'ok' : 'degraded',
@@ -177,6 +179,12 @@ app.get('/api/health', async (_req, res) => {
         heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
         heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
         rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+      },
+      cpu: {
+        cores: os.cpus().length,
+        load1m: Number(loadAverage[0].toFixed(2)),
+        load5m: Number(loadAverage[1].toFixed(2)),
+        load15m: Number(loadAverage[2].toFixed(2))
       },
       environment: process.env.NODE_ENV || 'development',
     });

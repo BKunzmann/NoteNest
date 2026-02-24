@@ -31,9 +31,9 @@ const INDEXABLE_EXTENSIONS = [
 ];
 
 const NOTE_FILE_TYPES = new Set(['md', 'txt']);
-const METADATA_REFRESH_INTERVAL_MS = 2 * 60 * 1000; // 2 Minuten
-const METADATA_REFRESH_MAX_DURATION_MS = 15 * 1000; // 15 Sekunden
-const METADATA_REFRESH_MAX_FILES = 20000;
+const METADATA_REFRESH_INTERVAL_MS = 30 * 1000; // 30 Sekunden
+const METADATA_REFRESH_MAX_DURATION_MS = 6 * 1000; // 6 Sekunden
+const METADATA_REFRESH_MAX_FILES = 6000;
 const metadataRefreshInFlight = new Set<string>();
 const metadataLastRefresh = new Map<string, number>();
 const TRASH_ROOT_FOLDER = '.notenest-trash';
@@ -1203,7 +1203,7 @@ export async function listRecentFiles(
   // - wenn nicht genug Treffer gefunden wurden
   // - oder wenn noch keine/kaum Metadata-Einträge vorhanden sind
   const shouldRefreshMetadata = files.length < limit || metadataRows.length < Math.min(limit, 50);
-  if (!notesOnly && shouldRefreshMetadata) {
+  if (shouldRefreshMetadata) {
     scheduleFileMetadataRefresh(userId, type, metadataRows.length === 0);
   }
 

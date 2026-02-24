@@ -9,6 +9,33 @@ und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### 🛠️ Suche-, Sidebar- und Index-Optimierungen (2026-02-13)
+- **Editor-Toolbar angepasst**:
+  - Die Bezeichnungen `Aa` und `Listen` stehen jetzt wieder direkt im jeweiligen Auswahlfeld (Button), nicht mehr daneben.
+- **Sidebar global vereinheitlicht**:
+  - `Nur Notizen / Alle Dateien` ist jetzt einmalig global oben und steuert private + geteilte Ansicht gemeinsam.
+  - `In Sidebar filtern...` ist ebenfalls global oben und filtert beide Rubriken gleichzeitig.
+  - Der Filter berücksichtigt weiterhin Dateinamen **und Ordnernamen**.
+- **Bessere Sichtbarkeit neuer Dateien vom physischen Laufwerk**:
+  - Sidebar-Ansichten aktualisieren sich zyklisch im geöffneten Zustand.
+  - Metadaten-Refresh für „Zuletzt“-Ansicht wird auch bei aktivem Notizen-Filter ausgelöst.
+  - Refresh-Intervalle wurden für schnellere Sichtbarkeit angepasst und gleichzeitig über Laufzeit-/Mengenlimits begrenzt.
+- **Zentrale Suche relevanter und schneller**:
+  - Matching-Logik im Index wurde verschlankt (keine breit streuenden Kurz-Token-Treffer mehr).
+  - Dateinamen-Treffer (exakt/präfix/enthält) werden deutlich höher priorisiert.
+  - Ergebnis-Sortierung bevorzugt sinnvolle Dateiname-Treffer vor reinem Kontextrauschen.
+  - Anzahl der pro Datei gezeigten Kontext-Matches wurde begrenzt, um Suchergebnisse lesbarer zu halten.
+- **Index-Status im User-Menü**:
+  - Neuer benutzerbezogener Indexstatus inkl. Datei-/Token-Zähler und letztem Indexzeitpunkt.
+  - Re-Indexierung kann direkt im User-Menü angestoßen werden.
+- **Optionale Server-Auslastung im User-Menü**:
+  - Anzeige von RAM-Werten und CPU-Load (1m/5m/15m + Kernanzahl).
+
+### ✅ Tests
+- Backend: Jest-Suite erfolgreich (inkl. bestehender Integrations-/Unit-Tests).
+- Frontend: Vitest erfolgreich.
+- Backend + Frontend Build erfolgreich.
+
 ### 🛠️ Editor-, Offline- und Versions-Feinschliff (2026-02-13)
 - **Editor-Listensteuerung erweitert**:
   - Automatische Listen-Erkennung im WYSIWYG kann jetzt direkt in der Toolbar aktiviert/deaktiviert werden.

@@ -14,6 +14,8 @@ import crypto from 'crypto';
 import db from '../config/database';
 import { readFile, resolveUserPath, listDirectory, isIndexable, isPathInHiddenFolder } from './file.service';
 
+const MIN_INDEX_TOKEN_LENGTH = 2;
+
 /**
  * Berechnet SHA-256 Hash einer Datei
  */
@@ -76,6 +78,9 @@ function tokenizeText(text: string): Array<{ token: string; line: number; positi
     
     while ((match = wordRegex.exec(normalizedLine)) !== null) {
       const token = match[0];
+      if (token.length < MIN_INDEX_TOKEN_LENGTH) {
+        continue;
+      }
       const position = match.index;
       
       // Kontext: 50 Zeichen vor und nach dem Token
@@ -371,6 +376,15 @@ export function searchIndex(
   }
   
   const normalizedQuery = searchTerm.toLowerCase().trim();
+  const queryTokens = normalizedQuery
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= MIN_INDEX_TOKEN_LENGTH)
+    .slice(0, 4);
+  if (queryTokens.length === 0) {
+    return [];
+  }
+
   const results: Map<number, {
     path: string;
     type: 'private' | 'shared';
@@ -379,55 +393,138 @@ export function searchIndex(
     relevance: number;
     lastModified?: string;
   }> = new Map();
-  
-  // Baue WHERE-Klausel für die Subquery (ohne Alias)
-  let subqueryWhereClause = 'user_id = ?';
-  const subqueryParams: any[] = [userId];
-  
-  if (folderType) {
-    subqueryWhereClause += ' AND file_type = ?';
-    subqueryParams.push(folderType);
-  }
-  
-  // Hole alle Tokens, die dem Suchbegriff ähnlich sind
-  const allTokens = db.prepare(`
-    SELECT DISTINCT token 
-    FROM search_tokens 
-    WHERE file_id IN (
-      SELECT id FROM search_index WHERE ${subqueryWhereClause}
-    )
-  `).all(...subqueryParams) as Array<{ token: string }>;
-  
-  // Finde passende Tokens (exakt oder fuzzy)
-  const matchingTokens: string[] = [];
-  for (const { token } of allTokens) {
-    if (token === normalizedQuery) {
-      // Exakter Match - höchste Priorität
-      matchingTokens.push(token);
-    } else if (token.includes(normalizedQuery) || normalizedQuery.includes(token)) {
-      // Teilstring-Match
-      matchingTokens.push(token);
-    } else {
-      // Fuzzy Match
-      if (normalizedQuery.length < 3 || token.length < 3) {
-        continue;
+
+  const fileTypeClause = folderType ? ' AND si.file_type = ?' : '';
+  const matchingTokenSet = new Set<string>();
+
+  for (const queryToken of queryTokens) {
+    const exactAndPrefixParams = [
+      userId,
+      ...(folderType ? [folderType] : []),
+      queryToken,
+      `${queryToken}%`
+    ];
+    const exactAndPrefixRows = db.prepare(`
+      SELECT DISTINCT st.token
+      FROM search_tokens st
+      INNER JOIN search_index si ON si.id = st.file_id
+      WHERE si.user_id = ?
+        ${fileTypeClause}
+        AND (st.token = ? OR st.token LIKE ?)
+      LIMIT 800
+    `).all(...exactAndPrefixParams) as Array<{ token: string }>;
+
+    for (const row of exactAndPrefixRows) {
+      if (row.token.length >= MIN_INDEX_TOKEN_LENGTH) {
+        matchingTokenSet.add(row.token);
       }
-      const distance = levenshteinDistance(normalizedQuery, token);
-      if (distance <= maxDistance) {
-        matchingTokens.push(token);
+    }
+
+    if (queryToken.length >= 4) {
+      const containsParams = [
+        userId,
+        ...(folderType ? [folderType] : []),
+        `%${queryToken}%`
+      ];
+      const containsRows = db.prepare(`
+        SELECT DISTINCT st.token
+        FROM search_tokens st
+        INNER JOIN search_index si ON si.id = st.file_id
+        WHERE si.user_id = ?
+          ${fileTypeClause}
+          AND st.token LIKE ?
+        LIMIT 250
+      `).all(...containsParams) as Array<{ token: string }>;
+
+      for (const row of containsRows) {
+        if (row.token.length >= MIN_INDEX_TOKEN_LENGTH) {
+          matchingTokenSet.add(row.token);
+        }
+      }
+    }
+
+    if (queryToken.length >= 5) {
+      const fuzzyPrefix = queryToken.slice(0, 2);
+      const fuzzyParams = [
+        userId,
+        ...(folderType ? [folderType] : []),
+        `${fuzzyPrefix}%`
+      ];
+      const fuzzyRows = db.prepare(`
+        SELECT DISTINCT st.token
+        FROM search_tokens st
+        INNER JOIN search_index si ON si.id = st.file_id
+        WHERE si.user_id = ?
+          ${fileTypeClause}
+          AND st.token LIKE ?
+        LIMIT 300
+      `).all(...fuzzyParams) as Array<{ token: string }>;
+
+      for (const row of fuzzyRows) {
+        const token = row.token;
+        if (
+          token.length < 4 ||
+          Math.abs(token.length - queryToken.length) > 1
+        ) {
+          continue;
+        }
+
+        const distance = levenshteinDistance(queryToken, token);
+        if (distance <= Math.max(1, Math.min(maxDistance, 2))) {
+          matchingTokenSet.add(token);
+        }
       }
     }
   }
 
+  const matchingTokens = Array.from(matchingTokenSet).slice(0, 1200);
+
+  const fileNameMatchScore = (fileName: string): number => {
+    const normalizedName = fileName.toLowerCase();
+    if (normalizedName === normalizedQuery) {
+      return 60;
+    }
+    if (normalizedName.startsWith(normalizedQuery)) {
+      return 38;
+    }
+    if (normalizedName.includes(normalizedQuery)) {
+      return 22;
+    }
+    return 0;
+  };
+
+  const tokenMatchScore = (token: string): number => {
+    let score = 1;
+    for (const queryToken of queryTokens) {
+      if (token === queryToken) {
+        score = Math.max(score, 12);
+        continue;
+      }
+      if (token.startsWith(queryToken)) {
+        score = Math.max(score, 8);
+        continue;
+      }
+      if (queryToken.length >= 4 && token.includes(queryToken)) {
+        score = Math.max(score, 5);
+        continue;
+      }
+      if (
+        queryToken.length >= 5 &&
+        token.length >= 4 &&
+        Math.abs(token.length - queryToken.length) <= 1 &&
+        levenshteinDistance(queryToken, token) <= Math.max(1, Math.min(maxDistance, 2))
+      ) {
+        score = Math.max(score, 4);
+      }
+    }
+    return score;
+  };
+
   // Hole alle Dateien mit Token-Matches
   if (matchingTokens.length > 0) {
     const placeholders = matchingTokens.map(() => '?').join(',');
-    const fileTypeClause = folderType ? 'AND si.file_type = ?' : '';
-    const fileResultParams = [
-      userId,
-      ...matchingTokens,
-      ...(folderType ? [folderType] : [])
-    ];
+    const scopedFileTypeClause = folderType ? 'AND si.file_type = ?' : '';
+    const fileResultParams = [userId, ...(folderType ? [folderType] : []), ...matchingTokens];
 
     const fileResults = db.prepare(`
       SELECT DISTINCT 
@@ -442,8 +539,8 @@ export function searchIndex(
       FROM search_index si
       INNER JOIN search_tokens st ON si.id = st.file_id
       WHERE si.user_id = ? 
+        ${scopedFileTypeClause}
         AND st.token IN (${placeholders})
-        ${fileTypeClause}
       ORDER BY si.id, st.line_number
     `).all(...fileResultParams) as Array<{
       id: number;
@@ -463,7 +560,7 @@ export function searchIndex(
           type: row.file_type,
           name: row.file_name,
           matches: [],
-          relevance: 0,
+          relevance: fileNameMatchScore(row.file_name),
           lastModified: row.last_modified
         });
       }
@@ -471,7 +568,7 @@ export function searchIndex(
       const result = results.get(row.id)!;
 
       const existingMatch = result.matches.find((m) => m.line === row.line_number && m.context === row.context);
-      if (!existingMatch) {
+      if (!existingMatch && result.matches.length < 8) {
         result.matches.push({
           line: row.line_number,
           text: row.context,
@@ -479,16 +576,7 @@ export function searchIndex(
         });
       }
 
-      let relevance = 1;
-      if (row.token === normalizedQuery) {
-        relevance += 10;
-      } else if (row.token.includes(normalizedQuery)) {
-        relevance += 6;
-      }
-      if (row.file_name.toLowerCase().includes(normalizedQuery)) {
-        relevance += 5;
-      }
-      result.relevance += relevance;
+      result.relevance += tokenMatchScore(row.token);
     }
   }
 
@@ -533,7 +621,7 @@ export function searchIndex(
       continue;
     }
 
-    existing.relevance += 8;
+    existing.relevance += 18;
     if (!existing.matches.some((m) => m.line === 0 && m.context.includes('Dateiname enthält'))) {
       existing.matches.unshift({
         line: 0,

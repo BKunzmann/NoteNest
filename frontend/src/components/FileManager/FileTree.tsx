@@ -24,8 +24,11 @@ interface FileTreeProps {
   icon: string;
   onFileSelect?: () => void; // Callback wenn eine Datei ausgewählt wird (für mobile Sidebar-Schließen)
   isCollapsed?: boolean;
+  isSidebarOpen?: boolean;
   onToggleCollapsed?: () => void;
   showSectionActions?: boolean;
+  showOnlyNotesValue?: boolean;
+  sidebarFilterValue?: string;
 }
 
 interface ContextState {
@@ -75,8 +78,11 @@ export default function FileTree({
   icon,
   onFileSelect,
   isCollapsed = false,
+  isSidebarOpen = true,
   onToggleCollapsed,
-  showSectionActions = true
+  showSectionActions = true,
+  showOnlyNotesValue,
+  sidebarFilterValue
 }: FileTreeProps) {
   const navigate = useNavigate();
   const { 
@@ -167,6 +173,20 @@ export default function FileTree({
     window.addEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
     return () => window.removeEventListener('notenest:settings-changed', handleSettingsChanged as EventListener);
   }, []);
+
+  useEffect(() => {
+    if (typeof showOnlyNotesValue !== 'boolean') {
+      return;
+    }
+    setShowOnlyNotes(showOnlyNotesValue);
+  }, [showOnlyNotesValue]);
+
+  useEffect(() => {
+    if (typeof sidebarFilterValue !== 'string') {
+      return;
+    }
+    setSidebarFilter(sidebarFilterValue);
+  }, [sidebarFilterValue]);
 
   const refreshRecentFiles = useCallback(async (notesOnlyOverride?: boolean) => {
     setIsLoadingRecent(true);
@@ -272,6 +292,38 @@ export default function FileTree({
     }
     void refreshRecentFiles();
   }, [isLoadingSettings, refreshRecentFiles, sidebarViewMode]);
+
+  useEffect(() => {
+    if (isLoadingSettings || !isSidebarOpen || isCollapsed) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      if (sidebarViewMode === 'recent') {
+        void refreshRecentFiles();
+        return;
+      }
+      void loadFiles(currentPath, type, showOnlyNotes);
+    }, 8000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    currentPath,
+    isCollapsed,
+    isLoadingSettings,
+    isSidebarOpen,
+    loadFiles,
+    refreshRecentFiles,
+    showOnlyNotes,
+    sidebarViewMode,
+    type
+  ]);
 
   useEffect(() => {
     const handleFilesChanged = (event: Event) => {
@@ -774,7 +826,7 @@ export default function FileTree({
         )}
         {!isCollapsed && (
           <>
-            {!isLoadingSettings && (
+            {showSectionActions && !isLoadingSettings && (
               <div style={{ marginBottom: '0.35rem', position: 'relative' }}>
                 <input
                   type="text"
@@ -823,7 +875,7 @@ export default function FileTree({
             )}
 
             {/* Toggle für Notizen/alle Dateien */}
-            {!isLoadingSettings && (
+            {showSectionActions && !isLoadingSettings && (
               <div
                 onClick={handleToggleShowOnlyNotes}
                 style={{
@@ -875,7 +927,7 @@ export default function FileTree({
               </div>
             )}
 
-            {!isLoadingSettings && (
+            {showSectionActions && !isLoadingSettings && (
               <div style={{
                 marginTop: '0.15rem',
                 padding: '0 0.5rem',

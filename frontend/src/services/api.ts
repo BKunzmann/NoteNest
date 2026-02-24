@@ -542,6 +542,31 @@ export interface SearchResponse {
   count: number;
 }
 
+export interface SearchIndexReindexState {
+  isRunning: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+  current: number;
+  total: number;
+  indexed: number;
+  errors: number;
+  scope: 'private' | 'shared' | 'all';
+  lastError?: string;
+}
+
+export interface SearchIndexStatusResponse {
+  indexedFiles: number;
+  tokenCount: number;
+  metadataFiles: number;
+  latestIndexedAt: string | null;
+  reindex: SearchIndexReindexState;
+}
+
+export interface TriggerReindexResponse {
+  message: string;
+  reindex: SearchIndexReindexState;
+}
+
 export const searchAPI = {
   /**
    * Sucht nach einem Begriff in allen Notizen
@@ -554,6 +579,47 @@ export const searchAPI = {
       params.append('type', type);
     }
     const response = await api.get<SearchResponse>(`/search?${params.toString()}`);
+    return response.data;
+  },
+
+  /**
+   * Liefert Indexstatus fuer den aktuellen Benutzer.
+   */
+  async getIndexStatus(): Promise<SearchIndexStatusResponse> {
+    const response = await api.get<SearchIndexStatusResponse>('/search/index-status');
+    return response.data;
+  },
+
+  /**
+   * Startet benutzerbezogene Re-Indexierung.
+   */
+  async triggerReindex(type?: 'private' | 'shared'): Promise<TriggerReindexResponse> {
+    const response = await api.post<TriggerReindexResponse>('/search/reindex', type ? { type } : {});
+    return response.data;
+  }
+};
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded' | 'error';
+  timestamp: string;
+  uptime: string;
+  database: string;
+  memory: {
+    heapUsed: string;
+    heapTotal: string;
+    rss: string;
+  };
+  cpu?: {
+    cores: number;
+    load1m: number;
+    load5m: number;
+    load15m: number;
+  };
+}
+
+export const systemAPI = {
+  async getHealth(): Promise<HealthResponse> {
+    const response = await api.get<HealthResponse>('/health');
     return response.data;
   }
 };
