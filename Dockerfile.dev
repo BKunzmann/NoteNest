@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+ARG PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_SKIP_DOWNLOAD=${PUPPETEER_SKIP_DOWNLOAD}
+
 WORKDIR /app
 
 # Installiere Build-Dependencies für better-sqlite3 und Puppeteer

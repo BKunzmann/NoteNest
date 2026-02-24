@@ -10,6 +10,7 @@ jobs:
   # Zuerst: Build testen, damit bei Fehlern die genaue Meldung sichtbar ist
   verify-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -22,13 +23,15 @@ jobs:
       - name: Install and build frontend
         run: |
           cd frontend
-          npm install
+          npm install --no-audit --no-fund
           npm run build
 
       - name: Install and build backend
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
         run: |
           cd backend
-          npm install
+          npm install --no-audit --no-fund
           npm run build
 
   build-and-push:
@@ -59,6 +62,8 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            PUPPETEER_SKIP_DOWNLOAD=true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/notenest:latest
             ${{ secrets.DOCKER_USERNAME }}/notenest:${{ steps.version.outputs.version }}
