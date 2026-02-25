@@ -254,7 +254,7 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
                 </div>
               </div>
               <div style={{ padding: '0.65rem 1rem', borderBottom: '1px solid #e0e0e0', fontSize: '0.78rem', color: '#555' }}>
-                <div style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Indexstatus</div>
+                <div style={{ fontWeight: 700, marginBottom: '0.35rem' }}>Indexstatus (benutzerbezogen)</div>
                 {isLoadingDiagnostics ? (
                   <div>Lädt…</div>
                 ) : diagnosticsError ? (
@@ -263,7 +263,7 @@ export default function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
                   <>
                     <div>Dateien: {indexStatus?.indexedFiles ?? 0} · Tokens: {indexStatus?.tokenCount ?? 0}</div>
                     <div>Metadaten: {indexStatus?.metadataFiles ?? 0}</div>
-                    <div>Zuletzt indexiert: {formatIsoToLocal(indexStatus?.latestIndexedAt)}</div>
+                    <div>Zuletzt für diesen Benutzer indexiert: {formatIsoToLocal(indexStatus?.latestIndexedAt)}</div>
                     <div style={{ marginTop: '0.2rem' }}>
                       {indexStatus?.reindex?.isRunning
                         ? `Reindex läuft: ${indexStatus.reindex.current}/${indexStatus.reindex.total || '?'}`

@@ -52,7 +52,29 @@ function normalizeSidebarPath(inputPath: string): string {
   if (!normalized.startsWith('/')) {
     normalized = `/${normalized}`;
   }
-  return normalized.replace(/\/+/g, '/');
+  normalized = normalized.replace(/\/+/g, '/');
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+function isPathRelevantForCurrentFolder(currentPath: string, changedPath?: string): boolean {
+  if (!changedPath) {
+    return true;
+  }
+  const normalizedCurrentPath = normalizeSidebarPath(currentPath || '/');
+  const normalizedChangedPath = normalizeSidebarPath(changedPath || '/');
+
+  if (normalizedCurrentPath === '/' || normalizedChangedPath === '/') {
+    return true;
+  }
+
+  return (
+    normalizedCurrentPath === normalizedChangedPath ||
+    normalizedCurrentPath.startsWith(`${normalizedChangedPath}/`) ||
+    normalizedChangedPath.startsWith(`${normalizedCurrentPath}/`)
+  );
 }
 
 function buildChildPath(parentPath: string, name: string): string {
@@ -93,7 +115,8 @@ export default function FileTree({
     loadFiles,
     selectFile,
     deleteItem,
-    isLoading,
+    isLoadingPrivate,
+    isLoadingShared,
     privateError,
     sharedError,
     selectedFile,
@@ -121,8 +144,10 @@ export default function FileTree({
   const [expandedRecentGroups, setExpandedRecentGroups] = useState<Set<string>>(new Set());
   const recentLongPressTimerRef = useRef<number | null>(null);
   const suppressRecentClickRef = useRef(false);
+  const lastBackgroundRefreshRef = useRef(0);
   
   const error = type === 'private' ? privateError : sharedError;
+  const isLoading = type === 'private' ? isLoadingPrivate : isLoadingShared;
 
   const allFiles = type === 'private' ? privateFiles : sharedFiles;
   const currentPath = type === 'private' ? privatePath : sharedPath;
@@ -188,18 +213,35 @@ export default function FileTree({
     setSidebarFilter(sidebarFilterValue);
   }, [sidebarFilterValue]);
 
-  const refreshRecentFiles = useCallback(async (notesOnlyOverride?: boolean) => {
-    setIsLoadingRecent(true);
-    setRecentError(null);
+  const refreshRecentFiles = useCallback(async (options?: {
+    notesOnlyOverride?: boolean;
+    silent?: boolean;
+    suppressErrors?: boolean;
+  }) => {
+    const notesOnlyOverride = options?.notesOnlyOverride;
+    const silent = options?.silent ?? false;
+    const suppressErrors = options?.suppressErrors ?? false;
+
+    if (!silent) {
+      setIsLoadingRecent(true);
+    }
+    if (!suppressErrors) {
+      setRecentError(null);
+    }
+
     try {
       const effectiveNotesOnly = notesOnlyOverride ?? showOnlyNotes;
       const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 1000);
       setRecentFiles(response.items);
     } catch (apiError: any) {
-      setRecentError(apiError?.response?.data?.error || 'Fehler beim Laden der zuletzt bearbeiteten Notizen');
-      setRecentFiles([]);
+      if (!suppressErrors) {
+        setRecentError(apiError?.response?.data?.error || 'Fehler beim Laden der zuletzt bearbeiteten Notizen');
+        setRecentFiles([]);
+      }
     } finally {
-      setIsLoadingRecent(false);
+      if (!silent) {
+        setIsLoadingRecent(false);
+      }
     }
   }, [showOnlyNotes, type]);
 
@@ -283,8 +325,10 @@ export default function FileTree({
     const state = useFileStore.getState();
     const pathToLoad = type === 'private' ? state.privatePath : state.sharedPath;
     void loadFiles(pathToLoad || '/', type, showOnlyNotes);
-    void refreshFileStats();
-  }, [isLoadingSettings, loadFiles, refreshFileStats, showOnlyNotes, type]);
+    if (showSectionActions) {
+      void refreshFileStats();
+    }
+  }, [isLoadingSettings, loadFiles, refreshFileStats, showOnlyNotes, showSectionActions, type]);
 
   useEffect(() => {
     if (isLoadingSettings || sidebarViewMode !== 'recent') {
@@ -294,7 +338,7 @@ export default function FileTree({
   }, [isLoadingSettings, refreshRecentFiles, sidebarViewMode]);
 
   useEffect(() => {
-    if (isLoadingSettings || !isSidebarOpen || isCollapsed) {
+    if (isLoadingSettings || !isSidebarOpen || isCollapsed || sidebarViewMode !== 'recent') {
       return;
     }
 
@@ -303,26 +347,21 @@ export default function FileTree({
         return;
       }
 
-      if (sidebarViewMode === 'recent') {
-        void refreshRecentFiles();
-        return;
-      }
-      void loadFiles(currentPath, type, showOnlyNotes);
+      void refreshRecentFiles({
+        silent: true,
+        suppressErrors: true
+      });
     }, 8000);
 
     return () => {
       window.clearInterval(interval);
     };
   }, [
-    currentPath,
     isCollapsed,
     isLoadingSettings,
     isSidebarOpen,
-    loadFiles,
     refreshRecentFiles,
-    showOnlyNotes,
     sidebarViewMode,
-    type
   ]);
 
   useEffect(() => {
@@ -336,12 +375,30 @@ export default function FileTree({
         return;
       }
 
-      if (sidebarViewMode === 'recent') {
-        void refreshRecentFiles();
-      } else {
-        void loadFiles(currentPath, type, showOnlyNotes);
+      const now = Date.now();
+      if (now - lastBackgroundRefreshRef.current < 900) {
+        return;
       }
-      void refreshFileStats();
+      lastBackgroundRefreshRef.current = now;
+
+      if (sidebarViewMode === 'recent') {
+        void refreshRecentFiles({
+          silent: true,
+          suppressErrors: true
+        });
+      } else {
+        const changedPath = detail?.path ? normalizeSidebarPath(detail.path) : undefined;
+        if (!isPathRelevantForCurrentFolder(currentPath, changedPath)) {
+          return;
+        }
+        void loadFiles(currentPath, type, showOnlyNotes, {
+          silent: true,
+          suppressErrors: true
+        });
+      }
+      if (showSectionActions) {
+        void refreshFileStats();
+      }
     };
 
     const handleRevealInSidebar = (event: Event) => {
@@ -365,7 +422,7 @@ export default function FileTree({
       window.removeEventListener('notenest:files-changed', handleFilesChanged as EventListener);
       window.removeEventListener('notenest:reveal-file-in-sidebar', handleRevealInSidebar as EventListener);
     };
-  }, [currentPath, loadFiles, refreshFileStats, refreshRecentFiles, showOnlyNotes, sidebarViewMode, type]);
+  }, [currentPath, loadFiles, refreshFileStats, refreshRecentFiles, showOnlyNotes, showSectionActions, sidebarViewMode, type]);
 
   const handleFolderClick = (folderPath: string) => {
     void loadFiles(folderPath, type, showOnlyNotes);
@@ -473,7 +530,7 @@ export default function FileTree({
         detail: { show_only_notes: newValue }
       }));
       if (sidebarViewMode === 'recent') {
-        await refreshRecentFiles(newValue);
+        await refreshRecentFiles({ notesOnlyOverride: newValue });
       } else {
         await loadFiles(currentPath, type, newValue);
       }
