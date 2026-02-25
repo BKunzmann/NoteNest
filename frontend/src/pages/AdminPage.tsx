@@ -9,13 +9,15 @@ import { useAuthStore } from '../store/authStore';
 import UserManagement from '../components/Admin/UserManagement';
 import SharedFoldersManagement from '../components/Admin/SharedFoldersManagement';
 import HiddenFoldersManagement from '../components/Admin/HiddenFoldersManagement';
+import BibleDatabaseManagement from '../components/Admin/BibleDatabaseManagement';
 
-type AdminTab = 'users' | 'shared' | 'hidden';
+type AdminTab = 'users' | 'shared' | 'hidden' | 'bible';
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'users', label: 'Benutzer' },
   { id: 'shared', label: 'Shared-Ordner' },
-  { id: 'hidden', label: 'Ausgeblendete Ordner' }
+  { id: 'hidden', label: 'Ausgeblendete Ordner' },
+  { id: 'bible', label: 'Bibel-Datenbank' }
 ];
 
 export default function AdminPage() {
@@ -80,6 +82,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UserManagement />}
         {activeTab === 'shared' && <SharedFoldersManagement />}
         {activeTab === 'hidden' && <HiddenFoldersManagement />}
+        {activeTab === 'bible' && <BibleDatabaseManagement />}
       </div>
     </div>
   );

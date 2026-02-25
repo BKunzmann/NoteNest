@@ -25,6 +25,20 @@ export interface BibleImportResult {
   reason?: 'already-imported' | 'path-not-found' | 'no-supported-json-files';
 }
 
+export interface BibleImportStatus {
+  verseCount: number;
+  cacheCount: number;
+  translations: Array<{ translation: string; count: number }>;
+  configuredPath: string | null;
+  resolvedPath: string | null;
+  availableJsonFiles: string[];
+}
+
+export interface BibleReimportResult extends BibleImportResult {
+  deletedVerses: number;
+  deletedCacheEntries: number;
+}
+
 /**
  * Mapping von Dateinamen zu Übersetzungs-Codes
  */
@@ -64,6 +78,11 @@ function getBibleVerseCount(): number {
   return row?.count ?? 0;
 }
 
+function getBibleCacheCount(): number {
+  const row = db.prepare('SELECT COUNT(*) as count FROM bible_cache').get() as { count: number } | undefined;
+  return row?.count ?? 0;
+}
+
 function getCandidateBiblePaths(): string[] {
   const configuredPath = process.env.BIBLE_LOCAL_PATH?.trim();
   const candidates = [
@@ -94,6 +113,16 @@ function resolveBiblePath(): string | null {
     }
   }
   return null;
+}
+
+function getJsonFiles(pathToBibles: string): string[] {
+  try {
+    return fs.readdirSync(pathToBibles)
+      .filter((fileName) => fileName.toLowerCase().endsWith('.json'))
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 function parseVersesFromFile(filePath: string): BibleVerse[] {
@@ -177,6 +206,38 @@ function importFromLocalJsonFiles(biblePath: string): BibleImportResult {
   };
 }
 
+function runImportTask(task: () => BibleImportResult): Promise<BibleImportResult> {
+  importInFlight = Promise.resolve()
+    .then<BibleImportResult>(task)
+    .finally(() => {
+      importInFlight = null;
+    });
+
+  return importInFlight;
+}
+
+export function getBibleImportStatus(): BibleImportStatus {
+  const configuredPath = process.env.BIBLE_LOCAL_PATH?.trim() || null;
+  const resolvedPath = resolveBiblePath();
+  const availableJsonFiles = resolvedPath ? getJsonFiles(resolvedPath) : [];
+
+  const translations = db.prepare(`
+    SELECT translation, COUNT(*) as count
+    FROM bible_verses
+    GROUP BY translation
+    ORDER BY translation
+  `).all() as Array<{ translation: string; count: number }>;
+
+  return {
+    verseCount: getBibleVerseCount(),
+    cacheCount: getBibleCacheCount(),
+    translations,
+    configuredPath,
+    resolvedPath,
+    availableJsonFiles
+  };
+}
+
 /**
  * Stellt sicher, dass lokale Bibeldaten importiert sind.
  * Führt den Import nur aus, wenn die Tabelle bible_verses noch leer ist.
@@ -209,7 +270,7 @@ export async function ensureBibleDataImported(): Promise<BibleImportResult> {
     return importInFlight;
   }
 
-  importInFlight = Promise.resolve().then<BibleImportResult>(() => {
+  return runImportTask(() => {
     // Race-Condition vermeiden: direkt vor Import erneut prüfen.
     const currentCount = getBibleVerseCount();
     if (currentCount > 0) {
@@ -248,10 +309,58 @@ export async function ensureBibleDataImported(): Promise<BibleImportResult> {
     }
 
     return result;
-  }).finally(() => {
-    importInFlight = null;
   });
+}
 
-  return importInFlight as Promise<BibleImportResult>;
+/**
+ * Erzwingt einen vollständigen Neuimport der Bibeldaten.
+ * Dabei werden vorhandene Verse (und optional der Bible-Cache) vor dem Import gelöscht.
+ */
+export async function forceReimportBibleData(clearCache: boolean = true): Promise<BibleReimportResult> {
+  if (importInFlight) {
+    await importInFlight;
+  }
+
+  const biblePath = resolveBiblePath();
+  if (!biblePath) {
+    return {
+      imported: false,
+      totalImported: 0,
+      sourcePath: null,
+      translations: [],
+      reason: 'path-not-found',
+      deletedVerses: 0,
+      deletedCacheEntries: 0
+    };
+  }
+
+  const deleteResult = db.transaction(() => {
+    const deletedVerses = db.prepare('DELETE FROM bible_verses').run().changes;
+    const deletedCacheEntries = clearCache ? db.prepare('DELETE FROM bible_cache').run().changes : 0;
+    return { deletedVerses, deletedCacheEntries };
+  })();
+
+  const importResult = importFromLocalJsonFiles(biblePath);
+
+  checkedExistingData = true;
+  hasExistingData = importResult.imported || getBibleVerseCount() > 0;
+
+  const result: BibleReimportResult = {
+    ...importResult,
+    deletedVerses: deleteResult.deletedVerses,
+    deletedCacheEntries: deleteResult.deletedCacheEntries
+  };
+
+  if (result.imported) {
+    const stats = result.translations.map((item) => `${item.translation}:${item.count}`).join(', ');
+    console.log(`✅ Bible reimport completed (${result.totalImported} verses) from ${biblePath}`);
+    if (stats) {
+      console.log(`   ${stats}`);
+    }
+  } else {
+    console.log(`ℹ️ Bible reimport skipped (${result.reason ?? 'no-data'}) from ${biblePath}`);
+  }
+
+  return result;
 }
 
