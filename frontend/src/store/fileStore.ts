@@ -10,6 +10,11 @@ import { fileAPI } from '../services/api';
 import { getCachedNote, cacheNote, isIndexedDBAvailable } from '../services/offlineStorage';
 import { isOnline } from '../services/syncService';
 
+interface LoadFilesOptions {
+  silent?: boolean;
+  suppressErrors?: boolean;
+}
+
 function normalizeStorePath(filePath: string): string {
   let normalized = filePath;
   if (!normalized.startsWith('/')) {
@@ -51,12 +56,19 @@ interface FileState {
   
   // Loading States
   isLoading: boolean;
+  isLoadingPrivate: boolean;
+  isLoadingShared: boolean;
   isLoadingContent: boolean;
   privateError: string | null;
   sharedError: string | null;
   
   // Actions
-  loadFiles: (path?: string, type?: 'private' | 'shared', notesOnly?: boolean) => Promise<void>;
+  loadFiles: (
+    path?: string,
+    type?: 'private' | 'shared',
+    notesOnly?: boolean,
+    options?: LoadFilesOptions
+  ) => Promise<void>;
   loadFileContent: (path: string, type: 'private' | 'shared') => Promise<void>;
   selectFile: (file: FileItem | null, path: string | null, type: 'private' | 'shared' | null) => void;
   clearSelection: () => void;
@@ -78,6 +90,8 @@ export const useFileStore = create<FileState>((set, get) => ({
   fileLastModified: null,
   fileCreatedAt: null,
   isLoading: false,
+  isLoadingPrivate: false,
+  isLoadingShared: false,
   isLoadingContent: false,
   privateError: null,
   sharedError: null,
@@ -88,47 +102,78 @@ export const useFileStore = create<FileState>((set, get) => ({
   loadFiles: async (
     path: string = '/',
     type: 'private' | 'shared' = 'private',
-    notesOnly: boolean = false
+    notesOnly: boolean = false,
+    options: LoadFilesOptions = {}
   ) => {
-    set({ isLoading: true });
+    const { silent = false, suppressErrors = false } = options;
+
+    if (!silent) {
+      if (type === 'private') {
+        set({ isLoadingPrivate: true, isLoading: true });
+      } else {
+        set({ isLoadingShared: true, isLoading: true });
+      }
+    }
     
     // Setze Fehler für den entsprechenden Typ zurück
-    if (type === 'private') {
-      set({ privateError: null });
-    } else {
-      set({ sharedError: null });
+    if (!suppressErrors) {
+      if (type === 'private') {
+        set({ privateError: null });
+      } else {
+        set({ sharedError: null });
+      }
     }
     
     try {
       const response: FileListResponse = await fileAPI.listFiles(path, type, notesOnly);
       
       if (type === 'private') {
-        set({
+        set((state) => ({
           privateFiles: response.items,
           privatePath: response.path,
-          isLoading: false,
+          ...(silent
+            ? {}
+            : {
+              isLoadingPrivate: false,
+              isLoading: state.isLoadingShared
+            }),
           privateError: null
-        });
+        }));
       } else {
-        set({
+        set((state) => ({
           sharedFiles: response.items,
           sharedPath: response.path,
-          isLoading: false,
+          ...(silent
+            ? {}
+            : {
+              isLoadingShared: false,
+              isLoading: state.isLoadingPrivate
+            }),
           sharedError: null
-        });
+        }));
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || 'Fehler beim Laden der Dateien';
       if (type === 'private') {
-        set({
-          isLoading: false,
-          privateError: errorMessage
-        });
+        set((state) => ({
+          ...(silent
+            ? {}
+            : {
+              isLoadingPrivate: false,
+              isLoading: state.isLoadingShared
+            }),
+          privateError: suppressErrors ? state.privateError : errorMessage
+        }));
       } else {
-        set({
-          isLoading: false,
-          sharedError: errorMessage
-        });
+        set((state) => ({
+          ...(silent
+            ? {}
+            : {
+              isLoadingShared: false,
+              isLoading: state.isLoadingPrivate
+            }),
+          sharedError: suppressErrors ? state.sharedError : errorMessage
+        }));
       }
     }
   },
