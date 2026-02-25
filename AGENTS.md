@@ -8,10 +8,15 @@ NoteNest is a personal note-taking app (German UI) with Bible verse references, 
 
 ### Node.js Version
 
-This project requires **Node.js 20** (not 22). Node 22 causes `ERR_REQUIRE_CYCLE_MODULE` errors due to stricter ESM/CJS handling in tsx. Use nvm to switch:
-```
-export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20
-```
+This project requires **Node.js 20** (not 22). Node 22 causes `ERR_REQUIRE_CYCLE_MODULE` errors due to stricter ESM/CJS handling in tsx. The update script handles this via nvm automatically.
+
+### Dependencies & Native Modules
+
+The update script runs `PUPPETEER_SKIP_DOWNLOAD=1 npm install` from the workspace root, which installs dependencies for **both** workspaces (`backend/` and `frontend/`) via npm workspaces. Native modules that require compilation:
+
+- **better-sqlite3** — requires `python3`, `make`, `g++` (pre-installed on Cloud VM). Compiled against Node 20 ABI. If you switch Node versions, run `npm rebuild better-sqlite3`.
+- **argon2** — same native build toolchain. Used for password hashing.
+- **PUPPETEER_SKIP_DOWNLOAD=1** is set as default in the update script to skip the ~500MB Chromium download. PDF export will be unavailable but all other features work. If PDF export is needed, run `npm install` without this flag.
 
 ### Starting Dev Servers
 
@@ -38,14 +43,10 @@ Standard commands are in root `package.json` and documented in `docs/AI/instruct
 - **Test**: `npm run test` (Jest for backend, Vitest for frontend)
 - **Build**: `npm run build`
 
-### Puppeteer / PDF Export
-
-PDF export uses Puppeteer (Chromium). Set `PUPPETEER_SKIP_DOWNLOAD=true` during `npm install` to skip the ~500MB Chromium download. PDF export will be unavailable but all other features work.
-
 ### Database
 
 SQLite is embedded via `better-sqlite3` — no external DB server needed. The database file is auto-created at `./data/database/notenest.db` on first backend start.
 
 ### Environment Setup
 
-Run `scripts/setup-env.sh` to auto-generate `.env` from `.env.example` with random JWT secrets. Bible API keys are optional (`BIBLE_API_ENABLED=false` by default).
+The update script runs `scripts/setup-env.sh` automatically if `.env` is missing. This generates `.env` from `.env.example` with random JWT secrets. Bible API keys are optional (`BIBLE_API_ENABLED=false` by default).
