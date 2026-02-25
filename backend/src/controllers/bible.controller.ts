@@ -31,6 +31,14 @@ export async function getVerse(req: Request, res: Response): Promise<void> {
     // Decodiere URL-encoded Referenz
     const decodedReference = decodeURIComponent(reference);
     console.log('Decoded reference:', decodedReference);
+
+    // Frühe Validierung für bessere Fehlermeldung (statt irreführender 404 "nicht importiert").
+    if (!parseBibleReference(decodedReference)) {
+      res.status(400).json({
+        error: 'Ungültige Bibelstellen-Referenz. Beispiel: "Johannes 3,16" oder "Psalm 23,1-3".'
+      });
+      return;
+    }
     
     // Verwende angegebene Übersetzung, ansonsten User-Default oder Fallback
     let finalTranslation = (translation as string) || 'LUT';
@@ -257,7 +265,7 @@ export async function getDiagnostics(req: Request, res: Response): Promise<void>
       },
       paths,
       checks: [
-        'Wenn totalVerseCount = 0, dann Import aus JSON mit npm run bible:import ausführen.',
+        'Wenn totalVerseCount = 0, dann Import aus JSON mit "npm run import-bibles --workspace=backend" ausführen.',
         'Wenn gewünschte JSON-Datei nicht in paths[].jsonFiles auftaucht, Volume-Mount in Docker prüfen.',
         'Wenn bibleApiEnabled=true, aber verseStats leer ist, sollte wenigstens API-Fallback Treffer liefern (Netzwerk/API-Key prüfen).',
         'Bei Übersetzungsproblemen Standardübersetzung in den Benutzereinstellungen auf LUT1912/ELB1905/SCH1951 setzen und erneut testen.'

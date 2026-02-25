@@ -9,6 +9,7 @@
 
 import db from '../config/database';
 import { BIBLE_CACHE_TTL } from '../config/constants';
+import { ensureBibleDataImported } from './bibleImport.service';
 
 /**
  * Buchnamen-Mapping (Deutsch -> Standard-Codes)
@@ -212,6 +213,13 @@ export async function getBibleVerse(
   translation: string = 'LUT'
 ): Promise<{ text: string; reference: string; translation: string } | null> {
   console.log('getBibleVerse called with:', { reference, translation });
+
+  // Stellt sicher, dass lokale JSON-Dateien bei leerer Datenbank automatisch importiert werden.
+  try {
+    await ensureBibleDataImported();
+  } catch (error) {
+    console.warn('Could not ensure bible import before verse lookup:', error);
+  }
   
   // Parse Referenz
   const parsed = parseBibleReference(reference);
@@ -372,6 +380,12 @@ export async function getBibleChapter(
   chapter: number,
   translation: string = 'LUT'
 ): Promise<Array<{ verse: number; text: string }> | null> {
+  try {
+    await ensureBibleDataImported();
+  } catch (error) {
+    console.warn('Could not ensure bible import before chapter lookup:', error);
+  }
+
   const normalizedBook = normalizeBookName(book);
   if (!normalizedBook) {
     console.log('Failed to normalize book name:', book);

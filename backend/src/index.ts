@@ -14,6 +14,7 @@ import logger, { logInfo, logError, logWarn } from './config/logger';
 import { apiLimiter } from './middleware/rateLimit.middleware';
 import { VERSION, getVersionInfo } from './config/version';
 import { IS_NAS_MODE } from './config/constants';
+import { ensureBibleDataImported } from './services/bibleImport.service';
 import { 
   httpRequestDuration, 
   httpRequestTotal, 
@@ -41,6 +42,11 @@ try {
     initializeDefaultAdmin().catch((error) => {
       logError('Failed to initialize default admin', error);
     });
+  });
+
+  // Auto-Import lokaler Bibel-JSON-Dateien (nur wenn bible_verses noch leer ist).
+  ensureBibleDataImported().catch((error) => {
+    logWarn('Bible auto-import could not be completed', { error: String(error) });
   });
 } catch (error) {
   logError('Failed to initialize database', error);
