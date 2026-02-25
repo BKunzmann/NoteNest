@@ -209,7 +209,7 @@ export async function ensureBibleDataImported(): Promise<BibleImportResult> {
     return importInFlight;
   }
 
-  importInFlight = Promise.resolve().then(() => {
+  importInFlight = Promise.resolve().then<BibleImportResult>(() => {
     // Race-Condition vermeiden: direkt vor Import erneut prüfen.
     const currentCount = getBibleVerseCount();
     if (currentCount > 0) {
@@ -252,6 +252,6 @@ export async function ensureBibleDataImported(): Promise<BibleImportResult> {
     importInFlight = null;
   });
 
-  return importInFlight;
+  return importInFlight as Promise<BibleImportResult>;
 }
 
