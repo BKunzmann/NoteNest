@@ -687,6 +687,35 @@ export interface AddSharedFolderRequest {
   folderPath: string;
 }
 
+export interface AdminBibleTranslationStat {
+  translation: string;
+  count: number;
+}
+
+export interface AdminBibleStatusResponse {
+  verseCount: number;
+  cacheCount: number;
+  translations: AdminBibleTranslationStat[];
+  configuredPath: string | null;
+  resolvedPath: string | null;
+  availableJsonFiles: string[];
+}
+
+export interface AdminBibleReimportResult {
+  imported: boolean;
+  totalImported: number;
+  sourcePath: string | null;
+  translations: AdminBibleTranslationStat[];
+  reason?: 'already-imported' | 'path-not-found' | 'no-supported-json-files';
+  deletedVerses: number;
+  deletedCacheEntries: number;
+}
+
+export interface AdminBibleReimportResponse {
+  message: string;
+  result: AdminBibleReimportResult;
+}
+
 /**
  * Admin API
  */
@@ -741,6 +770,24 @@ export const adminAPI = {
   async updateUserStatus(userId: number, isActive: boolean): Promise<{ message: string }> {
     const response = await api.patch<{ message: string }>(`/admin/users/${userId}/status`, {
       isActive
+    });
+    return response.data;
+  },
+
+  /**
+   * Gibt den Status der Bibel-Datenbank zurück.
+   */
+  async getBibleStatus(): Promise<AdminBibleStatusResponse> {
+    const response = await api.get<AdminBibleStatusResponse>('/admin/bible/status');
+    return response.data;
+  },
+
+  /**
+   * Erzwingt einen Neuimport der Bibel-JSON-Dateien.
+   */
+  async reimportBibleDatabase(clearCache: boolean = true): Promise<AdminBibleReimportResponse> {
+    const response = await api.post<AdminBibleReimportResponse>('/admin/bible/reimport', {
+      clearCache
     });
     return response.data;
   },

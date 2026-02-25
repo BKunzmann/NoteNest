@@ -15,6 +15,7 @@ import {
 } from '../services/admin.service';
 import { RegisterRequest } from '../types/auth';
 import { indexAllFiles } from '../services/index.service';
+import { forceReimportBibleData, getBibleImportStatus } from '../services/bibleImport.service';
 
 /**
  * GET /api/admin/users
@@ -428,6 +429,53 @@ export async function getIndexStatus(_req: Request, res: Response): Promise<void
   } catch (error) {
     console.error('Error getting index status:', error);
     res.status(500).json({ error: 'Failed to get index status' });
+  }
+}
+
+/**
+ * GET /api/admin/bible/status
+ * Gibt Statusinformationen zur Bibel-Datenbank zurück.
+ */
+export async function getBibleStatus(_req: Request, res: Response): Promise<void> {
+  try {
+    const status = getBibleImportStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Error getting bible status:', error);
+    res.status(500).json({ error: 'Failed to get bible status' });
+  }
+}
+
+/**
+ * POST /api/admin/bible/reimport
+ * Erzwingt einen Neuimport der lokalen Bibel-JSON-Dateien.
+ * Body optional: { clearCache: boolean }
+ */
+export async function reimportBibleDatabase(req: Request, res: Response): Promise<void> {
+  try {
+    const clearCache = req.body?.clearCache !== false;
+    const result = await forceReimportBibleData(clearCache);
+
+    if (result.reason === 'path-not-found') {
+      res.status(400).json({ error: 'Kein gültiger Bibelpfad gefunden. Bitte BIBLE_LOCAL_PATH/Volume-Mount prüfen.' });
+      return;
+    }
+
+    if (result.reason === 'no-supported-json-files') {
+      res.status(400).json({
+        error: 'Keine unterstützten Bibel-JSON-Dateien gefunden (erwartet: luther_1912, luther_1545, elberfelder_1905, schlachter_1951).',
+        result
+      });
+      return;
+    }
+
+    res.json({
+      message: `Bibel-Datenbank neu importiert (${result.totalImported} Verse).`,
+      result
+    });
+  } catch (error) {
+    console.error('Error reimporting bible database:', error);
+    res.status(500).json({ error: 'Failed to reimport bible database' });
   }
 }
 
