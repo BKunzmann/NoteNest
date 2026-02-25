@@ -10,6 +10,8 @@ RUN npm run build
 
 # Stage 2: Backend Build
 FROM node:20-alpine AS backend-builder
+ARG PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_SKIP_DOWNLOAD=${PUPPETEER_SKIP_DOWNLOAD}
 WORKDIR /app/backend
 COPY backend/package*.json ./
 # Verwende npm install (lock file könnte nicht synchron sein)
