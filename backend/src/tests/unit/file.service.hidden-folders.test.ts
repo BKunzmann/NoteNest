@@ -60,6 +60,7 @@ describe('Hidden Folders Configuration', () => {
         INSERT OR REPLACE INTO app_config (key, value, description)
         VALUES ('hidden_folders', ?, 'Test config')
       `).run(customFolders);
+      invalidateHiddenFoldersCache();
       
       const config = getHiddenFoldersConfig();
       expect(config).toContain('.notenest-trash');
