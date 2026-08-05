@@ -25,7 +25,7 @@ interface EditorState {
   canRedo: boolean;
   
   // Actions
-  setContent: (content: string) => void;
+  setContent: (content: string, skipHistory?: boolean) => void;
   setOriginalContent: (content: string) => void;
   reset: () => void;
   saveFile: (filePath: string, type: 'private' | 'shared') => Promise<void>;
@@ -35,6 +35,49 @@ interface EditorState {
   clearError: () => void;
   undo: () => void;
   redo: () => void;
+}
+
+/** Debounce für Undo-History: verhindert, dass bei jedem Tastendruck die ganze Notiz kopiert wird */
+let historyCommitTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingHistorySnapshot: string | null = null;
+const HISTORY_DEBOUNCE_MS = 400;
+const MAX_HISTORY_ENTRIES = 40;
+
+function commitPendingHistory(get: () => EditorState, set: (partial: Partial<EditorState>) => void) {
+  if (pendingHistorySnapshot === null) {
+    return;
+  }
+  const snapshot = pendingHistorySnapshot;
+  pendingHistorySnapshot = null;
+
+  const state = get();
+  if (snapshot === state.content && state.history[state.historyIndex] === snapshot) {
+    return;
+  }
+
+  let newHistory = state.history.slice(0, state.historyIndex + 1);
+  if (newHistory.length === 0 || newHistory[newHistory.length - 1] !== snapshot) {
+    // Snapshot ist der Stand VOR der aktuellen Änderung – am Ende den aktuellen Content halten
+    if (newHistory[newHistory.length - 1] !== state.content) {
+      newHistory.push(snapshot);
+    }
+  }
+
+  if (newHistory[newHistory.length - 1] !== state.content) {
+    newHistory.push(state.content);
+  }
+
+  while (newHistory.length > MAX_HISTORY_ENTRIES) {
+    newHistory.shift();
+  }
+
+  const newIndex = newHistory.length - 1;
+  set({
+    history: newHistory,
+    historyIndex: newIndex,
+    canUndo: newIndex > 0,
+    canRedo: false
+  });
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -59,48 +102,51 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get();
     const original = state.originalContent;
     
-    // Füge zum History-Stack hinzu, wenn sich der Content geändert hat
-    if (content !== state.content) {
-      if (skipHistory) {
-        // Bei Undo/Redo: Setze Content ohne History-Änderung
-        set({
-          content,
-          isDirty: content !== original
-        });
-      } else {
-        // Normale Änderung: Füge zum History-Stack hinzu
-        const currentContent = state.content;
-        const newHistory = state.history.slice(0, state.historyIndex + 1);
-        
-        // Füge den aktuellen Content hinzu (nur wenn nicht leer und nicht der erste Eintrag)
-        if (currentContent !== '' || newHistory.length > 0) {
-          newHistory.push(currentContent);
-        }
-        
-        // Begrenze History auf 50 Einträge
-        if (newHistory.length > 50) {
-          newHistory.shift();
-        }
-        
-        const newIndex = newHistory.length;
-        newHistory.push(content); // Füge den neuen Content hinzu
-        
-        set({
-          content,
-          isDirty: content !== original,
-          history: newHistory,
-          historyIndex: newIndex,
-          canUndo: newIndex > 0,
-          canRedo: false
-        });
-      }
+    if (content === state.content) {
+      return;
     }
+
+    if (skipHistory) {
+      if (historyCommitTimer) {
+        clearTimeout(historyCommitTimer);
+        historyCommitTimer = null;
+      }
+      pendingHistorySnapshot = null;
+      set({
+        content,
+        isDirty: content !== original
+      });
+      return;
+    }
+
+    // Sofort Content aktualisieren (ohne teure History-Kopie)
+    if (pendingHistorySnapshot === null) {
+      pendingHistorySnapshot = state.content;
+    }
+
+    set({
+      content,
+      isDirty: content !== original
+    });
+
+    if (historyCommitTimer) {
+      clearTimeout(historyCommitTimer);
+    }
+    historyCommitTimer = setTimeout(() => {
+      historyCommitTimer = null;
+      commitPendingHistory(get, set);
+    }, HISTORY_DEBOUNCE_MS);
   },
 
   /**
    * Setzt Original-Content (beim Laden einer Datei)
    */
   setOriginalContent: (content: string) => {
+    if (historyCommitTimer) {
+      clearTimeout(historyCommitTimer);
+      historyCommitTimer = null;
+    }
+    pendingHistorySnapshot = null;
     set({
       originalContent: content,
       content,
@@ -116,6 +162,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
    * Setzt Editor zurück
    */
   reset: () => {
+    if (historyCommitTimer) {
+      clearTimeout(historyCommitTimer);
+      historyCommitTimer = null;
+    }
+    pendingHistorySnapshot = null;
     set({
       content: '',
       originalContent: '',
@@ -276,13 +327,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
    * Macht die letzte Änderung rückgängig
    */
   undo: () => {
+    // Offene Tipp-Session zuerst in die History schreiben
+    if (historyCommitTimer) {
+      clearTimeout(historyCommitTimer);
+      historyCommitTimer = null;
+    }
+    commitPendingHistory(get, set);
+
     const state = get();
     if (state.historyIndex > 0 && state.history.length > 0) {
       const newIndex = state.historyIndex - 1;
       const previousContent = state.history[newIndex];
       const original = state.originalContent;
       
-      // Setze Content direkt ohne History-Änderung
       set({
         content: previousContent,
         isDirty: previousContent !== original,
@@ -297,13 +354,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
    * Wiederholt die letzte rückgängig gemachte Änderung
    */
   redo: () => {
+    if (historyCommitTimer) {
+      clearTimeout(historyCommitTimer);
+      historyCommitTimer = null;
+    }
+    pendingHistorySnapshot = null;
+
     const state = get();
     if (state.historyIndex < state.history.length - 1) {
       const nextIndex = state.historyIndex + 1;
       const nextContent = state.history[nextIndex];
       const original = state.originalContent;
       
-      // Setze Content direkt ohne History-Änderung
       set({
         content: nextContent,
         isDirty: nextContent !== original,

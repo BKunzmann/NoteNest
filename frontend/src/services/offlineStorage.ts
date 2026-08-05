@@ -140,7 +140,8 @@ export async function getAllCachedNotes(): Promise<NoteCache[]> {
 }
 
 /**
- * Fügt eine ausstehende Änderung zur Sync-Queue hinzu
+ * Fügt eine ausstehende Änderung zur Sync-Queue hinzu.
+ * Updates für denselben Pfad werden zusammengeführt (kein Queue-Wachstum bei Offline-Tippen).
  */
 export async function addPendingChange(
   path: string,
@@ -150,22 +151,51 @@ export async function addPendingChange(
 ): Promise<string> {
   try {
     const database = await openDB();
-    const transaction = database.transaction([STORE_PENDING], 'readwrite');
-    const store = transaction.objectStore(STORE_PENDING);
+
+    // Bestehende Einträge lesen
+    const existing = await new Promise<PendingChange[]>((resolve, reject) => {
+      const tx = database.transaction([STORE_PENDING], 'readonly');
+      const store = tx.objectStore(STORE_PENDING);
+      const request = store.getAll();
+      request.onsuccess = () => resolve((request.result as PendingChange[]) || []);
+      request.onerror = () => reject(request.error);
+    });
+
+    let finalAction = action;
+    const idsToDelete: string[] = [];
+
+    for (const item of existing) {
+      if (item.path !== path || item.type !== type) {
+        continue;
+      }
+      if (action === 'update' && (item.action === 'update' || item.action === 'create')) {
+        idsToDelete.push(item.id);
+        if (item.action === 'create') {
+          finalAction = 'create';
+        }
+      } else if (item.action === action) {
+        idsToDelete.push(item.id);
+      }
+    }
 
     const change: PendingChange = {
       id: `${Date.now()}-${Math.random()}`,
       path,
       type,
-      action,
+      action: finalAction,
       content,
       timestamp: Date.now()
     };
 
     await new Promise<void>((resolve, reject) => {
-      const request = store.put(change);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      const tx = database.transaction([STORE_PENDING], 'readwrite');
+      const store = tx.objectStore(STORE_PENDING);
+      for (const id of idsToDelete) {
+        store.delete(id);
+      }
+      store.put(change);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
 
     return change.id;

@@ -93,7 +93,7 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
           console.warn('Auto-save failed:', err);
         });
       }
-    }, 1500);
+    }, 4000);
   };
 
   // Keyboard Shortcuts

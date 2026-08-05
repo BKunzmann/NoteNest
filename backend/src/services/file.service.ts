@@ -645,11 +645,9 @@ export async function checkPermissions(
   mode: 'read' | 'write'
 ): Promise<boolean> {
   try {
-    const fsPromises = await import('fs/promises');
-    const fsSync = await import('fs');
     const accessMode = mode === 'read' ? fsSync.constants.R_OK : fsSync.constants.W_OK;
     
-    await fsPromises.access(filePath, accessMode);
+    await fs.access(filePath, accessMode);
     
     if (process.env.NODE_ENV === 'development') {
       console.log('checkPermissions: OK', { filePath, mode });
@@ -666,8 +664,21 @@ export async function checkPermissions(
 
 /**
  * Holt die Liste der zu versteckenden Ordner aus der app_config
+ * Mit kurzem In-Memory-Cache, da dies bei Listenoperationen sehr oft aufgerufen wird.
  */
+let hiddenFoldersCache: { value: string[]; expiresAt: number } | null = null;
+const HIDDEN_FOLDERS_CACHE_TTL_MS = 30_000;
+
+export function invalidateHiddenFoldersCache(): void {
+  hiddenFoldersCache = null;
+}
+
 export function getHiddenFoldersConfig(): string[] {
+  const now = Date.now();
+  if (hiddenFoldersCache && hiddenFoldersCache.expiresAt > now) {
+    return hiddenFoldersCache.value;
+  }
+
   const alwaysHiddenFolders = [TRASH_ROOT_FOLDER];
 
   try {
@@ -677,7 +688,9 @@ export function getHiddenFoldersConfig(): string[] {
       // Parse JSON-Array aus der Datenbank
       const parsed = JSON.parse(result.value);
       if (Array.isArray(parsed)) {
-        return Array.from(new Set([...alwaysHiddenFolders, ...parsed]));
+        const value = Array.from(new Set([...alwaysHiddenFolders, ...parsed]));
+        hiddenFoldersCache = { value, expiresAt: now + HIDDEN_FOLDERS_CACHE_TTL_MS };
+        return value;
       }
     }
   } catch (error) {
@@ -685,7 +698,7 @@ export function getHiddenFoldersConfig(): string[] {
   }
   
   // Fallback: Standard-Liste
-  return [
+  const fallback = [
     ...alwaysHiddenFolders,
     '._DAV',
     '.Trashes',
@@ -699,6 +712,8 @@ export function getHiddenFoldersConfig(): string[] {
     '.vscode',
     'node_modules'
   ];
+  hiddenFoldersCache = { value: fallback, expiresAt: now + HIDDEN_FOLDERS_CACHE_TTL_MS };
+  return fallback;
 }
 
 /**
@@ -1035,7 +1050,7 @@ export async function listRecentFiles(
   options?: { notesOnly?: boolean; limit?: number }
 ): Promise<FileItem[]> {
   const notesOnly = options?.notesOnly ?? false;
-  const limit = Math.max(1, Math.min(options?.limit ?? 200, 1000));
+  const limit = Math.max(1, Math.min(options?.limit ?? 100, 200));
   const sharedSettings = type === 'shared' && IS_NAS_MODE ? getUserSettings(userId) : null;
   const sharedBasePath = type === 'shared' && IS_NAS_MODE
     ? getSharedBasePath(sharedSettings)
@@ -1048,14 +1063,34 @@ export async function listRecentFiles(
     return [];
   }
 
+  // Hidden-Folder-Config einmalig cachen (sonst DB+JSON.parse pro Pfad)
+  const hiddenFoldersConfig = getHiddenFoldersConfig();
+  const isHiddenPath = (filePath: string): boolean => {
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const pathSegments = normalizedPath.split('/').filter(segment => segment.length > 0);
+    for (const segment of pathSegments) {
+      const normalizedSegment = segment.toLowerCase();
+      if (hiddenFoldersConfig.some(hidden => {
+        const normalizedHidden = hidden.toLowerCase();
+        return normalizedSegment === normalizedHidden ||
+               normalizedSegment.startsWith(normalizedHidden + '.') ||
+               normalizedSegment.startsWith('.' + normalizedHidden);
+      })) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const metadataLikePattern = `${type}:%`;
 
-  const candidateLimit = Math.max(limit * 5, 500);
+  // Weniger Kandidaten laden – bisher limit*5 (bis 5000) war zu teuer
+  const candidateLimit = Math.max(limit * 3, limit + 50);
   const metadataRows = db.prepare(`
     SELECT file_path, file_name, file_size, last_modified
     FROM file_metadata
     WHERE user_id = ?
-      AND (file_path LIKE ? OR file_path LIKE '/%')
+      AND file_path LIKE ?
       AND last_modified IS NOT NULL
     ORDER BY datetime(last_modified) DESC
     LIMIT ?
@@ -1096,7 +1131,7 @@ export async function listRecentFiles(
       continue;
     }
     const relativePath = parsed.path;
-    if (isPathInHiddenFolder(relativePath)) {
+    if (isHiddenPath(relativePath)) {
       continue;
     }
     if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(relativePath, sharedAssignments)) {
@@ -1112,7 +1147,7 @@ export async function listRecentFiles(
 
   for (const row of searchIndexRows) {
     const normalizedPath = normalizeRelativePath(row.file_path);
-    if (isPathInHiddenFolder(normalizedPath)) {
+    if (isHiddenPath(normalizedPath)) {
       continue;
     }
     if (type === 'shared' && IS_NAS_MODE && !isPathAllowedBySharedAssignments(normalizedPath, sharedAssignments)) {
@@ -1140,6 +1175,9 @@ export async function listRecentFiles(
 
   const files: FileItem[] = [];
   const stalePaths: string[] = [];
+  // Nur eine begrenzte Anzahl von fs.stat-Prüfungen – Metadata ist die Primärquelle
+  const maxStatChecks = Math.min(limit + 10, 40);
+  let statChecks = 0;
 
   for (const candidate of sortedCandidates) {
     if (files.length >= limit) {
@@ -1152,45 +1190,60 @@ export async function listRecentFiles(
       continue;
     }
 
-    if (isPathInHiddenFolder(candidate.path)) {
+    if (isHiddenPath(candidate.path)) {
       continue;
     }
 
-    try {
-      const absolutePath = resolveUserPath(userId, candidate.path, type);
-      const stats = await fs.stat(absolutePath);
-      if (!stats.isFile()) {
-        stalePaths.push(candidate.path);
-        continue;
-      }
-
-      const normalizedPath = normalizeRelativePath(candidate.path);
-      const finalName = path.basename(normalizedPath);
-      const finalType = getFileType(finalName);
-      const finalIsNote = finalType.isEditable && NOTE_FILE_TYPES.has(finalType.type);
-      if (notesOnly && !finalIsNote) {
-        continue;
-      }
-
-      const lastModifiedIso = stats.mtime.toISOString();
-      upsertFileMetadata(userId, normalizedPath, type, stats.size, lastModifiedIso);
-
-      files.push({
-        name: finalName,
-        path: normalizedPath,
-        type: 'file',
-        size: stats.size,
-        lastModified: lastModifiedIso,
-        fileType: finalType.type,
-        isEditable: finalType.isEditable
-      });
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        stalePaths.push(candidate.path);
-        continue;
-      }
+    const normalizedPath = normalizeRelativePath(candidate.path);
+    const finalName = path.basename(normalizedPath);
+    const finalType = getFileType(finalName);
+    const finalIsNote = finalType.isEditable && NOTE_FILE_TYPES.has(finalType.type);
+    if (notesOnly && !finalIsNote) {
       continue;
     }
+
+    // Trust metadata for most entries; only spot-check a few via fs.stat
+    if (statChecks < maxStatChecks) {
+      try {
+        statChecks += 1;
+        const absolutePath = resolveUserPath(userId, candidate.path, type);
+        const stats = await fs.stat(absolutePath);
+        if (!stats.isFile()) {
+          stalePaths.push(candidate.path);
+          continue;
+        }
+
+        const lastModifiedIso = stats.mtime.toISOString();
+        upsertFileMetadata(userId, normalizedPath, type, stats.size, lastModifiedIso);
+
+        files.push({
+          name: finalName,
+          path: normalizedPath,
+          type: 'file',
+          size: stats.size,
+          lastModified: lastModifiedIso,
+          fileType: finalType.type,
+          isEditable: finalType.isEditable
+        });
+        continue;
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          stalePaths.push(candidate.path);
+          continue;
+        }
+        // Bei anderen Fehlern auf Metadata zurückfallen
+      }
+    }
+
+    files.push({
+      name: finalName,
+      path: normalizedPath,
+      type: 'file',
+      size: candidate.size,
+      lastModified: candidate.lastModified,
+      fileType: finalType.type,
+      isEditable: finalType.isEditable
+    });
   }
 
   if (stalePaths.length > 0) {
@@ -1199,12 +1252,10 @@ export async function listRecentFiles(
     }
   }
 
-  // Triggere bei Bedarf einen asynchronen Metadata-Refresh:
-  // - wenn nicht genug Treffer gefunden wurden
-  // - oder wenn noch keine/kaum Metadata-Einträge vorhanden sind
-  const shouldRefreshMetadata = files.length < limit || metadataRows.length < Math.min(limit, 50);
+  // Metadata-Refresh seltener anstoßen (nicht bei jedem Poll mit <limit Treffern)
+  const shouldRefreshMetadata = metadataRows.length === 0;
   if (shouldRefreshMetadata) {
-    scheduleFileMetadataRefresh(userId, type, metadataRows.length === 0);
+    scheduleFileMetadataRefresh(userId, type, true);
   }
 
   files.sort((a, b) => {
@@ -1236,12 +1287,39 @@ export function getFileStats(
     return { totalFiles: 0, totalNotes: 0 };
   }
 
+  // Schneller Pfad: COUNT aus search_index (bereits nach Typ gefiltert)
+  if (!(type === 'shared' && IS_NAS_MODE)) {
+    const totals = db.prepare(`
+      SELECT
+        COUNT(*) AS total_files,
+        SUM(
+          CASE
+            WHEN lower(file_name) LIKE '%.md'
+              OR lower(file_name) LIKE '%.markdown'
+              OR lower(file_name) LIKE '%.txt'
+            THEN 1 ELSE 0
+          END
+        ) AS total_notes
+      FROM search_index
+      WHERE user_id = ?
+        AND file_type = ?
+    `).get(userId, type) as { total_files: number; total_notes: number } | undefined;
+
+    if (totals && totals.total_files > 0) {
+      return {
+        totalFiles: totals.total_files,
+        totalNotes: totals.total_notes || 0
+      };
+    }
+  }
+
   const metadataLikePattern = `${type}:%`;
   const metadataRows = db.prepare(`
     SELECT file_path, file_name
     FROM file_metadata
     WHERE user_id = ?
-      AND (file_path LIKE ? OR file_path LIKE '/%')
+      AND file_path LIKE ?
+    LIMIT 5000
   `).all(userId, metadataLikePattern) as Array<{
     file_path: string;
     file_name: string;
@@ -1270,13 +1348,13 @@ export function getFileStats(
     }
   }
 
-  // Fallback für sehr frühe Migrationen ohne Metadata.
   if (totalFiles === 0) {
     const indexRows = db.prepare(`
       SELECT file_path, file_name
       FROM search_index
       WHERE user_id = ?
         AND file_type = ?
+      LIMIT 5000
     `).all(userId, type) as Array<{ file_path: string; file_name: string }>;
 
     for (const row of indexRows) {

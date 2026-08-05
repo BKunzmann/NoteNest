@@ -270,9 +270,13 @@ export async function searchNotes(
       });
     }
 
-    // 3) Existenzprüfung (stale Indexeinträge entfernen, falsche Treffer filtern)
+    // 3) Existenzprüfung nur für Top-Treffer (nicht für die gesamte Ergebnismenge)
+    const rankedForValidation = Array.from(byKey.values())
+      .sort((a, b) => b.relevance - a.relevance)
+      .slice(0, 60);
+
     const validResults: CandidateResult[] = [];
-    for (const result of byKey.values()) {
+    for (const result of rankedForValidation) {
       try {
         const normalizedPath = normalizePath(result.path);
         const absolutePath = resolveUserPath(userId, normalizedPath, result.type);
@@ -313,7 +317,9 @@ export async function searchNotes(
 
       return a.name.localeCompare(b.name, 'de', { sensitivity: 'base' });
     });
-    const results: SearchResult[] = validResults.map(({ fromIndex: _fromIndex, ...result }) => result);
+    const results: SearchResult[] = validResults
+      .slice(0, 50)
+      .map(({ fromIndex: _fromIndex, ...result }) => result);
 
     // 4) Fallback: Wenn Index keine verwertbaren Ergebnisse liefert, Dateisystem direkt durchsuchen
     if (results.length === 0) {

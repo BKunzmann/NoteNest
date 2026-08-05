@@ -105,7 +105,7 @@ export async function listRecentFilesHandler(req: Request, res: Response): Promi
     }
 
     const parsedLimit = Number.parseInt(String(limit), 10);
-    const safeLimit = Number.isFinite(parsedLimit) ? parsedLimit : 200;
+    const safeLimit = Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : 100, 200));
     const onlyNotes = String(notesOnly).toLowerCase() === 'true' || String(notesOnly) === '1';
 
     const items = await listRecentFiles(req.user.id, type, {

@@ -231,7 +231,7 @@ export default function FileTree({
 
     try {
       const effectiveNotesOnly = notesOnlyOverride ?? showOnlyNotes;
-      const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 1000);
+      const response = await fileAPI.listRecentFiles(type, effectiveNotesOnly, 100);
       setRecentFiles(response.items);
     } catch (apiError: any) {
       if (!suppressErrors) {
@@ -351,7 +351,7 @@ export default function FileTree({
         silent: true,
         suppressErrors: true
       });
-    }, 8000);
+    }, 60000);
 
     return () => {
       window.clearInterval(interval);

@@ -11,6 +11,44 @@ import { getTranslationName, getAvailableTranslations, translationsMatch, normal
 import { formatBibleReference } from '../../utils/bibleFormatting';
 import { useAuthStore } from '../../store/authStore';
 
+/** Modulweite Caches – vermeiden N parallele Requests bei vielen Bibelstellen in einer Notiz */
+let sharedTranslationsPromise: Promise<string[]> | null = null;
+let sharedDefaultTranslationPromise: Promise<string> | null = null;
+
+function loadSharedBibleTranslations(): Promise<string[]> {
+  if (!sharedTranslationsPromise) {
+    sharedTranslationsPromise = bibleAPI.getTranslations('deu')
+      .then((data) => {
+        if (data.details?.all) {
+          registerTranslationDetails(data.details.all);
+        }
+        return data.all?.length ? data.all : getAvailableTranslations();
+      })
+      .catch(() => {
+        sharedTranslationsPromise = null;
+        return getAvailableTranslations();
+      });
+  }
+  return sharedTranslationsPromise;
+}
+
+function loadSharedDefaultTranslation(): Promise<string> {
+  if (!sharedDefaultTranslationPromise) {
+    sharedDefaultTranslationPromise = settingsAPI.getSettings()
+      .then((settings) => {
+        const defaultTrans = settings.default_bible_translation || 'LUT1912';
+        return ['LUT', 'ELB', 'SCH'].includes(defaultTrans)
+          ? normalizeTranslation(defaultTrans)
+          : defaultTrans;
+      })
+      .catch((err) => {
+        sharedDefaultTranslationPromise = null;
+        throw err;
+      });
+  }
+  return sharedDefaultTranslationPromise;
+}
+
 interface BibleReferenceProps {
   reference: string;
   translation?: string;
@@ -66,40 +104,45 @@ export default function BibleReference({ reference, translation, children, onIns
   const loadingRef = useRef<boolean>(false); // Verhindert doppelte Requests
   const isChapter = isChapterOnly(reference);
 
-  // Lade Übersetzungen (lokal + API) beim Mount
+  // Lade Übersetzungen einmalig (modulweit gecacht) – verhindert N API-Calls bei vielen Referenzen
   useEffect(() => {
-    bibleAPI.getTranslations('deu')
-      .then((data) => {
-        if (data.details?.all) {
-          registerTranslationDetails(data.details.all);
+    let cancelled = false;
+    loadSharedBibleTranslations()
+      .then((codes) => {
+        if (!cancelled) {
+          setAvailableTranslations(codes);
         }
-        const codes = data.all?.length ? data.all : getAvailableTranslations();
-        setAvailableTranslations(codes);
       })
       .catch(() => {
-        setAvailableTranslations(getAvailableTranslations());
+        if (!cancelled) {
+          setAvailableTranslations(getAvailableTranslations());
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Lade Standard-Übersetzung aus Settings beim Mount
+  // Lade Standard-Übersetzung aus Settings (modulweit gecacht)
   useEffect(() => {
-    if (user) {
-      settingsAPI.getSettings()
-        .then((settings) => {
-          const defaultTrans = settings.default_bible_translation || 'LUT1912';
-          // Nur generische Codes normalisieren; API-IDs unverändert lassen
-          const normalized = ['LUT', 'ELB', 'SCH'].includes(defaultTrans)
-            ? normalizeTranslation(defaultTrans)
-            : defaultTrans;
-          setDefaultTranslation(normalized);
-          if (!translation) {
-            setCurrentTranslation(normalized);
-          }
-        })
-        .catch((err) => {
-          console.error('Error loading settings:', err);
-        });
+    if (!user) {
+      return;
     }
+    let cancelled = false;
+    loadSharedDefaultTranslation()
+      .then((normalized) => {
+        if (cancelled) return;
+        setDefaultTranslation(normalized);
+        if (!translation) {
+          setCurrentTranslation(normalized);
+        }
+      })
+      .catch((err) => {
+        console.error('Error loading settings:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user, translation]);
 
   // Lade Favoriten beim Öffnen des Popups (wenn eingeloggt)

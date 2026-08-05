@@ -7,7 +7,8 @@ import db, { initializeDatabase } from '../../config/database';
 import { 
   getHiddenFoldersConfig, 
   isPathInHiddenFolder,
-  listDirectory 
+  listDirectory,
+  invalidateHiddenFoldersCache
 } from '../../services/file.service';
 import fs from 'fs/promises';
 import path from 'path';
@@ -16,6 +17,7 @@ import os from 'os';
 describe('Hidden Folders Configuration', () => {
   beforeEach(() => {
     initializeDatabase();
+    invalidateHiddenFoldersCache();
     // Setze Standard-Konfiguration für Tests
     const defaultHiddenFolders = JSON.stringify([
       '._DAV',
@@ -30,17 +32,20 @@ describe('Hidden Folders Configuration', () => {
       INSERT OR REPLACE INTO app_config (key, value, description)
       VALUES ('hidden_folders', ?, 'Test config')
     `).run(defaultHiddenFolders);
+    invalidateHiddenFoldersCache();
   });
 
   afterEach(() => {
     // Cleanup
     db.prepare('DELETE FROM app_config WHERE key = ?').run('hidden_folders');
+    invalidateHiddenFoldersCache();
   });
 
   describe('getHiddenFoldersConfig', () => {
     it('should return default folders when config is missing', () => {
       // Entferne Config
       db.prepare('DELETE FROM app_config WHERE key = ?').run('hidden_folders');
+      invalidateHiddenFoldersCache();
       
       const config = getHiddenFoldersConfig();
       expect(config).toBeInstanceOf(Array);

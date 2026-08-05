@@ -538,6 +538,9 @@ export async function updateHiddenFolders(req: Request, res: Response): Promise<
         updated_at = CURRENT_TIMESTAMP
     `).run(foldersJson, req.user.id);
 
+    const { invalidateHiddenFoldersCache } = await import('../services/file.service');
+    invalidateHiddenFoldersCache();
+
     res.json({ message: 'Hidden folders updated successfully', folders });
   } catch (error: any) {
     console.error('Error updating hidden folders:', error);

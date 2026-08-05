@@ -477,7 +477,7 @@ export function searchIndex(
     }
   }
 
-  const matchingTokens = Array.from(matchingTokenSet).slice(0, 1200);
+  const matchingTokens = Array.from(matchingTokenSet).slice(0, 200);
 
   const fileNameMatchScore = (fileName: string): number => {
     const normalizedName = fileName.toLowerCase();
@@ -520,14 +520,14 @@ export function searchIndex(
     return score;
   };
 
-  // Hole alle Dateien mit Token-Matches
+  // Hole Dateien mit Token-Matches – mit hartem LIMIT gegen Explosion bei häufigen Wörtern
   if (matchingTokens.length > 0) {
     const placeholders = matchingTokens.map(() => '?').join(',');
     const scopedFileTypeClause = folderType ? 'AND si.file_type = ?' : '';
     const fileResultParams = [userId, ...(folderType ? [folderType] : []), ...matchingTokens];
 
     const fileResults = db.prepare(`
-      SELECT DISTINCT 
+      SELECT  
         si.id,
         si.file_path,
         si.file_type,
@@ -541,7 +541,8 @@ export function searchIndex(
       WHERE si.user_id = ? 
         ${scopedFileTypeClause}
         AND st.token IN (${placeholders})
-      ORDER BY si.id, st.line_number
+      ORDER BY si.id DESC, st.line_number ASC
+      LIMIT 2000
     `).all(...fileResultParams) as Array<{
       id: number;
       file_path: string;
@@ -554,6 +555,10 @@ export function searchIndex(
     }>;
 
     for (const row of fileResults) {
+      if (results.size >= 80 && !results.has(row.id)) {
+        continue;
+      }
+
       if (!results.has(row.id)) {
         results.set(row.id, {
           path: row.file_path,
@@ -568,7 +573,7 @@ export function searchIndex(
       const result = results.get(row.id)!;
 
       const existingMatch = result.matches.find((m) => m.line === row.line_number && m.context === row.context);
-      if (!existingMatch && result.matches.length < 8) {
+      if (!existingMatch && result.matches.length < 5) {
         result.matches.push({
           line: row.line_number,
           text: row.context,
@@ -650,7 +655,7 @@ export function searchIndex(
     return bTime - aTime;
   });
   
-  return filteredResults.map((entry) => ({
+  return filteredResults.slice(0, 50).map((entry) => ({
     path: entry.path,
     type: entry.type,
     name: entry.name,
