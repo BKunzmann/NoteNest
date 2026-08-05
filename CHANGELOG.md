@@ -14,6 +14,11 @@ Zum Release-Prozess und zur Versionsverwaltung siehe [`VERSIONIERUNG.md`](VERSIO
 - Optional Office-Dateien indexieren (`.docx`, `.pdf`, `.xlsx`)
 - Erweiterte Bibelstellen-Features, LDAP/NAS, Share-Links, Tags, Notiz-Versionierung
 
+## [1.4.1] - 2026-08-05
+
+### 🐛 Bugfixes
+- Backend-Build: implizite `any`-Typen in `bibleApi.service.ts` behoben (CI/Docker)
+
 ## [1.4.0] - 2026-08-05
 
 ### ✨ Features

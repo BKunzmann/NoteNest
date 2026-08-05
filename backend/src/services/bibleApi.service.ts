@@ -126,14 +126,14 @@ export async function fetchApiBibleCatalog(language?: string): Promise<ApiBibleT
       timeout: 15000
     } as AxiosRequestConfig);
 
-    const rawList = Array.isArray(response.data?.data) ? response.data.data : [];
-    let bibles = rawList
-      .map(mapApiBible)
-      .filter((b: ApiBibleTranslation | null): b is ApiBibleTranslation => Boolean(b));
+    const rawList: unknown[] = Array.isArray(response.data?.data) ? response.data.data : [];
+    let bibles: ApiBibleTranslation[] = rawList
+      .map((item) => mapApiBible(item))
+      .filter((b): b is ApiBibleTranslation => Boolean(b));
 
     // Client-seitiger Sprachfilter als Fallback, falls API den Parameter ignoriert
     if (langKey) {
-      bibles = bibles.filter((b) => {
+      bibles = bibles.filter((b: ApiBibleTranslation) => {
         const id = b.language.toLowerCase();
         const name = b.languageName.toLowerCase();
         if (langKey === 'deu' || langKey === 'de') {
@@ -146,7 +146,7 @@ export async function fetchApiBibleCatalog(language?: string): Promise<ApiBibleT
       });
     }
 
-    bibles.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    bibles.sort((a: ApiBibleTranslation, b: ApiBibleTranslation) => a.name.localeCompare(b.name, 'de'));
 
     const entry: CatalogCacheEntry = { fetchedAt: now, language: langKey, bibles };
     if (langKey) {
@@ -214,7 +214,10 @@ export async function getApiBibleLanguages(): Promise<Array<{ id: string; name: 
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  return Array.from(map.values()).sort(
+    (a: { id: string; name: string; count: number }, b: { id: string; name: string; count: number }) =>
+      a.name.localeCompare(b.name, 'de')
+  );
 }
 
 /**

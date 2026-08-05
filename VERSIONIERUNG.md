@@ -189,9 +189,9 @@ docker build \
 
 ## 📊 Version-Historie
 
-Aktuelle App-Version: **1.4.0** (siehe Root/`backend`/`frontend` `package.json` und `version.ts`).
+Aktuelle App-Version: **1.4.1** (siehe Root/`backend`/`frontend` `package.json` und `version.ts`).
 
-Siehe `CHANGELOG.md` für die vollständige Versionshistorie. Was seit 1.4.0 geändert wurde, steht unter `## [Unreleased]`.
+Siehe `CHANGELOG.md` für die vollständige Versionshistorie. Was seit 1.4.1 geändert wurde, steht unter `## [Unreleased]`.
 
 ## 🎓 Best Practices
 

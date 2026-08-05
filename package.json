@@ -1,6 +1,6 @@
 {
   "name": "notenest",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "NoteNest - Persönliche Notizen-App mit Bibelstellen-Referenzen",
   "private": true,
   "workspaces": [
