@@ -34,6 +34,27 @@ const NOTE_FILE_TYPES = new Set(['md', 'txt']);
 const METADATA_REFRESH_INTERVAL_MS = 60 * 1000; // 60 Sekunden
 const METADATA_REFRESH_MAX_DURATION_MS = 4 * 1000; // 4 Sekunden
 const METADATA_REFRESH_MAX_FILES = 2000;
+
+/** Debounce für Suchindex-Updates nach Autosave */
+const indexUpdateTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const INDEX_UPDATE_DEBOUNCE_MS = 8_000;
+
+function scheduleIndexUpdate(userId: number, filePath: string, type: 'private' | 'shared'): void {
+  const key = `${userId}:${type}:${filePath}`;
+  const existing = indexUpdateTimers.get(key);
+  if (existing) {
+    clearTimeout(existing);
+  }
+  const timer = setTimeout(() => {
+    indexUpdateTimers.delete(key);
+    import('./index.service').then(({ updateIndex }) => {
+      updateIndex(userId, filePath, type).catch((error) => {
+        console.warn(`Failed to update index after file update: ${filePath}`, error);
+      });
+    });
+  }, INDEX_UPDATE_DEBOUNCE_MS);
+  indexUpdateTimers.set(key, timer);
+}
 const metadataRefreshInFlight = new Set<string>();
 const metadataLastRefresh = new Map<string, number>();
 const TRASH_ROOT_FOLDER = '.notenest-trash';
@@ -1475,7 +1496,6 @@ export async function readFile(
   // Lese Datei
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    console.log('File read successfully:', { userId, filePath, contentLength: content.length });
     
     // Metrics-Tracking
     trackFileOperation('read', type);
@@ -1586,13 +1606,9 @@ export async function updateFile(
   // Metrics-Tracking
   trackFileOperation('update', type);
   
-  // Index aktualisieren (asynchron, blockiert nicht)
+  // Index aktualisieren (debounced – Autosave soll nicht bei jedem Tippen reindexieren)
   if (isIndexable(filePath)) {
-    import('./index.service').then(({ updateIndex }) => {
-      updateIndex(userId, filePath, type).catch((error) => {
-        console.warn(`Failed to update index after file update: ${filePath}`, error);
-      });
-    });
+    scheduleIndexUpdate(userId, filePath, type);
   }
 }
 
