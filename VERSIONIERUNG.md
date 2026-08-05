@@ -32,11 +32,23 @@ npm run version:release 1.0.0 "Initial release"
 
 ## 📝 CHANGELOG.md
 
-Alle Änderungen werden in `CHANGELOG.md` dokumentiert.
+Alle Änderungen werden in **einer** Datei `CHANGELOG.md` dokumentiert (kein separates Unreleased-File).
+
+### Aufbau
+
+1. Kurzer Header (Keep a Changelog + SemVer + Verweis auf diese Datei)
+2. **`## [Unreleased]`** ganz oben – nur Änderungen seit dem letzten Release
+3. Danach Versionsabschnitte neu → alt: `## [x.y.z] - YYYY-MM-DD`
+4. Beim Release (`npm run version:release`) wird `## [Unreleased]` zu `## [x.y.z] - Datum` und eine leere Unreleased-Sektion neu angelegt
 
 ### Format
 
 ```markdown
+## [Unreleased]
+
+### ✨ Features
+- Noch nicht released
+
 ## [1.0.0] - 2024-01-15
 
 ### ✨ Features
@@ -44,9 +56,6 @@ Alle Änderungen werden in `CHANGELOG.md` dokumentiert.
 
 ### 🐛 Bugfixes
 - Behobener Fehler Y
-
-### 🔒 Sicherheit
-- Sicherheits-Update Z
 ```
 
 ### Kategorien
@@ -61,6 +70,7 @@ Alle Änderungen werden in `CHANGELOG.md` dokumentiert.
 - **⚡ Performance**: Performance-Verbesserungen
 - **🗑️ Deprecated**: Veraltete Features
 
+Prozess- und Schema-Texte gehören hierher, nicht in `CHANGELOG.md`.
 ## 🔖 Git-Tags
 
 Jedes Release erhält einen Git-Tag:
@@ -177,9 +187,9 @@ docker build \
 
 ## 📊 Version-Historie
 
-Aktuelle Version: **1.0.0**
+Aktuelle App-Version: **1.3.2** (siehe Root/`backend`/`frontend` `package.json` und `version.ts`).
 
-Siehe `CHANGELOG.md` für vollständige Versionshistorie.
+Siehe `CHANGELOG.md` für die vollständige Versionshistorie. Was seit 1.3.2 geändert wurde, steht unter `## [Unreleased]`.
 
 ## 🎓 Best Practices
 

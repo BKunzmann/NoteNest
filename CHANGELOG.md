@@ -5,382 +5,167 @@ Alle wichtigen Änderungen in diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt folgt [Semantic Versioning](https://semver.org/lang/de/).
 
-## [1.0.0] - 2025-12-10
+Zum Release-Prozess und zur Versionsverwaltung siehe [`VERSIONIERUNG.md`](VERSIONIERUNG.md).
 
 ## [Unreleased]
 
-### 🛠️ Suche-, Sidebar- und Index-Optimierungen (2026-02-13)
-- **Editor-Toolbar angepasst**:
-  - Die Bezeichnungen `Aa` und `Listen` stehen jetzt wieder direkt im jeweiligen Auswahlfeld (Button), nicht mehr daneben.
-- **Sidebar global vereinheitlicht**:
-  - `Nur Notizen / Alle Dateien` ist jetzt einmalig global oben und steuert private + geteilte Ansicht gemeinsam.
-  - `In Sidebar filtern...` ist ebenfalls global oben und filtert beide Rubriken gleichzeitig.
-  - Der Filter berücksichtigt weiterhin Dateinamen **und Ordnernamen**.
-- **Bessere Sichtbarkeit neuer Dateien vom physischen Laufwerk**:
-  - Sidebar-Ansichten aktualisieren sich zyklisch im geöffneten Zustand.
-  - Metadaten-Refresh für „Zuletzt“-Ansicht wird auch bei aktivem Notizen-Filter ausgelöst.
-  - Refresh-Intervalle wurden für schnellere Sichtbarkeit angepasst und gleichzeitig über Laufzeit-/Mengenlimits begrenzt.
-- **Zentrale Suche relevanter und schneller**:
-  - Matching-Logik im Index wurde verschlankt (keine breit streuenden Kurz-Token-Treffer mehr).
-  - Dateinamen-Treffer (exakt/präfix/enthält) werden deutlich höher priorisiert.
-  - Ergebnis-Sortierung bevorzugt sinnvolle Dateiname-Treffer vor reinem Kontextrauschen.
-  - Anzahl der pro Datei gezeigten Kontext-Matches wurde begrenzt, um Suchergebnisse lesbarer zu halten.
-- **Index-Status im User-Menü**:
-  - Neuer benutzerbezogener Indexstatus inkl. Datei-/Token-Zähler und letztem Indexzeitpunkt.
-  - Re-Indexierung kann direkt im User-Menü angestoßen werden.
-- **Optionale Server-Auslastung im User-Menü**:
-  - Anzeige von RAM-Werten und CPU-Load (1m/5m/15m + Kernanzahl).
-
-### ✅ Tests
-- Backend: Jest-Suite erfolgreich (inkl. bestehender Integrations-/Unit-Tests).
-- Frontend: Vitest erfolgreich.
-- Backend + Frontend Build erfolgreich.
-
-### 🛠️ Editor-, Offline- und Versions-Feinschliff (2026-02-13)
-- **Editor-Listensteuerung erweitert**:
-  - Automatische Listen-Erkennung im WYSIWYG kann jetzt direkt in der Toolbar aktiviert/deaktiviert werden.
-  - Auswahlfeld "Listen" bietet wieder definierte Zwischenstufen (Ebene 1/2) fuer Punkte, Bindestrich und nummerierte Listen.
-- **Bibel-Tooltip im WYSIWYG gehaertet**:
-  - Leere Antworten fuehren nicht mehr zu einem "leeren" Tooltip.
-  - Fehlertexte werden nutzerfreundlich normalisiert (z. B. bei nicht importierter Bibeldatenbank oder Netzwerkproblemen).
-- **Bibel-Uebersetzung vereinheitlicht**:
-  - Markdown-Editor verwendet konsistent normalisierte Uebersetzungs-Codes mit `LUT1912` als robustem Fallback.
-- **Versionierung fortgefuehrt**:
-  - Projektversion auf `1.3.1` angehoben (Root, Backend, Frontend und zentrale Version-Konfiguration).
-  - Dadurch ist die aktualisierte Versionsnummer im User-Menue direkt sichtbar.
-
-### ✅ Tests
-- Frontend: TypeScript + Vite Build erfolgreich.
-
-### 🛠️ UX/Index-Optimierungen (2026-02-10 – Iteration 2)
-- **Header-Fix**: Bei Nicht-Admins wird kein `0`-Artefakt mehr statt der Krone angezeigt.
-- **Version & Autor in GUI**: Im Benutzer-Menü wird jetzt ein Hinweis `vX.Y.Z · © C-Autor` angezeigt.
-- **Editor verbessert**:
-  - Auto-Save speichert nun verlässlich im Hintergrund inkl. Flush beim Verlassen.
-  - Undo/Redo bleibt verfügbar, während der gespeicherte Stand korrekt nachgeführt wird.
-  - Toolbar ist auf kleinen Bildschirmen kompakter (einzeilig scrollbar statt mehrzeilig blockierend).
-- **„Zuletzt“-Ansicht stabilisiert**:
-  - Gruppierung auf **„Letzte 7 Tage“**, **„Letzte 30 Tage“**, **„Jahre“** umgestellt.
-  - Candidate-Merging aus `file_metadata` + `search_index`, inkl. Existenzprüfung gegen das Dateisystem.
-  - Schnellere Bereinigung veralteter Indexeinträge bei extern gelöschten Dateien.
-  - Optionaler asynchroner Metadata-Refresh zur Vervollständigung bei großen Datenbeständen.
-- **Nur-Notizen-Filter erweitert**:
-  - In der Ordneransicht werden bei aktivem Filter nur noch Dateien **und Ordner mit enthaltenen Notizen** angezeigt.
-- **Ordnernavigation verbessert**:
-  - Stufenweise Rücknavigation (Breadcrumb + „Zurück“) in der Sidebar-Ordneransicht.
-- **Copy/Move robust gemacht**:
-  - Zielordnerauswahl jetzt über **FolderNavigator** (kein Freitext).
-  - Konflikt-Fallback für gleiche Namen (` (1)`, ` (2)`, …) in Frontend und Backend.
-- **Neue Datei/Notiz**:
-  - Vorgeschlagener Name beim Erstellen: `YYYY-MM-DD Neu`.
-- **Suche deutlich verbessert**:
-  - Suchverlauf (anzeigen, einzelne Einträge löschen, alle löschen).
-  - Klick/Tipp auf `×` leert das Suchfeld.
-  - Mobile Darstellung verbessert (lesbares Vollflächen-Overlay statt schmaler Ergebnisliste).
-- **Bibelstellen stabilisiert**:
-  - API respektiert jetzt explizit übergebene Übersetzungen (User-Default nur als Fallback).
-  - WYSIWYG-Popup wird bei wiederholten Klicks auf dieselbe Stelle korrekt neu geöffnet.
-
-### ✅ Tests
-- Backend: Jest vollständig erfolgreich (`12/12` Suites, `75/75` Tests).
-- Backend: TypeScript-Build erfolgreich.
-- Frontend: Vitest erfolgreich (`1/1` Datei, `2/2` Tests).
-- Frontend: TypeScript + Vite Build erfolgreich.
-
-### 🛠️ Stabilisierung & UX-Verbesserungen (2026-02-10)
-- **Admin-Navigation**: Die Admin-Krone im Header ist wieder sichtbar und führt erneut ins Adminpanel.
-- **Suche repariert**: Die Notizsuche funktioniert wieder zuverlässig (SQL-Fehler in der Indexabfrage behoben).
-- **„Zuletzt bearbeitet“ beschleunigt**:
-  - Umstellung auf **indexbasierte** Auslieferung statt rekursivem Dateisystem-Scan.
-  - Fallback-Merging aus bestehendem Suchindex.
-  - Zusätzliche Pflege von Datei-Metadaten bei Listen-/Create-/Update-/Move-/Copy-/Delete-Operationen.
-- **Gruppierung angepasst**: Statt „Älter“ werden ältere Einträge nun nach **Jahr** gruppiert (z. B. `2025`, `2024`).
-- **Sidebar-Verhalten verbessert**:
-  - Sidebar wird beim Einklappen nicht mehr unmontiert (State bleibt erhalten).
-  - Ordnerpfad bleibt erhalten, Selektion bleibt sichtbar, bis die Notiz explizit geschlossen wird.
-- **Kontextmenüs repariert**:
-  - Rechtsklick/Longpress-Menüs (Sidebar + 3-Punkte im Header) reagieren wieder korrekt auf Aktionen.
-- **Pfadauswahl gehärtet**:
-  - „Neue Datei…“ nutzt jetzt Ordnernavigation statt freiem Zielpfad-Textfeld.
-  - Wechsel des Ablagebereichs setzt den Zielordner auf den jeweiligen Bereichs-Start zurück.
-  - Einstellungen verwenden nun Dropdown-/Navigationsauswahl für private/geteilte Pfade und Standardablage.
-- **Bottom-Toolbar („Neu“) korrigiert**:
-  - In „Zuletzt“ wird der Standardordner vorgeschlagen.
-  - In „Ordner“ wird der aktuell geöffnete Ordnerpfad verwendet.
-
-### ✅ Tests
-- Backend: vollständige Jest-Suite erfolgreich (`12/12` Suites, `73/73` Tests).
-- Frontend: Build (TypeScript + Vite) erfolgreich.
-- Frontend: Vitest-Suite erfolgreich.
-
 ### ✨ Features
-- **Notiz-/Dateiaktionen per Kontextmenü**:
-  - Rechtsklick und Longpress in der Sidebar und im Notiz-Header
-  - Aktionen: **Löschen**, **Kopieren**, **Verschieben**
-  - Neuer Dialog für Copy/Move mit Zieltyp, Zielordner und Zielname
-- **Neue Standardablage für Notizen pro Benutzer**:
-  - Neue Benutzereinstellungen:
-    - `default_note_type` (`private`/`shared`)
-    - `default_note_folder_path`
-    - `sidebar_view_mode` (`recent`/`folders`)
-  - Startseite (`/notes`) bietet „Neue Notiz im Standardordner“
-- **Sidebar-Ansicht „Zuletzt bearbeitet“ (umschaltbar)**:
-  - Standardansicht gruppiert nach Zeiträumen (Heute, Gestern, letzte 7/30 Tage, älter)
-  - Umschaltbar auf klassische Ordneransicht
-  - Persistenz der Ansicht pro Benutzer
-- **Datei-API erweitert**:
-  - `GET /api/files/recent` für rekursive „zuletzt bearbeitet“-Listen
-  - `POST /api/files/copy` für Datei-/Ordnerkopien
-  - Verbesserter Move-Fallback bei Cross-Device-Moves (`EXDEV`)
-
-### 🐛 Bugfixes
-- **Erstell-Dialog (Neu/Ordner)** zeigt jetzt klar den Zielbereich und Zielordner an und erlaubt die Auswahl direkt im Dialog.
-- **Pfad-/Einstellungsvalidierung** in den Settings wurde erweitert (inkl. Erstellung/Prüfung des Standardordners).
-
-### ✅ Tests
-- Neue Backend-Tests:
-  - `file.service.copy-recent.test.ts`
-  - `settings.service.defaults.test.ts`
-- Neuer Frontend-Test:
-  - `recentGrouping.test.ts`
-
-### ✨ Features
-- **Volltextsuche mit Index**: Hochperformante Index-basierte Suche
-  - **10-100x schneller** als vorherige Dateisystem-Suche
-  - **Fuzzy Search** mit Tippfehler-Toleranz (Levenshtein-Distanz ≤ 2)
-  - **Automatische Indexierung** bei Datei-Operationen (create/update/delete/move)
-  - **Parallele Indexierung** für bessere Performance (konfigurierbar)
-  - **Relevanz-Scoring** für optimale Ergebnis-Sortierung
-  - Unterstützt alle Markdown-Varianten (`.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.mkdown`, `.mdwn`, `.mdtxt`, `.mdtext`) und `.txt`
-  - **Admin-Endpoints** für manuelle Re-Indexierung und Index-Statistiken
-  - Invertierter Index mit Tokenisierung für schnelle Suche
-  - Inkrementelle Updates (nur geänderte Dateien werden neu indexiert)
-- **Admin-Panel**: Benutzerverwaltung für Administratoren
-  - Benutzer erstellen, löschen, deaktivieren
-  - Passwort zurücksetzen
-  - Admin-Rechte verwalten
-  - Benutzer-Status ändern
-
-### 🐛 Bugfixes
-- **Authentifizierung**: "Angemeldet bleiben" funktioniert jetzt korrekt
-  - localStorage vs. sessionStorage abhängig von User-Wahl
-  - Race Condition beim App-Start behoben
-  - checkAuth() wird nur noch einmal pro Reload aufgerufen
-  - Access Token (15 Min) wird automatisch durch Refresh Token (7 Tage) erneuert
-
-### 🔧 Technische Details
-- **Datenbankschema erweitert**:
-  - `app_config` Tabelle für globale Konfiguration
-  - `search_index` Tabelle für indexierte Dateien
-  - `search_tokens` Tabelle für invertierten Index
-  - Indizes für optimale Performance
-- **Index-Service**:
-  - Tokenisierung mit Unicode-Support (Umlaute)
-  - Levenshtein-Distanz für Fuzzy Search
-  - Content-Hash (SHA-256) für Änderungserkennung
-  - Batch-Insert für Token-Performance
-- **Rate Limiting**: Angepasst für Development und Production
-  - Development: 20 Login-Versuche / 5 Minuten
-  - Production: 5 Login-Versuche / 15 Minuten
-- **Docker-Konfiguration**: Optimiert und vereinfacht
-  - `.env.example` und `.env.production.example` Templates
-  - Separate docker-compose.yml für Dev und Production
-  - Test-Daten aus Repository entfernt
-  - Entrypoint-Script verbessert (behandelt .env als Verzeichnis)
+- **API.Bible-Integration**: Dynamischer Übersetzungskatalog von `https://rest.api.bible`
+  - Sprachfilter und Auswahl der Übersetzung in den Einstellungen
+  - Vers-/Kapitelabruf über API-Passages neben lokalen Bibeln
+  - Konfiguration über `BIBLE_API_KEY`, `BIBLE_API_ENABLED`, `BIBLE_API_URL`
+- **Lokale Bibel-DB**: Auto-Import lokaler Bibeln, Admin-Hebel für Neuimport und Status
+- **Papierkorb**: Globale Trash-Dialoge, Wiederherstellung und erweiterte Trash-Aktionen
+- **Sidebar**: Einheitliche Aktionen, resizebare Sidebar, stabileres Refresh-/Loading-Verhalten
 
 ### ⚡ Performance
-- **Volltextsuche**: 10-100x schneller durch Index-basierte Suche
-  - Vorher: O(n) - jede Datei muss bei jeder Suche gelesen werden
-  - Jetzt: O(log n) - Suche im Index, nur relevante Dateien werden geladen
-  - Beispiel: 1000 Dateien - von ~30-60 Sekunden auf ~0.2-0.5 Sekunden
+- Trägheit bei vielen Notizen behoben (Recent-Limit, längeres Poll-Intervall, begrenzte Stats)
+- Suche mit LIMIT und max. ~50 Ergebnissen
+- Debounced Undo-Historie und Offline-Pending-Dedupe
+- Geteilter Cache für Bibel-Übersetzung/Settings; Autosave ~4s
+- Weniger teure Listen: kein Folder-`listFiles` im Recent-Modus, günstigeres `listDirectory`
+- Zustand-Selektoren, memoisiertes `FileItem`, begrenzte Recent-Gruppen
+- Debounced Suchindex-Updates nach Save (~8s)
+
+### 🔧 Technische Details
+- Setup-Branches nach `master` zusammengeführt (`AGENTS.md`, Vite/`import.meta.env`, `.gitignore`)
+- Docker-Action: Backend-Install-Schritt entblockt
+
+### Geplant
+- Erweiterte Suche (Phrasen, Wildcards, Boolesche Operatoren)
+- Optional Office-Dateien indexieren (`.docx`, `.pdf`, `.xlsx`)
+- Erweiterte Bibelstellen-Features, LDAP/NAS, Share-Links, Tags, Notiz-Versionierung
+
+## [1.3.2] - 2026-02-24
+
+### 🎨 UI/UX
+- Editor-Toolbar: Bezeichnungen `Aa` und `Listen` wieder im jeweiligen Auswahlfeld
+- Sidebar global vereinheitlicht: `Nur Notizen / Alle Dateien` und Filter steuern private + geteilte Ansicht
+- Filter berücksichtigt Dateinamen und Ordnernamen
+- Sidebar aktualisiert sich zyklisch; Metadaten-Refresh auch bei aktivem Notizen-Filter
+- Index-Status und optionale Server-Auslastung im User-Menü
+- Papierkorb mit Wiederherstellung; resizebare Sidebar; Notiz-Auto-Umbenennung
+
+### ✨ Features
+- Zentrale Suche relevanter und schneller (Dateinamen-Priorität, begrenzte Kontext-Matches)
+- Re-Indexierung direkt aus dem User-Menü anstoßbar
+
+### ✅ Tests
+- Backend Jest-Suite und Frontend Vitest erfolgreich; Builds erfolgreich
+
+## [1.3.1] - 2026-02-16
+
+### 🎨 UI/UX
+- Automatische Listen-Erkennung im WYSIWYG in der Toolbar ein-/ausschaltbar
+- Listen-Auswahl mit definierten Zwischenstufen (Ebene 1/2)
+
+### 🐛 Bugfixes
+- Bibel-Tooltip: leere Antworten und Fehlertexte nutzerfreundlich normalisiert
+- Markdown-Editor: Übersetzungs-Codes normalisiert, Fallback `LUT1912`
+
+### 🔧 Technische Details
+- Projektversion auf `1.3.1` synchronisiert (Root, Backend, Frontend, `version.ts`)
+
+## [1.3.0] - 2026-02-10
+
+### 🎨 UI/UX
+- Header: kein `0`-Artefakt mehr bei Nicht-Admins statt der Admin-Krone
+- Version & Autor im Benutzer-Menü (`vX.Y.Z · © C-Autor`)
+- Editor: zuverlässiges Auto-Save inkl. Flush; Undo/Redo bleibt verfügbar
+- Toolbar auf kleinen Bildschirmen kompakter (scrollbar)
+- „Zuletzt“-Gruppierung: Letzte 7/30 Tage und Jahre
+- Ordnernavigation: stufenweise Rücknavigation (Breadcrumb + Zurück)
+- Vorgeschlagener Dateiname: `YYYY-MM-DD Neu`
+- Suche: Verlauf, Feld leeren per `×`, bessere Mobile-Darstellung
+
+### 🐛 Bugfixes
+- Copy/Move über FolderNavigator; Konflikt-Fallback (` (1)`, ` (2)`, …)
+- Nur-Notizen-Filter zeigt Ordner mit enthaltenen Notizen
+- Bibelstellen: API respektiert übergebene Übersetzung; WYSIWYG-Popup öffnet korrekt erneut
+
+### ⚡ Performance
+- Candidate-Merging aus `file_metadata` + `search_index` mit Existenzprüfung
+- Schnellere Bereinigung veralteter Indexeinträge; optionaler Metadata-Refresh
+
+## [1.2.0] - 2026-02-10
+
+### 🐛 Bugfixes
+- Admin-Navigation (Krone) wieder sichtbar und funktionsfähig
+- Notizsuche repariert (SQL-Fehler in der Indexabfrage)
+- Kontextmenüs (Rechtsklick/Longpress) reagieren wieder korrekt
+- Bottom-Toolbar „Neu“: Standardordner in „Zuletzt“, aktueller Ordner in Ordneransicht
+
+### ⚡ Performance
+- „Zuletzt bearbeitet“ indexbasiert statt rekursivem Dateisystem-Scan
+- Metadaten-Pflege bei Listen-/Create-/Update-/Move-/Copy-/Delete
+
+### 🎨 UI/UX
+- Ältere Einträge nach Jahr gruppiert
+- Sidebar behält State beim Einklappen; Selektion bleibt bis zum Schließen der Notiz
+- Pfadauswahl gehärtet (FolderNavigator statt Freitext in Dialogen und Settings)
+
+## [1.1.0] - 2026-02-09
+
+### ✨ Features
+- Notiz-/Dateiaktionen per Kontextmenü (Löschen, Kopieren, Verschieben)
+- Standardablage pro Benutzer (`default_note_type`, `default_note_folder_path`, `sidebar_view_mode`)
+- Sidebar-Ansicht „Zuletzt bearbeitet“ (umschaltbar zur Ordneransicht)
+- Datei-API: `GET /api/files/recent`, `POST /api/files/copy`, robuster Move bei `EXDEV`
+- Index-basierte Volltextsuche mit Fuzzy Search (Levenshtein ≤ 2)
+- Automatische Indexierung, Relevanz-Scoring, Admin-Endpoints für Re-Index und Stats
+- Versteckte Ordner (Hidden Folders)
+- Admin-Panel: Benutzerverwaltung (erstellen, löschen, deaktivieren, Passwort, Rechte)
+
+### 🐛 Bugfixes
+- Erstell-Dialog zeigt Zielbereich/-ordner klar und erlaubt Auswahl
+- Pfad-/Einstellungsvalidierung inkl. Standardordner
+- „Angemeldet bleiben“: Storage und Token-Erneuerung korrigiert
+- Build-/CI-Stabilisierung (Frontend `import.meta.env`, Admin/Index-Services, `api.ts`)
+
+### 🔧 Technische Details
+- Schema: `app_config`, `search_index`, `search_tokens`
+- Rate Limiting für Dev/Production angepasst
+- Docker-Konfiguration vereinfacht (`.env`-Templates, Compose)
+
+### ⚡ Performance
+- Volltextsuche deutlich schneller durch Index statt Dateisystem-Scan
 
 ### 📚 Dokumentation
-- **SEARCH_INDEX.md**: Vollständige Dokumentation der Index-Funktionalität
-  - Technische Details
-  - API-Dokumentation
-  - Konfiguration
-  - Troubleshooting
+- `SEARCH_INDEX.md` für Index-Funktionalität
 
-### Geplant für zukünftige Releases
-- **Erweiterte Suche**: Phrasensuche, Wildcards, Boolesche Operatoren
-- **Office-Dateien**: Optional `.docx`, `.pdf`, `.xlsx` indexieren
-- Erweiterte Bibelstellen-Features (Vergleichsansicht, Vers-Notizen, erweiterte Versbereiche)
-- LDAP/NAS-Integration (optional)
-- Share-Links
-- Tags & Kategorien
-- Versionierung von Notizen
+### ✅ Tests
+- Backend: `file.service.copy-recent`, `settings.service.defaults`
+- Frontend: `recentGrouping.test.ts`
 
 ## [1.0.0] - 2025-12-14
 
 ### ✨ Features
-- **Authentifizierung**: JWT-basierte Authentifizierung mit Refresh-Tokens
-  - Login/Registrierung
-  - "Angemeldet bleiben" Funktionalität
-  - Automatische Token-Erneuerung
-- **Notizen-Verwaltung**: Vollständige CRUD-Operationen für Notizen
-  - Private und geteilte Ordner
-  - Markdown-Editor mit Live-Vorschau
-  - WYSIWYG-Editor (What You See Is What You Get)
-  - Split-View (Editor + Vorschau)
-  - Automatisches Speichern
-  - Undo/Redo-Funktionalität
-- **Bibelstellen-Integration**: Umfassende Bibelstellen-Funktionalität
-  - Automatische Erkennung von Bibelstellen im Text
-  - Hover-Tooltips mit Vers-Text
-  - Interaktive Popups mit vollständigem Vers/Kapitel
-  - Mehrere Übersetzungen unterstützt:
-    - Luther 1912 (LUT1912)
-    - Luther 1545 (LUT1545)
-    - Elberfelder 1905 (ELB1905)
-    - Schlachter 1951 (SCH1951)
-    - Elberfelder (ELB) via API.Bible
-  - Favoriten-System für Bibelübersetzungen
-  - Standard-Übersetzung konfigurierbar
-  - "In Notiz übernehmen" Funktionalität
-  - Bibelstellen-Links in WYSIWYG-Editor
-- **Export-Funktionen**: Export von Notizen in verschiedene Formate
-  - PDF-Export (A4/A5)
-  - Word-Dokument-Export (.docx)
-  - Markdown-Export (.md)
-  - Bibelstellen-Links in Exporten
-- **Volltextsuche**: Durchsucht alle Notizen
-  - Live-Suche mit Debouncing
-  - Kontextuelle Treffer-Anzeige
-  - Deep-Linking zu Ergebnissen
-  - Erweiterte Treffer-Anzeige
-- **Einstellungen**: Umfassende Konfigurationsmöglichkeiten
-  - Theme-Auswahl (Hell/Dunkel)
-  - Standard-Bibelübersetzung
-  - Bibelübersetzungs-Favoriten
-  - Export-Größe (A4/A5)
-  - Ordner-Pfade konfigurierbar
-- **PWA-Funktionalität**: Progressive Web App
-  - Offline-Funktionalität
-  - IndexedDB-Caching
-  - Automatische Synchronisation
-  - Offline-Indikator
-- **Production-Features**: Enterprise-ready Features
-  - Rate Limiting (Login, API, Export)
-  - Strukturiertes Logging (Winston)
-  - Log-Rotation (täglich, 30 Tage Retention)
-  - Health-Check Endpoint
-  - Prometheus Metrics
-  - Log-Analyse
-  - Erweiterte Tests (Unit + Integration)
+- JWT-Authentifizierung mit Refresh-Tokens, Login/Registrierung, „Angemeldet bleiben“
+- Notizen-CRUD: private/geteilte Ordner, Markdown-, WYSIWYG- und Split-View-Editor
+- Auto-Save, Undo/Redo
+- Bibelstellen: Erkennung, Hover-Tooltips, Popups, lokale Übersetzungen und Favoriten
+- Export: PDF (A4/A5), Word (`.docx`), Markdown
+- Volltextsuche mit Live-Suche, Kontext und Deep-Linking
+- Einstellungen: Theme, Bibelübersetzung, Export-Größe, Ordnerpfade
+- PWA: Offline, IndexedDB-Caching, Sync
+- Production: Rate Limiting, Winston-Logging, Health-Check, Prometheus, Tests
 
 ### 🔧 Technische Details
-- **Backend**: Node.js + Express + TypeScript
-  - SQLite-Datenbank (better-sqlite3)
-  - JWT-Authentifizierung
-  - Argon2id Passwort-Hashing
-  - Express Rate Limiting
-  - Winston Logging
-  - Prometheus Metrics
-- **Frontend**: React + TypeScript + Vite
-  - Zustand State Management
-  - React Router
-  - Markdown-Rendering (react-markdown)
-  - WYSIWYG-Editor (contentEditable)
-  - PWA-Support
-- **Docker**: Multi-Stage Build
-  - Production-optimiert
-  - Alpine Linux
-  - Puppeteer für PDF-Export
+- Backend: Node.js, Express, TypeScript, SQLite, Argon2id
+- Frontend: React, TypeScript, Vite, Zustand
+- Docker Multi-Stage Build (Alpine, Puppeteer für PDF)
 
 ### 🐛 Bugfixes
-- Korrigierte Bibelstellen-Erkennung für mehrstellige Kapitelnummern
-- Behobene Deep-Linking-Probleme bei Suchergebnissen
-- Korrigierte "Weitere Treffer" Funktionalität in Suche
-- Behobene WYSIWYG-Editor Cursor-Position beim Einfügen
-- Korrigierte "Angemeldet bleiben" Funktionalität
-- Behobene Markdown-Export-Funktionalität
+- Bibelstellen mit mehrstelligen Kapitelnummern
+- Deep-Linking und „Weitere Treffer“ in der Suche
+- WYSIWYG-Cursor beim Einfügen
+- „Angemeldet bleiben“ und Markdown-Export
 
 ### 🔒 Sicherheit
-- Path Traversal Prevention
-- Input Validation
-- Rate Limiting
-- JWT Token Security
-- Argon2id Passwort-Hashing
+- Path Traversal Prevention, Input Validation, Rate Limiting, JWT, Argon2id
 
 ### 📚 Dokumentation
-- Vollständige Architektur-Dokumentation (`ARCHITEKTUR_PLANUNG.md`)
-- Deployment-Checkliste (`DEPLOYMENT_CHECKLISTE.md`)
-- Monitoring-Setup (`MONITORING_SETUP.md`)
-- Testing-Guide (`TESTING_GUIDE.md`)
-- Production-Features Übersicht (`PRODUCTION_FEATURES_COMPLETE.md`)
+- Architektur, Deployment, Monitoring, Testing, Production-Features
 
 ### 🎨 UI/UX
-- Responsive Design
-- iPhone-Notes-App Philosophie
-- Intuitive Navigation
-- Keyboard Shortcuts
-- Dark/Light Theme
-
----
-
-## Versionierungs-Schema
-
-Wir folgen [Semantic Versioning](https://semver.org/lang/de/):
-
-- **MAJOR** (X.0.0): Breaking Changes
-- **MINOR** (0.X.0): Neue Features (rückwärtskompatibel)
-- **PATCH** (0.0.X): Bugfixes (rückwärtskompatibel)
-
-### Kategorien
-
-- **✨ Features**: Neue Funktionalitäten
-- **🐛 Bugfixes**: Fehlerbehebungen
-- **🔒 Sicherheit**: Sicherheitsrelevante Änderungen
-- **🔧 Technische Details**: Technische Verbesserungen
-- **📚 Dokumentation**: Dokumentations-Updates
-- **🎨 UI/UX**: UI/UX-Verbesserungen
-- **♻️ Refactoring**: Code-Verbesserungen ohne Funktionsänderung
-- **⚡ Performance**: Performance-Verbesserungen
-- **🗑️ Deprecated**: Veraltete Features
-
----
-
-## Release-Prozess
-
-### Vor einem Release
-
-1. **CHANGELOG.md aktualisieren**
-   - Alle Änderungen seit letztem Release dokumentieren
-   - Version und Datum setzen
-   - Kategorien korrekt zuordnen
-
-2. **Version in package.json aktualisieren**
-   - Root `package.json`
-   - `backend/package.json`
-   - `frontend/package.json`
-
-3. **Tests ausführen**
-   ```bash
-   npm test
-   ```
-
-4. **Build testen**
-   ```bash
-   npm run build
-   ```
-
-5. **Git-Tag erstellen**
-   ```bash
-   git tag -a v1.0.0 -m "Release v1.0.0"
-   git push origin v1.0.0
-   ```
-
-6. **Release-Notes erstellen**
-   - GitHub Release (falls verwendet)
-   - Zusammenfassung der wichtigsten Änderungen
-
-### Nach einem Release
-
-1. **Neue "Unreleased" Sektion in CHANGELOG.md**
-2. **Version in package.json erhöhen** (z.B. 1.0.1 für Patch)
-
----
-
-## Historische Releases
-
-*(Wird mit jedem Release aktualisiert)*
+- Responsive Design, iPhone-Notes-Philosophie, Dark/Light Theme, Shortcuts
