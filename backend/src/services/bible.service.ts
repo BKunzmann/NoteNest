@@ -279,8 +279,29 @@ export async function getBibleVerse(
       };
     }
     
-    // Versbereich nicht lokal gefunden - für API-Übersetzungen nicht unterstützt (zu komplex)
-    console.log(`Verse range not found locally for ${finalTranslation}`);
+    // Versbereich nicht lokal → API.Bible Passage
+    try {
+      const { isAPITranslation, getPassageFromAPIBible } = await import('./bibleApi.service');
+      if (isAPITranslation(translation) || isAPITranslation(finalTranslation)) {
+        const apiText = await getPassageFromAPIBible(
+          parsed.book,
+          parsed.chapter,
+          translation || finalTranslation,
+          parsed.verse,
+          parsed.verseEnd
+        );
+        if (apiText) {
+          return {
+            text: apiText,
+            reference: parsed.originalText,
+            translation: finalTranslation
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('API verse-range lookup failed:', error);
+    }
+    console.log(`Verse range not found for ${finalTranslation}`);
     return null;
   } else {
     // Einzelner Vers
@@ -306,68 +327,43 @@ export async function getBibleVerse(
       };
     }
     
-    // Lokaler Vers nicht gefunden - versuche API
+    // Lokaler Vers nicht gefunden - versuche API.Bible / SuperSearch
     console.log(`Verse not found locally for ${finalTranslation}, trying API...`);
-    
-    // Prüfe, ob es eine API-/Fallback-Übersetzung ist.
-    // Wichtig: Bei generischen Codes (z. B. LUT) prüfen wir auch die normalisierte Variante (LUT1912).
-    let isAPITranslation = false;
+
+    const availableLocalTranslations = ['LUT1912', 'LUT1545', 'ELB1905', 'SCH1951'];
+    const apiTranslation = translation || finalTranslation;
+
     try {
-      const { isAPITranslation: checkAPITranslation } = await import('./bibleApi.service');
-      isAPITranslation = checkAPITranslation(translation) || checkAPITranslation(finalTranslation);
-    } catch (error) {
-      console.warn('Could not check API translation:', error);
-    }
-    
-    // Fallback: Prüfe manuell für gängige generische Codes
-    if (!isAPITranslation) {
-      isAPITranslation = ['LUT', 'ELB', 'SCH'].includes(translation) ||
-        ['LUT1912', 'LUT1545', 'ELB1905', 'SCH1951'].includes(finalTranslation);
-    }
-    
-    if (isAPITranslation) {
-      try {
-        const { getVerseFromAPI } = await import('./bibleApi.service');
-        const apiTranslation = finalTranslation || translation;
-        const apiText = await getVerseFromAPI(parsed.book, parsed.chapter, parsed.verse, apiTranslation);
-        
-        if (apiText) {
-          return {
-            text: apiText,
-            reference: parsed.originalText,
-            translation: apiTranslation
-          };
-        }
-      } catch (error) {
-        console.error('Error fetching from API:', error);
+      const { getVerseFromAPI, resolveApiBibleId, isAPITranslation: checkAPI } = await import('./bibleApi.service');
+      const apiText = await getVerseFromAPI(parsed.book, parsed.chapter, parsed.verse, apiTranslation);
+
+      if (apiText) {
+        return {
+          text: apiText,
+          reference: parsed.originalText,
+          translation: apiTranslation
+        };
       }
+
+      const knownLocal = availableLocalTranslations.includes(finalTranslation);
+      const knownApi = checkAPI(apiTranslation) || Boolean(await resolveApiBibleId(apiTranslation));
+      if (!knownLocal && !knownApi) {
+        throw new Error(
+          `Übersetzung '${translation}' ist nicht verfügbar. Verfügbare lokale Übersetzungen: ${availableLocalTranslations.join(', ')}. API-Übersetzungen können in den Einstellungen gefiltert und ausgewählt werden.`
+        );
+      }
+    } catch (error: any) {
+      if (error.message && error.message.includes('ist nicht verfügbar')) {
+        throw error;
+      }
+      console.error('Error fetching from API:', error);
     }
-    
-    // Prüfe, ob Tabelle existiert und ob überhaupt Daten vorhanden sind
+
     const count = db.prepare(`
       SELECT COUNT(*) as count FROM bible_verses WHERE translation = ?
     `).get(finalTranslation) as { count: number } | undefined;
     console.log(`No verse found. Total verses in ${finalTranslation}:`, count?.count || 0);
-    
-    // Prüfe, ob Übersetzung überhaupt verfügbar ist
-    const availableLocalTranslations = ['LUT1912', 'LUT1545', 'ELB1905', 'SCH1951'];
-    const isAvailable = availableLocalTranslations.includes(finalTranslation) || isAPITranslation;
-    
-    if (!isAvailable) {
-      console.log(`Translation ${finalTranslation} (from ${translation}) is not available`);
-      // Wirf einen spezifischen Fehler, damit der Controller eine bessere Meldung geben kann
-      const availableList = [...availableLocalTranslations];
-      if (isAPITranslation) {
-        try {
-          const { getAPITranslations } = await import('./bibleApi.service');
-          availableList.push(...getAPITranslations());
-        } catch (error) {
-          // Ignoriere Fehler
-        }
-      }
-      throw new Error(`Übersetzung '${translation}' ist nicht verfügbar. Verfügbare Übersetzungen: ${availableList.join(', ')}`);
-    }
-    
+
     return null;
   }
 }
@@ -410,13 +406,21 @@ export async function getBibleChapter(
   
   console.log(`Found ${verses.length} verses for ${normalizedBook} ${chapter} in ${finalTranslation}`);
   
-  // Wenn lokal nicht gefunden und API-Übersetzung, versuche API (nur für einzelne Verse, nicht für ganze Kapitel)
-  if (verses.length === 0 && translation !== finalTranslation) {
-    console.log(`Chapter not found locally for ${translation}, API chapter lookup not implemented`);
-    // Kapitel-Lookup über API ist komplexer und wird hier nicht implementiert
-    // (würde viele API-Calls erfordern)
+  if (verses.length > 0) {
+    return verses;
   }
-  
-  return verses.length > 0 ? verses : null;
+
+  // Lokal nicht gefunden → API.Bible Kapitelversuch
+  try {
+    const { getChapterFromAPI } = await import('./bibleApi.service');
+    const apiChapter = await getChapterFromAPI(normalizedBook, chapter, translation || finalTranslation);
+    if (apiChapter && apiChapter.length > 0) {
+      return apiChapter;
+    }
+  } catch (error) {
+    console.warn('API chapter lookup failed:', error);
+  }
+
+  return null;
 }
 

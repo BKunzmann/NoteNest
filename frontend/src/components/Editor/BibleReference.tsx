@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { bibleAPI, BibleVerseResponse, BibleChapterResponse, BibleFavorite, settingsAPI } from '../../services/api';
-import { getTranslationName, getAvailableTranslations, translationsMatch, normalizeTranslation } from '../../utils/bibleTranslation';
+import { getTranslationName, getAvailableTranslations, translationsMatch, normalizeTranslation, registerTranslationDetails } from '../../utils/bibleTranslation';
 import { formatBibleReference } from '../../utils/bibleFormatting';
 import { useAuthStore } from '../../store/authStore';
 
@@ -59,14 +59,27 @@ export default function BibleReference({ reference, translation, children, onIns
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
+  const [availableTranslations, setAvailableTranslations] = useState<string[]>(getAvailableTranslations());
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const spanRef = useRef<HTMLSpanElement>(null);
   const loadingRef = useRef<boolean>(false); // Verhindert doppelte Requests
   const isChapter = isChapterOnly(reference);
-  
-  // Verfügbare Übersetzungen
-  const availableTranslations = getAvailableTranslations();
+
+  // Lade Übersetzungen (lokal + API) beim Mount
+  useEffect(() => {
+    bibleAPI.getTranslations('deu')
+      .then((data) => {
+        if (data.details?.all) {
+          registerTranslationDetails(data.details.all);
+        }
+        const codes = data.all?.length ? data.all : getAvailableTranslations();
+        setAvailableTranslations(codes);
+      })
+      .catch(() => {
+        setAvailableTranslations(getAvailableTranslations());
+      });
+  }, []);
 
   // Lade Standard-Übersetzung aus Settings beim Mount
   useEffect(() => {
@@ -74,9 +87,11 @@ export default function BibleReference({ reference, translation, children, onIns
       settingsAPI.getSettings()
         .then((settings) => {
           const defaultTrans = settings.default_bible_translation || 'LUT1912';
-          const normalized = normalizeTranslation(defaultTrans);
+          // Nur generische Codes normalisieren; API-IDs unverändert lassen
+          const normalized = ['LUT', 'ELB', 'SCH'].includes(defaultTrans)
+            ? normalizeTranslation(defaultTrans)
+            : defaultTrans;
           setDefaultTranslation(normalized);
-          // Setze currentTranslation auf Standard, wenn noch nicht gesetzt
           if (!translation) {
             setCurrentTranslation(normalized);
           }

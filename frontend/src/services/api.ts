@@ -409,6 +409,31 @@ export interface BibleFavoritesResponse {
   favorites: BibleFavorite[];
 }
 
+export interface BibleTranslationDetail {
+  id: string;
+  abbreviation: string;
+  name: string;
+  nameLocal?: string;
+  description?: string;
+  language: string;
+  languageName: string;
+  source: 'local' | 'api';
+}
+
+export interface BibleTranslationsResponse {
+  local: string[];
+  api: string[];
+  all: string[];
+  details?: {
+    local: BibleTranslationDetail[];
+    api: BibleTranslationDetail[];
+    all: BibleTranslationDetail[];
+  };
+  languages?: Array<{ id: string; name: string; count: number }>;
+  apiEnabled?: boolean;
+  languageFilter?: string | null;
+}
+
 /**
  * Bible API
  */
@@ -483,9 +508,15 @@ export const bibleAPI = {
 
   /**
    * Ruft alle verfügbaren Übersetzungen ab (lokal + API)
+   * @param language - Optionaler ISO-639-3 Sprachfilter für API-Übersetzungen (z.B. "deu")
    */
-  async getTranslations(): Promise<{ local: string[]; api: string[]; all: string[] }> {
-    const response = await api.get<{ local: string[]; api: string[]; all: string[] }>('/bible/translations');
+  async getTranslations(language?: string): Promise<BibleTranslationsResponse> {
+    const params = new URLSearchParams();
+    if (language) {
+      params.append('language', language);
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await api.get<BibleTranslationsResponse>(`/bible/translations${query}`);
     return response.data;
   }
 };

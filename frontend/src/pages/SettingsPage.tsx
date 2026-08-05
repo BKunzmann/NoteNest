@@ -6,18 +6,20 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { settingsAPI, bibleAPI, BibleFavorite } from '../services/api';
+import { settingsAPI, bibleAPI, BibleFavorite, BibleTranslationDetail, BibleTranslationsResponse } from '../services/api';
 import {
   UserSettings,
   UpdateSettingsRequest,
   SettingsPathOptionsResponse
 } from '../types/settings';
 import { useThemeStore } from '../store/themeStore';
-import { getTranslationName } from '../utils/bibleTranslation';
+import {
+  getTranslationName,
+  LOCAL_TRANSLATIONS,
+  registerTranslationDetails,
+  COMMON_BIBLE_LANGUAGES
+} from '../utils/bibleTranslation';
 import FolderNavigator from '../components/FileManager/FolderNavigator';
-
-// Verfügbare Übersetzungen (tatsächlich in den JSON-Dateien vorhanden)
-import { LOCAL_TRANSLATIONS } from '../utils/bibleTranslation';
 
 export default function SettingsPage() {
   const location = useLocation();
@@ -44,13 +46,10 @@ export default function SettingsPage() {
   const [favorites, setFavorites] = useState<BibleFavorite[]>([]);
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false);
   const [selectedTranslation, setSelectedTranslation] = useState<string>('');
+  const [apiLanguageFilter, setApiLanguageFilter] = useState<string>('deu');
   
   // Verfügbare Übersetzungen (lokal + API)
-  const [availableTranslations, setAvailableTranslations] = useState<{
-    local: string[];
-    api: string[];
-    all: string[];
-  } | null>(null);
+  const [availableTranslations, setAvailableTranslations] = useState<BibleTranslationsResponse | null>(null);
 
   // Nur rendern, wenn wir tatsächlich auf /settings sind
   if (location.pathname !== '/settings') {
@@ -61,7 +60,7 @@ export default function SettingsPage() {
     loadSettings();
     loadPathOptions();
     loadFavorites();
-    loadAvailableTranslations();
+    loadAvailableTranslations(apiLanguageFilter);
   }, []);
 
   const loadPathOptions = async () => {
@@ -74,19 +73,26 @@ export default function SettingsPage() {
     }
   };
 
-  const loadAvailableTranslations = async () => {
+  const loadAvailableTranslations = async (language?: string) => {
     try {
-      const data = await bibleAPI.getTranslations();
+      const data = await bibleAPI.getTranslations(language || undefined);
+      if (data.details?.all) {
+        registerTranslationDetails(data.details.all);
+      }
       setAvailableTranslations(data);
     } catch (err: any) {
       console.error('Error loading available translations:', err);
-      // Fallback: Verwende nur lokale Übersetzungen
       setAvailableTranslations({
         local: LOCAL_TRANSLATIONS,
         api: [],
         all: LOCAL_TRANSLATIONS
       });
     }
+  };
+
+  const handleLanguageFilterChange = async (language: string) => {
+    setApiLanguageFilter(language);
+    await loadAvailableTranslations(language || undefined);
   };
 
   const loadSettings = async () => {
@@ -106,16 +112,15 @@ export default function SettingsPage() {
       setTheme((data.theme || 'light') as 'light' | 'dark');
       setExportSize(data.default_export_size || 'A4');
       setNonEditableFilesMode(data.non_editable_files_mode || 'gray');
-      // Normalisiere Standard-Übersetzung (LUT -> LUT1912, etc.)
+      // Normalisiere Standard-Übersetzung (LUT -> LUT1912, etc.); API-IDs bleiben erhalten
       const defaultTranslation = data.default_bible_translation || 'LUT1912';
       const normalized = defaultTranslation === 'LUT' ? 'LUT1912' : 
                         defaultTranslation === 'ELB' ? 'ELB1905' : 
                         defaultTranslation === 'SCH' ? 'SCH1951' : defaultTranslation;
-      const finalTranslation = LOCAL_TRANSLATIONS.includes(normalized) ? normalized : 'LUT1912';
-      setBibleTranslation(finalTranslation);
+      setBibleTranslation(normalized);
       
       // Stelle sicher, dass Standard-Übersetzung als Favorit existiert
-      await ensureDefaultTranslationIsFavorite(finalTranslation);
+      await ensureDefaultTranslationIsFavorite(normalized);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fehler beim Laden der Einstellungen');
     } finally {
@@ -590,8 +595,56 @@ export default function SettingsPage() {
               Standard Bibel-Übersetzung
             </label>
             <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
-              Diese Übersetzung wird standardmäßig in Hover-Text und Popup verwendet
+              Diese Übersetzung wird standardmäßig in Hover-Text und Popup verwendet.
+              Neben lokalen Bibeln stehen Übersetzungen von API.Bible zur Auswahl.
             </div>
+
+            <label htmlFor="apiLanguageFilter" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
+              Sprachfilter (API.Bible)
+            </label>
+            <select
+              id="apiLanguageFilter"
+              value={apiLanguageFilter}
+              onChange={(e) => handleLanguageFilterChange(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                fontSize: '1rem',
+                marginBottom: '0.75rem'
+              }}
+            >
+              <option value="">Alle Sprachen</option>
+              {COMMON_BIBLE_LANGUAGES.map((lang) => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.name}
+                </option>
+              ))}
+              {(availableTranslations?.languages || [])
+                .filter((lang) => !COMMON_BIBLE_LANGUAGES.some((c) => c.id === lang.id))
+                .map((lang) => (
+                  <option key={lang.id} value={lang.id}>
+                    {lang.name} ({lang.count})
+                  </option>
+                ))}
+            </select>
+
+            {availableTranslations?.apiEnabled === false && (
+              <div style={{
+                padding: '0.75rem',
+                marginBottom: '0.75rem',
+                backgroundColor: '#fff8e1',
+                border: '1px solid #ffe082',
+                borderRadius: '4px',
+                fontSize: '0.875rem',
+                color: '#6d4c00'
+              }}>
+                API.Bible ist nicht konfiguriert. Setze <code>BIBLE_API_KEY</code> und
+                <code> BIBLE_API_URL=https://rest.api.bible</code>, um weitere Übersetzungen zu nutzen.
+              </div>
+            )}
+
             <select
               id="bibleTranslation"
               value={bibleTranslation}
@@ -604,12 +657,43 @@ export default function SettingsPage() {
                 fontSize: '1rem'
               }}
             >
-              {(availableTranslations?.all || LOCAL_TRANSLATIONS).map(translation => (
-                <option key={translation} value={translation}>
-                  {getTranslationName(translation)}
-                  {availableTranslations?.api.includes(translation) && ' (API)'}
-                </option>
-              ))}
+              {/* Aktuelle Auswahl sichtbar halten, auch wenn sie durch Sprachfilter ausgeblendet wäre */}
+              {bibleTranslation &&
+                !(availableTranslations?.all || LOCAL_TRANSLATIONS).includes(bibleTranslation) && (
+                  <option value={bibleTranslation}>
+                    {getTranslationName(bibleTranslation)} (aktuell)
+                  </option>
+                )}
+              <optgroup label="Lokal">
+                {(availableTranslations?.details?.local || LOCAL_TRANSLATIONS.map((id) => ({
+                  id,
+                  abbreviation: id,
+                  name: getTranslationName(id),
+                  language: 'deu',
+                  languageName: 'German',
+                  source: 'local' as const
+                }))).map((translation: BibleTranslationDetail | string) => {
+                  const id = typeof translation === 'string' ? translation : translation.id;
+                  const label = typeof translation === 'string'
+                    ? getTranslationName(translation)
+                    : (translation.nameLocal || translation.name);
+                  return (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </optgroup>
+              {(availableTranslations?.details?.api?.length || 0) > 0 && (
+                <optgroup label={`API.Bible${apiLanguageFilter ? ` (${apiLanguageFilter})` : ''}`}>
+                  {availableTranslations!.details!.api.map((translation) => (
+                    <option key={translation.id} value={translation.id}>
+                      {translation.nameLocal || translation.name}
+                      {translation.abbreviation ? ` (${translation.abbreviation})` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
         </div>
@@ -820,12 +904,21 @@ export default function SettingsPage() {
                 }}
               >
                 <option value="">-- Übersetzung wählen --</option>
-                {(availableTranslations?.all || LOCAL_TRANSLATIONS)
-                  .filter(t => !favorites.some(f => f.translation === t))
-                  .map(t => (
-                    <option key={t} value={t}>
-                      {getTranslationName(t)}
-                      {availableTranslations?.api.includes(t) && ' (API)'}
+                {(availableTranslations?.details?.all ||
+                  (availableTranslations?.all || LOCAL_TRANSLATIONS).map((id) => ({
+                    id,
+                    abbreviation: id,
+                    name: getTranslationName(id),
+                    language: 'deu',
+                    languageName: 'German',
+                    source: (availableTranslations?.api.includes(id) ? 'api' : 'local') as 'local' | 'api'
+                  }))
+                )
+                  .filter((t) => !favorites.some((f) => f.translation === t.id))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nameLocal || t.name}
+                      {t.source === 'api' ? ' (API)' : ''}
                     </option>
                   ))}
               </select>

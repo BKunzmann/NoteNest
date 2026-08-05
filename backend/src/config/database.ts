@@ -151,6 +151,9 @@ export function initializeDatabase(): void {
     }
   }
 
+  // Hinweis: SQLite erzwingt VARCHAR-Längen nicht.
+  // API.Bible-IDs (z.B. f492a38d0e52db0f-01) passen daher auch bei VARCHAR(20)-Schema.
+
   // Tabelle: user_bible_favorites
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_bible_favorites (

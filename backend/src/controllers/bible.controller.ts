@@ -169,21 +169,46 @@ export async function parseReference(req: Request, res: Response): Promise<void>
 /**
  * GET /api/bible/translations
  * Gibt alle verfügbaren Übersetzungen zurück (lokal + API)
+ * Query: ?language=deu (optional, ISO 639-3 Sprachfilter für API-Übersetzungen)
  */
-export async function getTranslations(_req: Request, res: Response): Promise<void> {
+export async function getTranslations(req: Request, res: Response): Promise<void> {
   try {
-    const { getAPITranslations } = await import('../services/bibleApi.service');
-    
-    // Lokale Übersetzungen (tatsächlich in der Datenbank vorhanden)
-    const localTranslations = ['LUT1912', 'LUT1545', 'ELB1905', 'SCH1951'];
-    
-    // API-Übersetzungen (wenn API aktiviert)
-    const apiTranslations = getAPITranslations();
-    
+    const {
+      getAPITranslationDetails,
+      getApiBibleLanguages,
+      isApiBibleEnabled
+    } = await import('../services/bibleApi.service');
+
+    const language = typeof req.query.language === 'string' ? req.query.language : undefined;
+
+    const localDetails = [
+      { id: 'LUT1912', abbreviation: 'LUT1912', name: 'Lutherbibel 1912', language: 'deu', languageName: 'German', source: 'local' as const },
+      { id: 'LUT1545', abbreviation: 'LUT1545', name: 'Lutherbibel 1545', language: 'deu', languageName: 'German', source: 'local' as const },
+      { id: 'ELB1905', abbreviation: 'ELB1905', name: 'Elberfelder Bibel 1905', language: 'deu', languageName: 'German', source: 'local' as const },
+      { id: 'SCH1951', abbreviation: 'SCH1951', name: 'Schlachter 1951', language: 'deu', languageName: 'German', source: 'local' as const }
+    ];
+
+    const apiDetails = await getAPITranslationDetails(language);
+    // Lokal und API nicht doppelt anzeigen, wenn gleiche Kurzform
+    const localIds = new Set(localDetails.map((t) => t.id));
+    const apiFiltered = apiDetails.filter((t) => !localIds.has(t.abbreviation) && !localIds.has(t.id));
+
+    const localCodes = localDetails.map((t) => t.id);
+    const apiCodes = apiFiltered.map((t) => t.id);
+    const languages = await getApiBibleLanguages();
+
     res.json({
-      local: localTranslations,
-      api: apiTranslations,
-      all: [...localTranslations, ...apiTranslations]
+      local: localCodes,
+      api: apiCodes,
+      all: [...localCodes, ...apiCodes],
+      details: {
+        local: localDetails,
+        api: apiFiltered,
+        all: [...localDetails, ...apiFiltered]
+      },
+      languages,
+      apiEnabled: isApiBibleEnabled(),
+      languageFilter: language || null
     });
   } catch (error: any) {
     console.error('Error getting translations:', error);
