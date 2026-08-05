@@ -1,9 +1,11 @@
 name: Build and Push Docker Image
 
+# Nur bei Versions-Tags (z. B. v1.3.3) und manuell – nicht bei jedem Push auf master.
+# Tags entstehen über `npm run version:release` bzw. `git push origin vX.Y.Z`.
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:

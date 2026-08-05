@@ -154,8 +154,9 @@ function main() {
     console.log(`\n📝 Next steps:`);
     console.log(`   1. Review CHANGELOG.md`);
     console.log(`   2. Commit changes: git add . && git commit -m "Release v${version}"`);
-    console.log(`   3. Push tag: git push origin v${version}`);
-    console.log(`   4. Push commits: git push`);
+    console.log(`   3. Push commits: git push`);
+    console.log(`   4. Push tag: git push origin v${version}`);
+    console.log(`      → startet Docker-Build/Push (Workflow bei Tags v*)`);
     return;
   }
   

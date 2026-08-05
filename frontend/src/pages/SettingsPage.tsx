@@ -665,24 +665,18 @@ export default function SettingsPage() {
                   </option>
                 )}
               <optgroup label="Lokal">
-                {(availableTranslations?.details?.local || LOCAL_TRANSLATIONS.map((id) => ({
+                {(availableTranslations?.details?.local || LOCAL_TRANSLATIONS.map((id): BibleTranslationDetail => ({
                   id,
                   abbreviation: id,
                   name: getTranslationName(id),
                   language: 'deu',
                   languageName: 'German',
-                  source: 'local' as const
-                }))).map((translation: BibleTranslationDetail | string) => {
-                  const id = typeof translation === 'string' ? translation : translation.id;
-                  const label = typeof translation === 'string'
-                    ? getTranslationName(translation)
-                    : (translation.nameLocal || translation.name);
-                  return (
-                    <option key={id} value={id}>
-                      {label}
-                    </option>
-                  );
-                })}
+                  source: 'local'
+                }))).map((translation) => (
+                  <option key={translation.id} value={translation.id}>
+                    {translation.nameLocal || translation.name}
+                  </option>
+                ))}
               </optgroup>
               {(availableTranslations?.details?.api?.length || 0) > 0 && (
                 <optgroup label={`API.Bible${apiLanguageFilter ? ` (${apiLanguageFilter})` : ''}`}>
@@ -905,13 +899,13 @@ export default function SettingsPage() {
               >
                 <option value="">-- Übersetzung wählen --</option>
                 {(availableTranslations?.details?.all ||
-                  (availableTranslations?.all || LOCAL_TRANSLATIONS).map((id) => ({
+                  (availableTranslations?.all || LOCAL_TRANSLATIONS).map((id): BibleTranslationDetail => ({
                     id,
                     abbreviation: id,
                     name: getTranslationName(id),
                     language: 'deu',
                     languageName: 'German',
-                    source: (availableTranslations?.api.includes(id) ? 'api' : 'local') as 'local' | 'api'
+                    source: availableTranslations?.api.includes(id) ? 'api' : 'local'
                   }))
                 )
                   .filter((t) => !favorites.some((f) => f.translation === t.id))

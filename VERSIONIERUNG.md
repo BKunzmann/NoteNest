@@ -75,6 +75,8 @@ git push origin v1.0.0
 
 Das Version-Script erstellt Tags automatisch beim `release`-Befehl.
 
+Der GitHub-Workflow **Build and Push Docker Image** läuft bei Push von Tags `v*` (und manuell per `workflow_dispatch`), nicht bei jedem Commit auf `master`.
+
 ## 📦 Version in Code
 
 Die Version wird an mehreren Stellen gespeichert:
