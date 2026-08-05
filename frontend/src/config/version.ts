@@ -8,10 +8,10 @@
 export const VERSION = '1.3.2';
 
 // Build-Datum (wird beim Build gesetzt)
-export const BUILD_DATE = process.env.BUILD_DATE || new Date().toISOString();
+export const BUILD_DATE = import.meta.env.VITE_BUILD_DATE || new Date().toISOString();
 
 // Git-Commit-Hash (wird beim Build gesetzt, optional)
-export const GIT_COMMIT = process.env.GIT_COMMIT || 'unknown';
+export const GIT_COMMIT = import.meta.env.VITE_GIT_COMMIT || 'unknown';
 
 /**
  * Gibt vollständige Versions-Informationen zurück
