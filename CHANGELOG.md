@@ -9,6 +9,13 @@ Zum Release-Prozess und zur Versionsverwaltung siehe [`VERSIONIERUNG.md`](VERSIO
 
 ## [Unreleased]
 
+### Geplant
+- Erweiterte Suche (Phrasen, Wildcards, Boolesche Operatoren)
+- Optional Office-Dateien indexieren (`.docx`, `.pdf`, `.xlsx`)
+- Erweiterte Bibelstellen-Features, LDAP/NAS, Share-Links, Tags, Notiz-Versionierung
+
+## [1.4.0] - 2026-08-05
+
 ### ✨ Features
 - **API.Bible-Integration**: Dynamischer Übersetzungskatalog von `https://rest.api.bible`
   - Sprachfilter und Auswahl der Übersetzung in den Einstellungen
@@ -27,14 +34,13 @@ Zum Release-Prozess und zur Versionsverwaltung siehe [`VERSIONIERUNG.md`](VERSIO
 - Zustand-Selektoren, memoisiertes `FileItem`, begrenzte Recent-Gruppen
 - Debounced Suchindex-Updates nach Save (~8s)
 
+### 🐛 Bugfixes
+- TypeScript: `nameLocal` in Settings-Übersetzungsauswahl korrekt typisiert (Frontend-Build)
+
 ### 🔧 Technische Details
 - Setup-Branches nach `master` zusammengeführt (`AGENTS.md`, Vite/`import.meta.env`, `.gitignore`)
-- Docker-Action: Backend-Install-Schritt entblockt
-
-### Geplant
-- Erweiterte Suche (Phrasen, Wildcards, Boolesche Operatoren)
-- Optional Office-Dateien indexieren (`.docx`, `.pdf`, `.xlsx`)
-- Erweiterte Bibelstellen-Features, LDAP/NAS, Share-Links, Tags, Notiz-Versionierung
+- Docker-Workflow nur noch bei Tags `v*` und `workflow_dispatch` (nicht bei jedem master-Push)
+- CHANGELOG bereinigt und historische Releases 1.0.0–1.3.2 zugeordnet
 
 ## [1.3.2] - 2026-02-24
 

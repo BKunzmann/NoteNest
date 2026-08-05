@@ -5,7 +5,7 @@
  */
 
 // Versionsnummer (wird automatisch aus package.json gelesen)
-export const VERSION = '1.3.2';
+export const VERSION = '1.4.0';
 
 // Build-Datum (wird beim Build gesetzt)
 export const BUILD_DATE = import.meta.env.VITE_BUILD_DATE || new Date().toISOString();

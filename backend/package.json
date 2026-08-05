@@ -1,6 +1,6 @@
 {
   "name": "notenest-backend",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "NoteNest Backend API",
   "main": "dist/index.js",
   "scripts": {
