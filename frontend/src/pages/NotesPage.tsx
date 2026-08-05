@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { shallow } from 'zustand/shallow';
 import { useFileStore } from '../store/fileStore';
 import { useEditorStore } from '../store/editorStore';
 import MarkdownEditor from '../components/Editor/MarkdownEditor';
@@ -149,8 +150,24 @@ export default function NotesPage() {
     selectFile,
     clearSelection,
     deleteItem
-  } = useFileStore();
-  const { content: editorContent, reset: resetEditor } = useEditorStore();
+  } = useFileStore(
+    (state) => ({
+      selectedFile: state.selectedFile,
+      selectedPath: state.selectedPath,
+      selectedType: state.selectedType,
+      fileContent: state.fileContent,
+      fileLastModified: state.fileLastModified,
+      fileCreatedAt: state.fileCreatedAt,
+      isLoadingContent: state.isLoadingContent,
+      loadFileContent: state.loadFileContent,
+      selectFile: state.selectFile,
+      clearSelection: state.clearSelection,
+      deleteItem: state.deleteItem
+    }),
+    shallow
+  );
+  const editorContent = useEditorStore((s) => s.content);
+  const resetEditor = useEditorStore((s) => s.reset);
   const [contextPosition, setContextPosition] = useState<{ x: number; y: number } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);

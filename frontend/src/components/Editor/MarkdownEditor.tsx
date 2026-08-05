@@ -22,25 +22,23 @@ interface MarkdownEditorProps {
 }
 
 export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorProps) {
-  const { 
-    content, 
-    setContent, 
-    viewMode, 
-    setViewMode,
-    isPreviewFullscreen,
-    setPreviewFullscreen,
-    isDirty,
-    isSaving,
-    saveFile,
-    autoSaveFile,
-    error,
-    undo,
-    redo,
-    canUndo,
-    canRedo
-  } = useEditorStore();
+  const content = useEditorStore((s) => s.content);
+  const setContent = useEditorStore((s) => s.setContent);
+  const viewMode = useEditorStore((s) => s.viewMode);
+  const setViewMode = useEditorStore((s) => s.setViewMode);
+  const isPreviewFullscreen = useEditorStore((s) => s.isPreviewFullscreen);
+  const setPreviewFullscreen = useEditorStore((s) => s.setPreviewFullscreen);
+  const isDirty = useEditorStore((s) => s.isDirty);
+  const isSaving = useEditorStore((s) => s.isSaving);
+  const saveFile = useEditorStore((s) => s.saveFile);
+  const autoSaveFile = useEditorStore((s) => s.autoSaveFile);
+  const error = useEditorStore((s) => s.error);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const canUndo = useEditorStore((s) => s.canUndo);
+  const canRedo = useEditorStore((s) => s.canRedo);
   
-  const { loadFileContent } = useFileStore();
+  const loadFileContent = useFileStore((s) => s.loadFileContent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [bibleTranslation, setBibleTranslation] = useState<string>('LUT1912');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -53,7 +51,7 @@ export default function MarkdownEditor({ filePath, fileType }: MarkdownEditorPro
   }, [filePath, fileType]);
 
   // Synchronisiere fileStore content mit editorStore
-  const { fileContent } = useFileStore();
+  const fileContent = useFileStore((s) => s.fileContent);
   useEffect(() => {
     if (fileContent !== null && fileContent !== undefined) {
       const editorStore = useEditorStore.getState();

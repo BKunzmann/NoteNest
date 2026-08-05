@@ -31,9 +31,9 @@ const INDEXABLE_EXTENSIONS = [
 ];
 
 const NOTE_FILE_TYPES = new Set(['md', 'txt']);
-const METADATA_REFRESH_INTERVAL_MS = 30 * 1000; // 30 Sekunden
-const METADATA_REFRESH_MAX_DURATION_MS = 6 * 1000; // 6 Sekunden
-const METADATA_REFRESH_MAX_FILES = 6000;
+const METADATA_REFRESH_INTERVAL_MS = 60 * 1000; // 60 Sekunden
+const METADATA_REFRESH_MAX_DURATION_MS = 4 * 1000; // 4 Sekunden
+const METADATA_REFRESH_MAX_FILES = 2000;
 const metadataRefreshInFlight = new Set<string>();
 const metadataLastRefresh = new Map<string, number>();
 const TRASH_ROOT_FOLDER = '.notenest-trash';
@@ -761,7 +761,8 @@ export function isPathInHiddenFolder(filePath: string): boolean {
 }
 
 async function directoryContainsNotes(absoluteDir: string, depth: number = 0): Promise<boolean> {
-  if (depth > 20) {
+  // Flache Prüfung reicht für die Sidebar-Filterung; tiefe Rekursion war O(n) über den ganzen Baum
+  if (depth > 2) {
     return false;
   }
 
@@ -778,9 +779,11 @@ async function directoryContainsNotes(absoluteDir: string, depth: number = 0): P
       if (shouldHideFolder(entry.name)) {
         continue;
       }
-      const containsNotes = await directoryContainsNotes(absoluteEntryPath, depth + 1);
-      if (containsNotes) {
-        return true;
+      if (depth < 2) {
+        const containsNotes = await directoryContainsNotes(absoluteEntryPath, depth + 1);
+        if (containsNotes) {
+          return true;
+        }
       }
       continue;
     }
@@ -795,6 +798,36 @@ async function directoryContainsNotes(absoluteDir: string, depth: number = 0): P
   }
 
   return false;
+}
+
+/**
+ * Schneller Index-Lookup: Hat der Ordner (relativ) indexierte Notizen?
+ */
+function directoryHasIndexedNotes(
+  userId: number,
+  type: 'private' | 'shared',
+  folderRelativePath: string
+): boolean {
+  const normalized = normalizeRelativePath(folderRelativePath);
+  const prefix = normalized === '/' ? '/' : normalized.replace(/\/+$/, '');
+  try {
+    const row = db.prepare(`
+      SELECT 1 AS ok
+      FROM search_index
+      WHERE user_id = ?
+        AND file_type = ?
+        AND (file_path LIKE ? OR file_path LIKE ?)
+      LIMIT 1
+    `).get(
+      userId,
+      type,
+      `${prefix}/%`,
+      prefix === '/' ? '/%.md' : `${prefix}/%`
+    ) as { ok: number } | undefined;
+    return Boolean(row);
+  } catch {
+    return false;
+  }
 }
 
 async function refreshFileMetadataIndex(
@@ -938,6 +971,8 @@ export async function listDirectory(
   
   // Liste Dateien auf
   const entries = await fs.readdir(fullPath, { withFileTypes: true });
+  // Parent-Berechtigung gilt für Einträge – kein access() pro Datei
+  const parentWritable = await checkPermissions(fullPath, 'write');
   
   const items: FileItem[] = [];
   
@@ -963,20 +998,14 @@ export async function listDirectory(
     }
     
     try {
-      const stats = await fs.stat(entryPath);
-      const fileType = entry.isFile() ? getFileType(entry.name) : null;
-      
-      const canReadItem = await checkPermissions(entryPath, 'read');
-      const canWriteItem = await checkPermissions(entryPath, 'write');
-      
-      // Normalisiere relativen Pfad (verwende / statt \ für Konsistenz)
-      // Stelle sicher, dass der Pfad mit / beginnt
+      // Normalisiere relativen Pfad früh (für Index-Lookups)
       let normalizedRelativePath = relativePath.replace(/\\/g, '/');
       if (!normalizedRelativePath.startsWith('/')) {
         normalizedRelativePath = '/' + normalizedRelativePath;
       }
-      // Entferne doppelte Slashes
       normalizedRelativePath = normalizedRelativePath.replace(/\/+/g, '/');
+
+      const fileType = entry.isFile() ? getFileType(entry.name) : null;
 
       if (notesOnly) {
         if (entry.isFile()) {
@@ -985,10 +1014,12 @@ export async function listDirectory(
             continue;
           }
         } else if (entry.isDirectory()) {
-          const hasNotes = await directoryContainsNotes(entryPath);
+          // Zuerst Index prüfen (billig), sonst flache FS-Prüfung
+          const hasNotes =
+            directoryHasIndexedNotes(userId, type, normalizedRelativePath) ||
+            await directoryContainsNotes(entryPath);
           if (!hasNotes) {
-            // Leere Ordner sollen trotz Notizen-Filter sichtbar bleiben,
-            // damit neue Zielordner direkt nach dem Anlegen erreichbar sind.
+            // Leere Ordner sollen trotz Notizen-Filter sichtbar bleiben
             let directEntries: string[] = [];
             try {
               directEntries = await fs.readdir(entryPath);
@@ -1001,26 +1032,38 @@ export async function listDirectory(
           }
         }
       }
+
+      let size: number | undefined;
+      let lastModified: string | undefined;
+      if (entry.isFile() || entry.isDirectory()) {
+        try {
+          const stats = await fs.stat(entryPath);
+          size = entry.isFile() ? stats.size : undefined;
+          lastModified = stats.mtime.toISOString();
+        } catch {
+          continue;
+        }
+      }
       
       items.push({
         name: entry.name,
         path: normalizedRelativePath,
         type: entry.isDirectory() ? 'folder' : 'file',
-        size: entry.isFile() ? stats.size : undefined,
-        lastModified: stats.mtime.toISOString(),
+        size,
+        lastModified,
         fileType: fileType?.type,
         isEditable: fileType?.isEditable || false,
-        canRead: canReadItem,
-        canWrite: canWriteItem
+        canRead: true,
+        canWrite: parentWritable
       });
 
-      if (entry.isFile()) {
+      if (entry.isFile() && size != null && lastModified) {
         upsertFileMetadata(
           userId,
           normalizedRelativePath,
           type,
-          stats.size,
-          stats.mtime.toISOString()
+          size,
+          lastModified
         );
       }
     } catch (error) {

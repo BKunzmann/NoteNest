@@ -4,8 +4,9 @@
  * Zeigt eine einzelne Datei oder einen Ordner
  */
 
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { shallow } from 'zustand/shallow';
 import { FileItem as FileItemType } from '../../types/file';
 import { useFileStore } from '../../store/fileStore';
 
@@ -35,7 +36,7 @@ function normalizePath(inputPath: string): string {
   return normalized.replace(/\/+/g, '/');
 }
 
-export default function FileItem({
+function FileItem({
   file,
   type,
   currentPath,
@@ -44,7 +45,14 @@ export default function FileItem({
   onContextRequest,
   highlightedPath = null
 }: FileItemProps) {
-  const { selectFile, selectedPath, selectedType } = useFileStore();
+  const { selectFile, selectedPath, selectedType } = useFileStore(
+    (state) => ({
+      selectFile: state.selectFile,
+      selectedPath: state.selectedPath,
+      selectedType: state.selectedType
+    }),
+    shallow
+  );
   const navigate = useNavigate();
   const longPressTimerRef = useRef<number | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -226,3 +234,4 @@ export default function FileItem({
   );
 }
 
+export default memo(FileItem);

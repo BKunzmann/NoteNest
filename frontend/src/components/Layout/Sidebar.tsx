@@ -26,10 +26,10 @@ function getParentPath(filePath: string): string {
 }
 
 export default function Sidebar({ isOpen, onClose, width }: SidebarProps) {
-  const { selectedType } = useFileStore();
+  const selectedType = useFileStore((s) => s.selectedType);
   const [hasSharedAccess, setHasSharedAccess] = useState(false);
   const [privateCollapsed, setPrivateCollapsed] = useState(false);
-  const [sharedCollapsed, setSharedCollapsed] = useState(false);
+  const [sharedCollapsed, setSharedCollapsed] = useState(true); // Shared standardmäßig zugeklappt (weniger Polling/DOM)
   const [sidebarViewMode, setSidebarViewMode] = useState<'recent' | 'folders'>('recent');
   const [showOnlyNotes, setShowOnlyNotes] = useState(true);
   const [sidebarFilter, setSidebarFilter] = useState('');

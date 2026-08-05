@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { shallow } from 'zustand/shallow';
 import { useFileStore } from '../../store/fileStore';
 import { fileAPI, settingsAPI } from '../../services/api';
 import { addPendingChange, cacheNote, isIndexedDBAvailable } from '../../services/offlineStorage';
@@ -122,7 +123,25 @@ export default function FileTree({
     selectedFile,
     selectedPath,
     selectedType
-  } = useFileStore();
+  } = useFileStore(
+    (state) => ({
+      privateFiles: state.privateFiles,
+      privatePath: state.privatePath,
+      sharedFiles: state.sharedFiles,
+      sharedPath: state.sharedPath,
+      loadFiles: state.loadFiles,
+      selectFile: state.selectFile,
+      deleteItem: state.deleteItem,
+      isLoadingPrivate: state.isLoadingPrivate,
+      isLoadingShared: state.isLoadingShared,
+      privateError: state.privateError,
+      sharedError: state.sharedError,
+      selectedFile: state.selectedFile,
+      selectedPath: state.selectedPath,
+      selectedType: state.selectedType
+    }),
+    shallow
+  );
   
   const [showOnlyNotes, setShowOnlyNotes] = useState(true);
   const [nonEditableFilesMode, setNonEditableFilesMode] = useState<'gray' | 'hide'>('gray');
@@ -322,13 +341,20 @@ export default function FileTree({
     if (isLoadingSettings) {
       return;
     }
+    // Im Recent-Modus keine Ordnerliste laden (spart große Readdir/Permission-Kosten)
+    if (sidebarViewMode === 'recent') {
+      if (showSectionActions) {
+        void refreshFileStats();
+      }
+      return;
+    }
     const state = useFileStore.getState();
     const pathToLoad = type === 'private' ? state.privatePath : state.sharedPath;
     void loadFiles(pathToLoad || '/', type, showOnlyNotes);
     if (showSectionActions) {
       void refreshFileStats();
     }
-  }, [isLoadingSettings, loadFiles, refreshFileStats, showOnlyNotes, showSectionActions, type]);
+  }, [isLoadingSettings, loadFiles, refreshFileStats, showOnlyNotes, showSectionActions, sidebarViewMode, type]);
 
   useEffect(() => {
     if (isLoadingSettings || sidebarViewMode !== 'recent') {
@@ -1166,7 +1192,8 @@ export default function FileTree({
                       border: '1px solid var(--border-color)',
                       backgroundColor: 'var(--bg-tertiary)'
                     }}>
-                      {group.items.map((file, index) => {
+                      {group.items.slice(0, 40).map((file, index) => {
+                        const visibleCount = Math.min(group.items.length, 40);
                         const isSelected =
                           (selectedType === type && selectedPath === file.path) ||
                           normalizeSidebarPath(file.path) === contextHighlightPath;
@@ -1184,7 +1211,7 @@ export default function FileTree({
                             onTouchCancel={clearRecentLongPress}
                             style={{
                               padding: '0.65rem 0.8rem',
-                              borderBottom: index < group.items.length - 1 ? '1px solid var(--border-color)' : 'none',
+                              borderBottom: index < visibleCount - 1 || group.items.length > 40 ? '1px solid var(--border-color)' : 'none',
                               cursor: 'pointer',
                               backgroundColor: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent'
                             }}
@@ -1211,6 +1238,16 @@ export default function FileTree({
                           </div>
                         );
                       })}
+                      {group.items.length > 40 && (
+                        <div style={{
+                          padding: '0.55rem 0.8rem',
+                          fontSize: '0.75rem',
+                          color: 'var(--text-secondary)',
+                          backgroundColor: 'var(--bg-secondary)'
+                        }}>
+                          +{group.items.length - 40} weitere in dieser Gruppe
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
